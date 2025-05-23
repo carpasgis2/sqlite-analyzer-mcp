@@ -1,13 +1,13 @@
 # SinaSuite: Inteligencia de Datos Médicos Avanzada con Lenguaje Natural
 
-**En Laberit, transformamos la complejidad de los datos médicos en conocimiento accionable.** SinaSuite incorpora un motor de análisis de bases de datos SQLite de última generación, diseñado para empoderar a los profesionales de la salud y analistas. Esta capacidad permite realizar consultas intrincadas utilizando lenguaje natural, eliminando la barrera técnica de SQL y facilitando el acceso instantáneo a información vital.
+eTE CHATBOT incorpora un motor de análisis de bases de datos SQLite de última generación, diseñado para empoderar a los profesionales de la salud y analistas. Esta capacidad permite realizar consultas intrincadas utilizando lenguaje natural, eliminando la barrera técnica de SQL y facilitando el acceso instantáneo a información vital.
 
-Con ChatSinaSuite, usted puede:
+Con ChatSuite, se puede:
 *   **Descubrir insights profundos** ocultos en sus datos.
 *   **Obtener respuestas claras y precisas** a preguntas complejas sobre pacientes, tratamientos, diagnósticos y más.
 *   **Potenciar la toma de decisiones clínicas y operativas** con información relevante y oportuna.
 
-Nuestra tecnología de IA no solo analiza esquemas y datos, sino que comprende la semántica de sus preguntas, infiere relaciones complejas entre tablas (multi-hop joins) y entrega la información crucial, cuándo y cómo la necesita. Libere el verdadero potencial de sus datos médicos con la inteligencia analítica de SinaSuite.
+La tecnología de IA no solo analiza esquemas y datos, sino que comprende la semántica de sus preguntas, infiere relaciones complejas entre tablas (multi-hop joins) y entrega la información crucial, cuándo y cómo la necesita. Libere el verdadero potencial de sus datos médicos con la inteligencia analítica de SinaSuite.
 
 ## Arquitectura del Componente de Análisis de Lenguaje Natural
 
