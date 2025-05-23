@@ -1,60 +1,88 @@
-# SQLite Analyzer
+# SinaSuite: Inteligencia de Datos Médicos Avanzada con Lenguaje Natural
 
-Este proyecto es una herramienta para analizar bases de datos SQLite. Permite a los usuarios conectarse a una base de datos SQLite, extraer información sobre su esquema y realizar análisis de datos.
+**En Laberit, transformamos la complejidad de los datos médicos en conocimiento accionable.** SinaSuite incorpora un motor de análisis de bases de datos SQLite de última generación, diseñado para empoderar a los profesionales de la salud y analistas. Esta capacidad permite realizar consultas intrincadas utilizando lenguaje natural, eliminando la barrera técnica de SQL y facilitando el acceso instantáneo a información vital.
 
-## Estructura del Proyecto
+Con ChatSinaSuite, usted puede:
+*   **Descubrir insights profundos** ocultos en sus datos.
+*   **Obtener respuestas claras y precisas** a preguntas complejas sobre pacientes, tratamientos, diagnósticos y más.
+*   **Potenciar la toma de decisiones clínicas y operativas** con información relevante y oportuna.
+
+Nuestra tecnología de IA no solo analiza esquemas y datos, sino que comprende la semántica de sus preguntas, infiere relaciones complejas entre tablas (multi-hop joins) y entrega la información crucial, cuándo y cómo la necesita. Libere el verdadero potencial de sus datos médicos con la inteligencia analítica de SinaSuite.
+
+## Arquitectura del Componente de Análisis de Lenguaje Natural
+
+Este componente es una parte integral de SinaSuite, responsable de la interpretación de consultas en lenguaje natural y su traducción a SQL para interactuar con bases de datos médicas SQLite.
 
 ```
-sqlite-analyzer
-├── src
-│   ├── main.py               # Punto de entrada del script
-│   ├── db
-│   │   ├── connection.py      # Gestión de la conexión a la base de datos
-│   │   └── queries.py         # Consultas SQL para extraer datos
-│   ├── analysis
-│   │   ├── schema_analyzer.py # Análisis del esquema de la base de datos
-│   │   └── data_analyzer.py   # Análisis de los datos dentro de las tablas
-│   └── utils
-│       └── helpers.py         # Funciones auxiliares
-├── data
-│   └── database.sqlite3.db    # Base de datos SQLite a analizar
-├── requirements.txt            # Dependencias del proyecto
-└── README.md                   # Documentación del proyecto
+sina_mcp/
+├── src/                      # Núcleo de la lógica de la aplicación
+│   ├── pipeline.py           # Orquestador principal del flujo de consulta NLQ a SQL
+│   ├── langchain_chatbot.py  # Integración con agente LangChain y herramientas de IA
+│   ├── llm_utils.py          # Utilidades para la interacción con Modelos de Lenguaje Grandes (LLMs)
+│   ├── sql_generator.py      # Generador de consultas SQL a partir de JSON estructurado
+│   ├── rag_enhancements.py   # Lógica de RAG para recuperación de contexto semántico
+│   ├── db_relationship_graph.py # Gestión y uso del grafo de relaciones entre tablas
+│   ├── generate_enhanced_dict.py # Script para generar dictionary.json (descripciones, sinónimos, relaciones)
+│   ├── schema_enhancer.py    # Script para generar schema_enhanced.json (esquema de BD enriquecido)
+│   ├── ...                   # Otros módulos clave (validadores, conectores BD, preprocesadores, etc.)
+├── data/                     # Archivos de datos generados y utilizados por el sistema (generalmente no versionados si son específicos de una BD)
+│   ├── dictionary.json       # Diccionario enriquecido de tablas, columnas, relaciones (ejemplo o plantilla)
+│   ├── schema_enhanced.json  # Esquema de la BD enriquecido con metadatos semánticos (ejemplo o plantilla)
+│   └── (database.sqlite3.db) # Base de datos de ejemplo o de desarrollo (si aplica)
+├── docs/                     # Documentación del proyecto
+│   ├── README.md             # Este archivo (documentación principal del componente)
+│   └── flujo_tecnico.html    # Descripción detallada del flujo técnico interno
+├── tests/                    # Pruebas unitarias y de integración para asegurar la calidad
+├── requirements.txt          # Dependencias del proyecto Python
+└── .gitignore                # Archivos y carpetas a ignorar por el control de versiones Git
 ```
 
-## Requisitos
+## Requisitos Previos
 
 Asegúrate de tener instaladas las siguientes dependencias:
 
 - sqlite3
 - Otras bibliotecas necesarias (especificadas en `requirements.txt`)
 
-## Instalación
+## Instalación y Configuración (Contexto de Desarrollo/Integración)
 
-1. Clona el repositorio:
-   ```
-   git clone <URL_DEL_REPOSITORIO>
-   cd sqlite-analyzer
-   ```
+Estos pasos son relevantes para desarrolladores o para la integración de este componente dentro de entornos específicos de SinaSuite.
 
-2. Instala las dependencias:
-   ```
-   pip install -r requirements.txt
-   ```
+1.  **Clonación del Repositorio (si aplica):**
+    ```bash
+    git clone https://github.com/carpasgis2/sqlite-analyzer-mcp.git
+    cd sqlite-analyzer-mcp
+    ```
 
-## Uso
+2.  **Gestión de Dependencias:**
+    Se recomienda el uso de entornos virtuales (por ejemplo, `venv` o `conda`).
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # En Linux/macOS
+    # venv\\Scripts\\activate   # En Windows
+    pip install -r requirements.txt
+    ```
 
-Para ejecutar el script, utiliza el siguiente comando:
+3.  **Configuración de Variables de Entorno:**
+    Este componente requiere la configuración de ciertas variables de entorno, como claves API para los LLMs (ej. `DEEPSEEK_API_KEY`). Consulte la documentación específica de los módulos que interactúan con servicios externos.
 
+## Uso del Componente (Interfaz Principal)
+
+La interacción principal con este componente se realiza a través del script `langchain_chatbot.py` o integrando el `pipeline.py` en otras aplicaciones de SinaSuite.
+
+Para ejecutar la interfaz de línea de comandos (CLI) de ejemplo:
+```bash
+python src/langchain_chatbot.py
 ```
-python src/main.py
-```
+Asegúrese de que los archivos de configuración necesarios (como `dictionary.json`, `schema_enhanced.json`) y la base de datos SQLite estén accesibles y correctamente referenciados en la configuración del `db_connector` y el `pipeline`.
 
-Asegúrate de que el archivo `database.sqlite3.db` esté en la carpeta `data` antes de ejecutar el script.
+## Desarrollo y Contribuciones (Interno Laberit)
 
-## Contribuciones
-
-Las contribuciones son bienvenidas. Si deseas contribuir, por favor abre un issue o envía un pull request.
+El desarrollo de este componente sigue las directrices internas de Laberit. Para contribuir:
+*   Asegúrese de seguir las convenciones de código y estilo.
+*   Escriba pruebas unitarias para nuevas funcionalidades o correcciones.
+*   Documente los cambios significativos.
+*   Utilice el flujo de trabajo de Git establecido (ramas, pull requests) para la revisión de código.
 
 ## Preguntas Objetivo a Contestar por el Sistema
 
