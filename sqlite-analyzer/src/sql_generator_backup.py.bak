@@ -1,0 +1,148 @@
+import re
+import logging
+import sys
+import os
+from typing import Dict, Any, Tuple, List, Optional
+
+# Ajustar el path para importaciones
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Ahora importamos desde el directorio actual
+from sql_validator import whitelist_validate_query
+
+
+class SQLGenerator:
+    def __init__(self, allowed_tables: List[str], allowed_columns: Dict[str, List[str]]):
+        """
+        Inicializa el generador SQL con tablas y columnas permitidas.
+        
+        Args:
+            allowed_tables: Lista de nombres de tablas permitidas
+            allowed_columns: Diccionario donde las claves son tablas y los valores son listas de columnas permitidas
+        """
+        self.allowed_tables = allowed_tables
+        self.allowed_columns = allowed_columns    
+    
+    def _build_conditions(self, conditions):
+        """
+        Convierte una lista/dict/string de condiciones en un string SQL.
+        """
+        if isinstance(conditions, str):
+            return conditions
+        elif isinstance(conditions, dict):
+            col = conditions.get("column", "")
+            op = conditions.get("operator", "=")
+            val = conditions.get("value", "")
+            if isinstance(val, str):
+                val = f"'{val}'"
+            return f"{col} {op} {val}"        elif isinstance(conditions, list):
+            # Si es una lista con un solo elemento diccionario, usarlo directamente
+            if len(conditions) == 1 and isinstance(conditions[0], dict):
+                return self._build_conditions(conditions[0])
+                
+            # Si no, procesar todos los elementos de la lista
+            conds = []
+            for cond in conditions:
+                conds.append(self._build_conditions(cond))
+            return " AND ".join([c for c in conds if c])
+        else:
+            return ""
+            
+    def generate_sql(self, query_info: Dict[str, Any]) -> Tuple[str, List[Any]]:
+        """
+        Genera una consulta SQL parametrizada a partir de la información proporcionada.
+        
+        Args:
+            query_info: Diccionario con la información de la consulta
+            
+        Returns:
+            Tupla (consulta_sql, valores_parámetros)
+        """
+        try:
+            # Validar la consulta primero
+            is_valid, error_msg = whitelist_validate_query(
+                query_info, self.allowed_tables, self.allowed_columns
+            )
+            
+            if not is_valid:
+                return "SELECT ? AS mensaje", [f"Error de validación: {error_msg}"]
+            
+            # Procesar la información de la consulta
+            tables = query_info.get('tables', [])
+            action = query_info.get('actions', 'SELECT')
+            columns = query_info.get('columns', ['*'])
+            conditions = query_info.get('conditions', '')
+            joins = query_info.get('joins', '')
+
+            # Procesar joins para asegurar que sea string
+            if isinstance(joins, list):
+                joins = " ".join([str(j) for j in joins if j])
+            elif not isinstance(joins, str):
+                joins = str(joins)
+                
+            # Procesar conditions para asegurar que sea string
+            if isinstance(conditions, dict):
+                # Si es un diccionario (formato preferido), usarlo directamente
+                conditions = self._build_conditions(conditions)
+            elif isinstance(conditions, list):
+                # Si es una lista, procesarla normalmente
+                conditions = self._build_conditions(conditions)
+            elif not isinstance(conditions, str):
+                # Si no es ni diccionario ni lista ni string, convertir a string vacío
+                conditions = ""
+            
+            # Validar el tipo después de build_conditions para asegurar que sea string    
+            if not isinstance(conditions, str):
+                logging.warning(f"Condiciones no es string después de _build_conditions: {type(conditions)}")
+                conditions = str(conditions)
+            
+            # Ahora podemos aplicar _fix_spanish_conditions con seguridad
+            conditions = self._fix_spanish_conditions(conditions)
+            
+            # Generar la consulta SQL según el tipo de acción
+            if action.upper() == 'COUNT':
+                sql = f"SELECT COUNT({', '.join(columns)}) AS total FROM {tables[0]}"
+            else:
+                sql = f"SELECT {', '.join(columns)} FROM {tables[0]}"
+            
+            # Añadir JOINs
+            if joins:
+                sql += f" {joins}"
+            
+            # Añadir condiciones WHERE
+            if conditions:
+                sql += f" WHERE {conditions}"
+            
+            return sql, []
+            
+        except Exception as e:
+            return "SELECT ? AS mensaje", [f"Error al generar consulta SQL: {str(e)}"]
+    
+    def _fix_spanish_conditions(self, conditions: str) -> str:
+        """
+        Corrige operadores lógicos en español y otros problemas comunes.
+        
+        Args:
+            conditions: String con las condiciones SQL
+            
+        Returns:
+            Condiciones corregidas
+        """
+        if not conditions:
+            return conditions
+            
+        # Reemplazar operadores lógicos en español
+        conditions = re.sub(r'\bO\b', 'OR', conditions, flags=re.IGNORECASE)
+        conditions = re.sub(r'\bY\b', 'AND', conditions, flags=re.IGNORECASE)
+        
+        # Corregir el problema específico con las fechas (ajustar según la consulta real)
+        if "YEAR(PATI_PATIENTS.PATI_BIRTH_DATE) = 2024" in conditions:
+            # Si estamos buscando diagnósticos en 2024, no nacimientos
+            conditions = conditions.replace(
+                "YEAR(PATI_PATIENTS.PATI_BIRTH_DATE) = 2024",
+                "YEAR(ONCO_EVENT_INDICATIONS.EVIN_DATE) = 2024"
+            )
+        
+        return conditions

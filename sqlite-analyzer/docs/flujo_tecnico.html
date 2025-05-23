@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Flujo Técnico - Chatbot Médico SQL Analyzer</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; background: #f9f9f9; color: #222; }
+    h1, h2, h3 { color: #2a4d7a; }
+    code, pre { background: #eef; padding: 2px 6px; border-radius: 3px; }
+    .diagram { background: #fff; border: 1px solid #ccc; padding: 1em; margin: 1em 0; border-radius: 6px; }
+    ul { margin-bottom: 1em; }
+    .file { color: #0a5; font-weight: bold; }
+    .mod { color: #07a; }
+    .section { margin-bottom: 2em; }
+  </style>
+</head>
+<body>
+<h1>Flujo Técnico y Arquitectura del Proyecto</h1>
+
+<div class="section">
+  <h2>1. Diagrama General del Flujo</h2>
+  <div class="diagram">
+    <pre>
+[USUARIO] → Pregunta en lenguaje natural
+    ↓
+[PREPROCESAMIENTO]
+    - Corrección de typos y normalización (usa dictionary.json)
+    - Extracción de términos clave y entidades
+    ↓
+[RAG]
+    - Recupera contexto semántico relevante del esquema (usa schema_enhanced.json)
+    - Identifica tablas y columnas candidatas usando embeddings y sinónimos
+    ↓
+[LLM - PASO 1]
+    - Prompt al LLM con la pregunta y el contexto de esquema
+    - El LLM devuelve un JSON estructurado con tablas, columnas, condiciones, acciones, joins
+    ↓
+[RAG - PASO 2]
+    - Enriquecimiento: infiere relaciones, valida joins, añade contexto médico
+    - Normaliza y valida la estructura extraída
+    ↓
+[SQL GENERATOR]
+    - Traduce la estructura JSON a una consulta SQL válida
+    - Usa mappings y relaciones de schema_enhanced.json
+    ↓
+[VALIDADOR SQL]
+    - Verifica seguridad, sintaxis y entidades válidas
+    - Corrige errores comunes y aplica whitelists
+    ↓
+[BASE DE DATOS]
+    - Ejecuta la consulta SQL
+    - Devuelve resultados tabulares
+    ↓
+[LLM - PASO 3]
+    - Prompt al LLM con la pregunta, SQL y resultados
+    - El LLM genera una respuesta natural, explicando los resultados
+    ↓
+[USUARIO] ← Recibe respuesta en lenguaje natural
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2. Componentes y Archivos Principales (detalle)</h2>
+  <ul>
+    <li><span class="file">generate_enhanced_dict.py</span>:<br>
+      <ul>
+        <li>Extrae todas las tablas y columnas de la BD vía PRAGMA.</li>
+        <li>Para cada tabla/columna, llama al LLM para obtener descripciones y sinónimos.</li>
+        <li>Genera <b>dictionary.json</b> con estructura:<br>
+          <code>{ tables: { ... }, columns: { ... }, common_typos: { ... }, table_relationships: [...] }</code></li>
+        <li>Optimizado para lookup rápido y mapeo de términos en preprocesamiento.</li>
+        <li>Se ha modificado para cargar la clave API de DeepSeek desde variables de entorno o usar una por defecto, pasándola a `llm_config`.</li>
+      </ul>
+    </li>
+    <li><span class="file">schema_enhancer.py</span>:<br>
+      <ul>
+        <li>Extrae la estructura completa de la BD y la enriquece con LLM.</li>
+        <li>Agrega descripciones, sinónimos, casos de uso, tipo semántico, ejemplos, flags de sensibilidad, etc.</li>
+        <li>Genera <b>schema_enhanced.json</b> con estructura:<br>
+          <code>{ schema_knowledge: { tables, columns, relationships, ... }, table_corpus, column_corpus, ... }</code></li>
+        <li>Diseñado para RAG, prompts LLM y razonamiento avanzado.</li>
+      </ul>
+    </li>
+    <li><span class="file">pipeline.py</span>:<br>
+      <ul>
+        <li>Contiene el pipeline principal: orquesta el flujo de pregunta a respuesta.</li>
+        <li>Integra preprocesamiento, RAG, LLM, generación y validación de SQL, ejecución y respuesta.</li>
+        <li>Gestiona fallback, autocorrección y logging detallado.</li>
+        <li>Se ha modificado la función `chatbot_pipeline` para incluir lógica de inferencia de joins de múltiples saltos (multi-hop). Esta lógica utiliza `table_relationships` de `dictionary.json` y el módulo `db_relationship_graph.py` para construir un grafo de relaciones, identificar tablas no conectadas directamente en la consulta, encontrar las rutas de join más cortas y generar los joins necesarios, que se añaden a la información estructurada para el `sql_generator.py`.</li>
+      </ul>
+    </li>
+    <li><span class="file">sql_utils.py</span>:<br>
+      <ul>
+        <li>Funciones para validación de SQL, mapeo de términos, corrección de typos, extracción de entidades y normalización.</li>
+        <li>Expone <code>load_terms_mapping</code> para cargar y exponer los campos enriquecidos de dictionary.json.</li>
+      </ul>
+    </li>
+    <li><span class="file">rag_enhancements.py</span>:<br>
+      <ul>
+        <li>Implementa el sistema RAG avanzado: embeddings, búsqueda semántica, recuperación de contexto relevante.</li>
+        <li>Permite identificar tablas y columnas relevantes incluso con sinónimos o lenguaje ambiguo.</li>
+      </ul>
+    </li>
+    <li><span class="file">db/connection.py</span>, <span class="file">db/queries.py</span>:<br>
+      <ul>
+        <li>Gestión de la conexión SQLite y consultas básicas (tablas, esquemas, datos).</li>
+      </ul>
+    </li>
+    <li><span class="file">analysis/schema_analyzer.py</span>, <span class="file">analysis/data_analyzer.py</span>:<br>
+      <ul>
+        <li>Análisis estructural y estadístico de la base de datos.</li>
+        <li>Útiles para validación, exploración y generación de ejemplos.</li>
+      </ul>
+    </li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>3. Generación y Uso de <code>dictionary.json</code> y <code>schema_enhanced.json</code> (detalle)</h2>
+  <ul>
+    <li><b>dictionary.json</b>:
+      <ul>
+        <li>Contiene para cada tabla/columna: descripción breve, lista de sinónimos y términos comunes, tipo de dato, y mapeos rápidos.</li>
+        <li>Incluye <code>common_typos</code> para autocorrección de errores frecuentes del usuario.</li>
+        <li>Ejemplo de uso en preprocesamiento:<br>
+          <code>terms_dict = load_terms_mapping('dictionary.json')<br>question = correct_typos_in_question(question, terms_dict['valid_terms'])</code></li>
+        <li>Se usa para:<br>
+          - Autocompletado y sugerencias<br>
+          - Mapeo de términos ambiguos a entidades reales<br>
+          - Corrección de errores ortográficos<br>
+          - Validación rápida de entidades</li>
+      </ul>
+    </li>
+    <li><b>schema_enhanced.json</b>:
+      <ul>
+        <li>Incluye descripciones ricas, sinónimos, casos de uso, tipo semántico, ejemplos, flags de sensibilidad, relaciones, corpus de tablas y columnas, etc.</li>
+        <li>Ejemplo de uso en RAG y prompts LLM:<br>
+          <code>with open('schema_enhanced.json') as f: schema = json.load(f)<br>context = schema['schema_knowledge']['tables']['PATI_PATIENTS']['description']</code></li>
+        <li>Se usa para:<br>
+          - Recuperación semántica avanzada (RAG)<br>
+          - Enriquecimiento de prompts para el LLM<br>
+          - Inferencia de relaciones y joins<br>
+          - Generación de explicaciones y respuestas ricas</li>
+      </ul>
+    </li>
+    <li>Ambos archivos pueden regenerarse fácilmente para nuevas BDs o cambios en el esquema, sin tocar el pipeline principal.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>4. Detalle del Pipeline Técnico (profundo)</h2>
+  <ol>
+    <li><b>Entrada del usuario</b>:<br>
+      - El usuario ingresa una pregunta en lenguaje natural (soporta español y variantes, con errores comunes).</li>
+    <li><b>Preprocesamiento</b> (<span class="mod">sql_utils.py</span>):<br>
+      - Se corrigen typos usando <code>common_typos</code> y <code>valid_terms</code> de dictionary.json.<br>
+      - Se extraen entidades, patrones de IDs, y se normaliza el texto.<br>
+      - Se detecta el tipo de consulta (COUNT, SELECT, AVG, etc.) y se enriquecen los metadatos.</li>
+    <li><b>Recuperación de contexto (RAG)</b> (<span class="mod">rag_enhancements.py</span>):<br>
+      - Se usan embeddings y sinónimos para identificar tablas y columnas relevantes.<br>
+      - Se consulta schema_enhanced.json para obtener descripciones y relaciones.<br>
+      - Permite robustez ante lenguaje ambiguo o sinónimos no exactos.</li>
+    <li><b>Extracción estructurada (LLM)</b> (<span class="mod">pipeline.py</span>):<br>
+      - Se construye un prompt con la pregunta y el contexto de esquema.<br>
+      - El LLM devuelve un JSON estructurado con:<br>
+        <code>{ tables: [...], actions: [...], columns: [...], conditions: [...], joins: [...] }</code><br>
+      - Se extraen y validan las entidades detectadas.</li>
+    <li><b>Enriquecimiento y validación</b> (<span class="mod">pipeline.py</span>):<br>
+      - Se normaliza la estructura, se validan relaciones y se infieren joins faltantes (incluyendo joins de múltiples saltos utilizando el grafo de relaciones de `dictionary.json`).<br>
+      - Se aplican reglas médicas y de negocio para asegurar la coherencia.<br>
+      - Se usan funciones como <code>validate_and_fix_relations</code> y <code>enhance_structured_info</code>.</li>
+    <li><b>Generación de SQL</b> (<span class="mod">sql_generator.py</span>):<br>
+      - Traduce la estructura JSON a SQL usando mappings, relaciones y convenciones.<br>
+      - Aplica aliases, parametrización y validación de entidades.<br>
+      - Usa fallback al LLM si la generación automática falla.</li>
+    <li><b>Validación de SQL</b> (<span class="mod">sql_validator.py</span>):<br>
+      - Verifica sintaxis, seguridad (prevención de inyección), y que solo se usen entidades válidas.<br>
+      - Aplica whitelists y corrige errores comunes automáticamente.</li>
+    <li><b>Ejecución</b>:<br>
+      - Ejecuta la consulta SQL en la base de datos.<br>
+      - Captura resultados, errores y tiempos de ejecución.</li>
+    <li><b>Generación de respuesta (LLM)</b>:<br>
+      - Prompt al LLM con la pregunta, SQL y resultados.<br>
+      - El LLM genera una respuesta natural, explicando los resultados y su contexto médico.<br>
+      - Soporta fallback y autocorrección si la respuesta es ambigua o incompleta.</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2>5. Esquema de Dependencias y Extensión (profundo)</h2>
+  <ul>
+    <li>El pipeline es modular y desacoplado: cada etapa puede ser reemplazada o extendida (por ejemplo, cambiar el modelo LLM, añadir nuevas reglas de validación, o mejorar el sistema RAG).</li>
+    <li>Los scripts de generación de diccionario y esquema pueden adaptarse a nuevas BDs o dominios médicos sin modificar el pipeline.</li>
+    <li>El sistema soporta fallback y autocorrección en cada etapa: si falla la generación de SQL, se intenta con el LLM; si falla la respuesta, se regenera o simplifica automáticamente.</li>
+    <li>Se pueden añadir nuevas fuentes de contexto (por ejemplo, ontologías médicas externas) integrando en la etapa RAG o en los prompts LLM.</li>
+    <li>El logging y la trazabilidad están integrados en cada módulo para facilitar debugging y auditoría.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>6. Ejemplo de Flujo Completo (profundo)</h2>
+  <pre class="diagram">
+Usuario: "¿Cuántos pacientes con cáncer de pulmón fueron atendidos el año pasado?"
+↓
+Preprocesamiento: Detecta tipo COUNT, corrige typos, extrae términos clave ("pacientes", "cáncer de pulmón", "año pasado")
+↓
+RAG: Identifica tablas (PATI_PATIENTS, ONCO_EVENT_INDICATIONS) y columnas (PATI_ID, EVIN_DESCRIPTION_ES, EVIN_DATE) relevantes
+↓
+LLM: Genera estructura JSON:
+{
+  "tables": ["PATI_PATIENTS", "ONCO_EVENT_INDICATIONS"],
+  "actions": ["COUNT"],
+  "columns": ["PATI_ID"],
+  "conditions": ["EVIN_DESCRIPTION_ES LIKE '%cáncer de pulmón%'", "YEAR(EVIN_DATE) = 2023"],
+  "joins": ["INNER JOIN ONCO_EVENT_INDICATIONS ON PATI_PATIENTS.PATI_ID = ONCO_EVENT_INDICATIONS.PATI_ID"]
+}
+↓
+SQLGenerator: Genera SQL:
+SELECT COUNT(DISTINCT PATI_PATIENTS.PATI_ID)
+FROM PATI_PATIENTS
+INNER JOIN ONCO_EVENT_INDICATIONS ON PATI_PATIENTS.PATI_ID = ONCO_EVENT_INDICATIONS.PATI_ID
+WHERE EVIN_DESCRIPTION_ES LIKE '%cáncer de pulmón%' AND YEAR(EVIN_DATE) = 2023
+↓
+Ejecución: Ejecuta SQL y obtiene resultados (ej: 157)
+↓
+LLM: Formula respuesta natural:
+"En el año 2023 fueron atendidos 157 pacientes con diagnóstico de cáncer de pulmón según los registros de la base de datos."
+↓
+Usuario: Recibe respuesta final
+  </pre>
+</div>
+
+<div class="section">
+  <h2>7. Notas para Programadores (avanzado)</h2>
+  <ul>
+    <li>Para regenerar los archivos enriquecidos, ejecuta <code>generate_enhanced_dict.py</code> y <code>schema_enhancer.py</code> con la ruta de la base de datos. Puedes personalizar los prompts LLM para adaptar el estilo de descripciones y sinónimos.</li>
+    <li>El pipeline principal está en <span class="file">pipeline.py</span> y es altamente configurable vía argumentos y variables de entorno.</li>
+    <li>El sistema está preparado para nuevas BDs, nuevos términos, nuevos idiomas y nuevas tareas de RAG/LLM. Solo necesitas actualizar los scripts de generación y los archivos JSON.</li>
+    <li>Para añadir nuevas validaciones, hooks o lógica de negocio, extiende las funciones en <span class="file">sql_utils.py</span> y <span class="file">pipeline.py</span>.</li>
+    <li>Consulta el README y los docstrings para detalles de cada módulo. El código está documentado y sigue buenas prácticas de logging y modularidad.</li>
+    <li>Para depuración avanzada, revisa los logs generados y utiliza los scripts de análisis en <span class="file">analysis/</span>.</li>
+  </ul>
+</div>
+
+</body>
+</html>
+``` 
