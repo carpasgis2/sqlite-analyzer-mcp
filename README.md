@@ -37,6 +37,28 @@ sina_mcp/
 └── .gitignore                # Archivos y carpetas a ignorar por el control de versiones Git
 ```
 
+## Arquitectura MCP (Model-Controller-Pipeline)
+
+El componente de análisis de lenguaje natural de SinaSuite se estructura siguiendo un patrón conceptual que denominamos MCP (Model-Controller-Pipeline). Este enfoque organiza la lógica del sistema en tres capas principales para facilitar la modularidad, el mantenimiento y la escalabilidad:
+
+1.  **Model (Modelo):**
+    *   **Definición:** Representa los datos, el conocimiento del dominio y la lógica de negocio para interactuar con la base de datos. Incluye el esquema de la base de datos (`schema_enhanced.json`), el diccionario de datos enriquecido (`dictionary.json` con descripciones, sinónimos y relaciones), y los módulos responsables de la generación y validación de SQL (`sql_generator.py`, `db_relationship_graph.py`).
+    *   **Función:** Proporciona las herramientas y la información necesaria para comprender la estructura de los datos médicos y cómo consultarlos eficazmente. Es la base sobre la cual se construyen las consultas SQL.
+
+2.  **Controller (Controlador):**
+    *   **Definición:** Actúa como el intermediario entre el usuario (o el sistema que consume este componente) y el `Pipeline`. El script `langchain_chatbot.py` es el principal exponente de esta capa.
+    *   **Función:** Gestiona la interacción con el usuario (entrada de preguntas en lenguaje natural), inicializa y coordina el agente LangChain, maneja el historial de la conversación, invoca el `Pipeline` para procesar la consulta y presenta la respuesta final al usuario. Es el punto de entrada y orquestación de alto nivel.
+
+3.  **Pipeline (Tubería de Procesamiento):**
+    *   **Definición:** Es el núcleo del procesamiento de la consulta, encapsulado principalmente en `pipeline.py`.
+    *   **Función:** Orquesta la secuencia de pasos necesarios para traducir una pregunta en lenguaje natural a una consulta SQL ejecutable y luego a una respuesta comprensible. Esto incluye el preprocesamiento de la pregunta, la recuperación de información relevante mediante RAG (Retrieval Augmented Generation), la interacción con el LLM para la interpretación y estructuración, la generación de SQL (utilizando componentes del `Model`), la ejecución de la consulta y la formulación de la respuesta final. El `Pipeline` es invocado por el `Controller` (`langchain_chatbot.py`) y utiliza el `Model` para acceder a la lógica de datos y generación SQL.
+
+**Relación con `langchain_chatbot.py`:**
+
+`langchain_chatbot.py` funciona como la capa de `Controller`. Inicia el sistema, gestiona la interfaz con el usuario (en este caso, una CLI), y lo más importante, configura y ejecuta el agente LangChain. Este agente, a su vez, utiliza herramientas personalizadas que internamente llaman al `Pipeline` (`pipeline.py`). El `Pipeline` luego utiliza los componentes del `Model` para realizar su tarea de convertir la pregunta del usuario en una consulta SQL, ejecutarla y devolver los resultados para que el `Controller` los presente.
+
+Esta arquitectura MCP permite una clara separación de responsabilidades, haciendo que el sistema sea más robusto y fácil de evolucionar.
+
 ## Requisitos Previos
 
 Asegúrate de tener instaladas las siguientes dependencias:
