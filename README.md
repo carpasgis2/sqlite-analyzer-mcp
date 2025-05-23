@@ -1,6 +1,6 @@
 # SinaSuite: Inteligencia de Datos Médicos Avanzada con Lenguaje Natural
 
-eTE CHATBOT incorpora un motor de análisis de bases de datos SQLite de última generación, diseñado para empoderar a los profesionales de la salud y analistas. Esta capacidad permite realizar consultas intrincadas utilizando lenguaje natural, eliminando la barrera técnica de SQL y facilitando el acceso instantáneo a información vital.
+Este CHATBOT incorpora un motor de análisis de bases de datos SQLite de última generación, diseñado para empoderar a los profesionales de la salud y analistas. Esta capacidad permite realizar consultas intrincadas utilizando lenguaje natural, eliminando la barrera técnica de SQL y facilitando el acceso instantáneo a información vital.
 
 Con ChatSuite, se puede:
 *   **Descubrir insights profundos** ocultos en sus datos.
