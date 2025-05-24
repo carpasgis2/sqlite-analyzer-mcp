@@ -1,110 +1,60 @@
-# SinaSuite: Inteligencia de Datos Médicos Avanzada con Lenguaje Natural
+# SQLite Analyzer
 
-Este CHATBOT incorpora un motor de análisis de bases de datos SQLite de última generación, diseñado para empoderar a los profesionales de la salud y analistas. Esta capacidad permite realizar consultas intrincadas utilizando lenguaje natural, eliminando la barrera técnica de SQL y facilitando el acceso instantáneo a información vital.
+Este proyecto es una herramienta para analizar bases de datos SQLite. Permite a los usuarios conectarse a una base de datos SQLite, extraer información sobre su esquema y realizar análisis de datos.
 
-Con ChatSuite, se puede:
-*   **Descubrir insights profundos** ocultos en sus datos.
-*   **Obtener respuestas claras y precisas** a preguntas complejas sobre pacientes, tratamientos, diagnósticos y más.
-*   **Potenciar la toma de decisiones clínicas y operativas** con información relevante y oportuna.
-
-La tecnología de IA no solo analiza esquemas y datos, sino que comprende la semántica de sus preguntas, infiere relaciones complejas entre tablas (multi-hop joins) y entrega la información crucial, cuándo y cómo la necesita. Libere el verdadero potencial de sus datos médicos con la inteligencia analítica de SinaSuite.
-
-## Arquitectura del Componente de Análisis de Lenguaje Natural
-
-Este componente es una parte integral de SinaSuite, responsable de la interpretación de consultas en lenguaje natural y su traducción a SQL para interactuar con bases de datos médicas SQLite.
+## Estructura del Proyecto
 
 ```
-sina_mcp/
-├── src/                      # Núcleo de la lógica de la aplicación
-│   ├── pipeline.py           # Orquestador principal del flujo de consulta NLQ a SQL
-│   ├── langchain_chatbot.py  # Integración con agente LangChain y herramientas de IA
-│   ├── llm_utils.py          # Utilidades para la interacción con Modelos de Lenguaje Grandes (LLMs)
-│   ├── sql_generator.py      # Generador de consultas SQL a partir de JSON estructurado
-│   ├── rag_enhancements.py   # Lógica de RAG para recuperación de contexto semántico
-│   ├── db_relationship_graph.py # Gestión y uso del grafo de relaciones entre tablas
-│   ├── generate_enhanced_dict.py # Script para generar dictionary.json (descripciones, sinónimos, relaciones)
-│   ├── schema_enhancer.py    # Script para generar schema_enhanced.json (esquema de BD enriquecido)
-│   ├── ...                   # Otros módulos clave (validadores, conectores BD, preprocesadores, etc.)
-├── data/                     # Archivos de datos generados y utilizados por el sistema (generalmente no versionados si son específicos de una BD)
-│   ├── dictionary.json       # Diccionario enriquecido de tablas, columnas, relaciones (ejemplo o plantilla)
-│   ├── schema_enhanced.json  # Esquema de la BD enriquecido con metadatos semánticos (ejemplo o plantilla)
-│   └── (database.sqlite3.db) # Base de datos de ejemplo o de desarrollo (si aplica)
-├── docs/                     # Documentación del proyecto
-│   ├── README.md             # Este archivo (documentación principal del componente)
-│   └── flujo_tecnico.html    # Descripción detallada del flujo técnico interno
-├── tests/                    # Pruebas unitarias y de integración para asegurar la calidad
-├── requirements.txt          # Dependencias del proyecto Python
-└── .gitignore                # Archivos y carpetas a ignorar por el control de versiones Git
+sqlite-analyzer
+├── src
+│   ├── main.py               # Punto de entrada del script
+│   ├── db
+│   │   ├── connection.py      # Gestión de la conexión a la base de datos
+│   │   └── queries.py         # Consultas SQL para extraer datos
+│   ├── analysis
+│   │   ├── schema_analyzer.py # Análisis del esquema de la base de datos
+│   │   └── data_analyzer.py   # Análisis de los datos dentro de las tablas
+│   └── utils
+│       └── helpers.py         # Funciones auxiliares
+├── data
+│   └── database.sqlite3.db    # Base de datos SQLite a analizar
+├── requirements.txt            # Dependencias del proyecto
+└── README.md                   # Documentación del proyecto
 ```
 
-## Arquitectura MCP (Model-Controller-Pipeline)
-
-El componente de análisis de lenguaje natural de SinaSuite se estructura siguiendo un patrón conceptual que denominamos MCP (Model-Controller-Pipeline). Este enfoque organiza la lógica del sistema en tres capas principales para facilitar la modularidad, el mantenimiento y la escalabilidad:
-
-1.  **Model (Modelo):**
-    *   **Definición:** Representa los datos, el conocimiento del dominio y la lógica de negocio para interactuar con la base de datos. Incluye el esquema de la base de datos (`schema_enhanced.json`), el diccionario de datos enriquecido (`dictionary.json` con descripciones, sinónimos y relaciones), y los módulos responsables de la generación y validación de SQL (`sql_generator.py`, `db_relationship_graph.py`).
-    *   **Función:** Proporciona las herramientas y la información necesaria para comprender la estructura de los datos médicos y cómo consultarlos eficazmente. Es la base sobre la cual se construyen las consultas SQL.
-
-2.  **Controller (Controlador):**
-    *   **Definición:** Actúa como el intermediario entre el usuario (o el sistema que consume este componente) y el `Pipeline`. El script `langchain_chatbot.py` es el principal exponente de esta capa.
-    *   **Función:** Gestiona la interacción con el usuario (entrada de preguntas en lenguaje natural), inicializa y coordina el agente LangChain, maneja el historial de la conversación, invoca el `Pipeline` para procesar la consulta y presenta la respuesta final al usuario. Es el punto de entrada y orquestación de alto nivel.
-
-3.  **Pipeline (Tubería de Procesamiento):**
-    *   **Definición:** Es el núcleo del procesamiento de la consulta, encapsulado principalmente en `pipeline.py`.
-    *   **Función:** Orquesta la secuencia de pasos necesarios para traducir una pregunta en lenguaje natural a una consulta SQL ejecutable y luego a una respuesta comprensible. Esto incluye el preprocesamiento de la pregunta, la recuperación de información relevante mediante RAG (Retrieval Augmented Generation), la interacción con el LLM para la interpretación y estructuración, la generación de SQL (utilizando componentes del `Model`), la ejecución de la consulta y la formulación de la respuesta final. El `Pipeline` es invocado por el `Controller` (`langchain_chatbot.py`) y utiliza el `Model` para acceder a la lógica de datos y generación SQL.
-
-**Relación con `langchain_chatbot.py`:**
-
-`langchain_chatbot.py` funciona como la capa de `Controller`. Inicia el sistema, gestiona la interfaz con el usuario (en este caso, una CLI), y lo más importante, configura y ejecuta el agente LangChain. Este agente, a su vez, utiliza herramientas personalizadas que internamente llaman al `Pipeline` (`pipeline.py`). El `Pipeline` luego utiliza los componentes del `Model` para realizar su tarea de convertir la pregunta del usuario en una consulta SQL, ejecutarla y devolver los resultados para que el `Controller` los presente.
-
-Esta arquitectura MCP permite una clara separación de responsabilidades, haciendo que el sistema sea más robusto y fácil de evolucionar.
-
-## Requisitos Previos
+## Requisitos
 
 Asegúrate de tener instaladas las siguientes dependencias:
 
 - sqlite3
 - Otras bibliotecas necesarias (especificadas en `requirements.txt`)
 
-## Instalación y Configuración (Contexto de Desarrollo/Integración)
+## Instalación
 
-Estos pasos son relevantes para desarrolladores o para la integración de este componente dentro de entornos específicos de SinaSuite.
+1. Clona el repositorio:
+   ```
+   git clone <URL_DEL_REPOSITORIO>
+   cd sqlite-analyzer
+   ```
 
-1.  **Clonación del Repositorio (si aplica):**
-    ```bash
-    git clone https://github.com/carpasgis2/sqlite-analyzer-mcp.git
-    cd sqlite-analyzer-mcp
-    ```
+2. Instala las dependencias:
+   ```
+   pip install -r requirements.txt
+   ```
 
-2.  **Gestión de Dependencias:**
-    Se recomienda el uso de entornos virtuales (por ejemplo, `venv` o `conda`).
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # En Linux/macOS
-    # venv\\Scripts\\activate   # En Windows
-    pip install -r requirements.txt
-    ```
+## Uso
 
-3.  **Configuración de Variables de Entorno:**
-    Este componente requiere la configuración de ciertas variables de entorno, como claves API para los LLMs (ej. `DEEPSEEK_API_KEY`). Consulte la documentación específica de los módulos que interactúan con servicios externos.
+Para ejecutar el script, utiliza el siguiente comando:
 
-## Uso del Componente (Interfaz Principal)
-
-La interacción principal con este componente se realiza a través del script `langchain_chatbot.py` o integrando el `pipeline.py` en otras aplicaciones de SinaSuite.
-
-Para ejecutar la interfaz de línea de comandos (CLI) de ejemplo:
-```bash
-python src/langchain_chatbot.py
 ```
-Asegúrese de que los archivos de configuración necesarios (como `dictionary.json`, `schema_enhanced.json`) y la base de datos SQLite estén accesibles y correctamente referenciados en la configuración del `db_connector` y el `pipeline`.
+python src/main.py
+```
 
-## Desarrollo y Contribuciones (Interno Laberit)
+Asegúrate de que el archivo `database.sqlite3.db` esté en la carpeta `data` antes de ejecutar el script.
 
-El desarrollo de este componente sigue las directrices internas de Laberit. Para contribuir:
-*   Asegúrese de seguir las convenciones de código y estilo.
-*   Escriba pruebas unitarias para nuevas funcionalidades o correcciones.
-*   Documente los cambios significativos.
-*   Utilice el flujo de trabajo de Git establecido (ramas, pull requests) para la revisión de código.
+## Contribuciones
+
+Las contribuciones son bienvenidas. Si deseas contribuir, por favor abre un issue o envía un pull request.
 
 ## Preguntas Objetivo a Contestar por el Sistema
 

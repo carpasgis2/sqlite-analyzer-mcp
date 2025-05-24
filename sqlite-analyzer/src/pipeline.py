@@ -137,12 +137,14 @@ except ImportError:
 
 pipeline_module_logger.info("Intentando importar get_db_connector de db_config...")
 # Importar helper de conexión y configuración por defecto
+# Se modifica la importación para que coincida con las definiciones en db_config.py
 try:
-    from src.db_config import get_db_connector, DEFAULT_DB_CONFIG
-    pipeline_module_logger.info("Importado src.db_config.get_db_connector.")
+    from src.db_config import get_db_connector, DEFAULT_DB_CONFIG, DBConnector
+    pipeline_module_logger.info("Importado src.db_config.get_db_connector, DEFAULT_DB_CONFIG y DBConnector.")
 except ImportError:
-    from db_config import get_db_connector, DEFAULT_DB_CONFIG
-    pipeline_module_logger.info("Importado db_config.get_db_connector (fallback).")
+    # Este fallback asume que db_config.py está en el mismo directorio o en sys.path
+    from db_config import get_db_connector, DEFAULT_DB_CONFIG, DBConnector
+    pipeline_module_logger.info("Importado db_config.get_db_connector, DEFAULT_DB_CONFIG y DBConnector (fallback).")
 
 pipeline_module_logger.info("Intentando importar SQLGenerator...")
 from src.sql_generator import SQLGenerator
@@ -272,6 +274,15 @@ def load_terms_dictionary(file_path: str = DICTIONARY_FILE) -> Dict[str, Any]:
     # Utilizamos la función mejorada desde sql_utils
     return load_terms_mapping(file_path)
 
+def normalize_text(text):
+    """Normaliza texto a minúsculas y sin acentos para matching robusto."""
+    if not isinstance(text, str):
+        return text
+    text = text.lower()
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join([c for c in text if unicodedata.category(c) != 'Mn'])
+    return text
+
 # Preprocesamiento mejorado con corrección de typos y términos del diccionario
 def preprocess_question(question: str, terms_dict: Dict[str, Any] = None) -> Tuple[str, List[str], str]:
     """
@@ -292,6 +303,7 @@ def preprocess_question(question: str, terms_dict: Dict[str, Any] = None) -> Tup
             logging.info(f"Correcciones aplicadas: {corrections}")
     original_question_for_terms = question  # Guardar la pregunta original para la búsqueda de términos
     question = question.lower().strip()
+    normalized_question = normalize_text(question)
     question_type = "select"
     if re.search(r'(cuant[oa]s|número|total|contar|count)', question):
         question_type = "count"
@@ -337,62 +349,51 @@ def preprocess_question(question: str, terms_dict: Dict[str, Any] = None) -> Tup
     if structured_metadata:
         enriched_question += f" [METADATA: {json.dumps(structured_metadata, ensure_ascii=False)}]"
     enriched_question += f" {original_question_for_terms}"
-    
-    identified_tables_from_terms = set()  # Usar un set para evitar duplicados
-    matched_terms = []             # <--- INICIALIZACIÓN CORREGIDA
-    matched_descriptions = []      # <--- INICIALIZACIÓN CORREGIDA
-    matched_synonyms = []          # <--- INICIALIZACIÓN CORREGIDA
 
-    # Enriquecer con términos, descripciones y sinónimos del diccionario
+    identified_tables_from_terms = set()
+    matched_terms = []
+    matched_descriptions = []
+    matched_synonyms = []
+
+    # --- MEJORA: Matching robusto y exhaustivo ---
     if terms_dict:
-        if 'table_mappings' in terms_dict:
-            for term, table_data in terms_dict['table_mappings'].items():
-                # Verificar que table_data es un diccionario
-                if not isinstance(table_data, dict):
-                    logging.warning(f"Se esperaba un diccionario para el término '{term}' en 'table_mappings', pero se encontró {type(table_data)}. Omitiendo este término.")
-                    continue
-
-                pattern = r'(^|\W)' + re.escape(term) + r'\b'
-                try:
-                    if re.search(pattern, original_question_for_terms, re.IGNORECASE):
-                        table_name = table_data.get('table')
-                        if table_name:
-                            identified_tables_from_terms.add(table_name)
-                            enriched_term = f"- {term}:table:{table_name}"
-                            if enriched_term not in matched_terms:
-                                matched_terms.append(enriched_term)
-                        
-                        description = table_data.get('description')
-                        if description and description not in matched_descriptions:
-                            matched_descriptions.append(f"- {term}:desc:{description}")
-
-                        synonyms = table_data.get('synonyms', [])
-                        # Asegurarse de que los sinónimos sean una lista
-                        if not isinstance(synonyms, list):
-                            logging.warning(f"Se esperaba una lista para los sinónimos del término '{term}', pero se encontró {type(synonyms)}. Omitiendo sinónimos para este término.")
-                            synonyms = []
-                            
-                        for syn in synonyms:
-                            syn_entry = f"- {term}:syn:{syn}"
-                            if syn_entry not in matched_synonyms:
-                                matched_synonyms.append(syn_entry)
-                except re.error as e:
-                    logging.warning(f"Error de regex con término '{term}' y patrón '{pattern}': {e}")
-        else:
-            logging.warning("La clave 'table_mappings' no se encontró en terms_dict.")
-        
-        # Columnas
-        if 'column_mappings' in terms_dict:
-            for term, col_data in terms_dict['column_mappings'].items():
-                pattern = r'(^|\W)' + re.escape(term) + r'\b'
-                try:
-                    if re.search(pattern, original_question_for_terms, re.IGNORECASE):
-                        pass
-                except re.error as e:
-                    logging.warning(f"Error de regex con término de columna '{term}' y patrón '{pattern}': {e}")
-        else:
-            logging.warning("La clave 'column_mappings' no se encontró en terms_dict.")
-
+        # Recopilar todos los términos y sinónimos posibles para cada tabla
+        table_candidates = {}
+        for table, syns in terms_dict.get('table_synonyms', {}).items():
+            for syn in syns:
+                table_candidates[normalize_text(syn)] = table
+        for table, syns in terms_dict.get('table_common_terms', {}).items():
+            for syn in syns:
+                table_candidates[normalize_text(syn)] = table
+        for term, table in terms_dict.get('table_mappings', {}).items():
+            table_candidates[normalize_text(term)] = table
+        # Matching robusto: buscar coincidencias parciales y exactas
+        for syn_norm, table in table_candidates.items():
+            if not syn_norm:
+                continue
+            # Coincidencia exacta o parcial (palabra dentro de la pregunta)
+            if syn_norm in normalized_question or syn_norm in question or any(syn_norm in w for w in normalized_question.split()):
+                identified_tables_from_terms.add(table)
+                if syn_norm not in matched_synonyms:
+                    matched_synonyms.append(syn_norm)
+        # Fuzzy matching adicional si no hay match directo
+        if not identified_tables_from_terms and table_candidates:
+            from difflib import get_close_matches
+            words = normalized_question.split()
+            for word in words:
+                close = get_close_matches(word, list(table_candidates.keys()), n=1, cutoff=0.7)
+                if close:
+                    identified_tables_from_terms.add(table_candidates[close[0]])
+                    if close[0] not in matched_synonyms:
+                        matched_synonyms.append(close[0])
+        # Añadir descripciones si están disponibles
+        for table in identified_tables_from_terms:
+            desc = terms_dict.get('table_descriptions', {}).get(table)
+            if desc and desc not in matched_descriptions:
+                matched_descriptions.append(desc)
+        if identified_tables_from_terms:
+            for table in identified_tables_from_terms:
+                matched_terms.append(f"- {table}")
         if matched_terms:
             enriched_question += f" [TERMS: {', '.join(matched_terms)}]"
         if matched_descriptions:
@@ -402,6 +403,8 @@ def preprocess_question(question: str, terms_dict: Dict[str, Any] = None) -> Tup
         logging.info(f"Términos identificados: {matched_terms}")
         logging.info(f"Descripciones identificadas: {matched_descriptions}")
         logging.info(f"Sinónimos identificados: {matched_synonyms}")
+        if not identified_tables_from_terms:
+            logging.warning(f"No se identificaron tablas en la pregunta '{question}'. Términos candidatos: {list(table_candidates.keys())}")
     logging.debug(f"Pregunta preprocesada: {enriched_question}")
     return enriched_question, list(identified_tables_from_terms), question_type
 
@@ -539,23 +542,36 @@ def load_semantic_mappings():
     """
     table_map = {}
     column_map = {}
-    # Cargar dictionary.json
+    # Cargar dictionary.json y extraer sinónimos de common_terms o de la descripción si está vacío
     try:
         with open(DICTIONARY_FILE, encoding="utf-8") as f:
             dct = json.load(f)
+            # Procesar tablas
             for tname, tinfo in dct.get("tables", {}).items():
-                # Agregar nombre real y sinónimos
+                desc = tinfo.get("description", "")
+                synonyms = tinfo.get("common_terms", []) or []
+                if not synonyms or synonyms == [tname.lower()]:
+                    m = re.search(r"\[(.*?)\]", desc)
+                    if m:
+                        items = [s.strip().strip("'\"") for s in m.group(1).split(",")]
+                        synonyms = [s.lower() for s in items if s]
                 table_map[tname.lower()] = tname
-                for term in tinfo.get("common_terms", []):
-                    clean = term.lower().replace("**términos/sinónimos comunes**:", "").strip("- ")
-                    if clean:
-                        table_map[clean] = tname
+                for term in synonyms:
+                    table_map[term] = tname
+            # Procesar columnas
             for cname, cinfo in dct.get("columns", {}).items():
-                column_map[cname.lower()] = cinfo.get("table", ""), cname
-                for term in cinfo.get("common_terms", []):
-                    clean = term.lower().replace("**términos/sinónimos comunes**:", "").strip("- ")
-                    if clean:
-                        column_map[clean] = (cinfo.get("table", ""), cname)
+                table = cinfo.get("table", "")
+                col_key = f"{table}.{cname}" if table else cname
+                desc = cinfo.get("description", "")
+                synonyms = cinfo.get("common_terms", []) or []
+                if not synonyms or synonyms == [col_key.lower()]:
+                    m = re.search(r"\[(.*?)\]", desc)
+                    if m:
+                        items = [s.strip().strip("'\"") for s in m.group(1).split(",")]
+                        synonyms = [s.lower() for s in items if s]
+                column_map[col_key.lower()] = (table, cname)
+                for term in synonyms:
+                    column_map[term] = (table, cname)
     except Exception as e:
         logging.warning(f"No se pudo cargar dictionary.json: {e}")
     # Cargar schema_enhanced.json
@@ -598,53 +614,141 @@ def normalize_name(name):
         return ""
     return unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii').lower().strip()
 
-def normalize_table_and_column_names(structured_info):
+def normalize_table_and_column_names(structured_info: Dict[str, Any]) -> Dict[str, Any]:
     """
     Normaliza los nombres de tablas y columnas en structured_info usando los mappings semánticos.
+    También se asegura de que las listas de tablas/columnas no contengan Nones.
     """
     table_map, column_map = load_semantic_mappings()
+
     # Tablas
     if "tables" in structured_info:
-        new_tables = []
-        for t in structured_info["tables"]:
-            t_norm = normalize_name(t)
-            mapped = table_map.get(t_norm, t)
-            new_tables.append(mapped)
-        structured_info["tables"] = new_tables
+        original_tables = structured_info.get("tables")
+        if isinstance(original_tables, list):
+            new_tables = []
+            for t in original_tables:
+                if t is None:
+                    logging.debug("normalize_table_and_column_names: Se encontró un valor de tabla None. Se omitirá.")
+                    continue
+                if not isinstance(t, str):
+                    logging.warning(f"normalize_table_and_column_names: Nombre de tabla no es string: '{t}'. Se omitirá.")
+                    continue
+                t_norm = normalize_name(t)
+                mapped = table_map.get(t_norm, t)
+                new_tables.append(mapped)
+            structured_info["tables"] = new_tables
+        elif original_tables is None:
+            structured_info["tables"] = []
+        else:
+            logging.warning(f"normalize_table_and_column_names: 'tables' en structured_info no es una lista ni None, sino {type(original_tables)}. Se dejará como está.")
+
     # Columnas
     if "columns" in structured_info:
-        new_columns = []
-        for c in structured_info["columns"]:
-            c_norm = normalize_name(c)
-            mapped = column_map.get(c_norm)
-            if mapped:
-                new_columns.append(f"{mapped[0]}.{mapped[1]}")
-            else:
-                new_columns.append(c)
-        structured_info["columns"] = new_columns
+        original_columns = structured_info.get("columns")
+        if isinstance(original_columns, list):
+            new_columns = []
+            for c in original_columns:
+                if c is None:
+                    logging.debug("normalize_table_and_column_names: Se encontró un valor de columna None. Se omitirá.")
+                    continue
+                if not isinstance(c, str):
+                    logging.warning(f"normalize_table_and_column_names: Nombre de columna no es string: '{c}' (tipo: {type(c)}). Se omitirá.")
+                    continue
+                
+                c_norm = normalize_name(c)
+                mapped_data = column_map.get(c_norm)
+                column_to_add = c # Default to original (confirmed string)
+
+                if isinstance(mapped_data, tuple) and len(mapped_data) == 2:
+                    table_name_map, column_name_map = mapped_data
+                    if table_name_map and column_name_map: # e.g., ("PATI_PATIENTS", "PATI_NAME")
+                        column_to_add = f"{table_name_map}.{column_name_map}"
+                    elif column_name_map: # e.g., (None, "PATI_NAME") or ("", "PATI_NAME")
+                        column_to_add = column_name_map
+                elif isinstance(mapped_data, str): # Direct mapping to a column name string
+                     column_to_add = mapped_data
+
+                new_columns.append(column_to_add)
+            structured_info["columns"] = new_columns
+        elif original_columns is None:
+            structured_info["columns"] = []
+        else:
+            logging.warning(f"normalize_table_and_column_names: 'columns' en structured_info no es una lista ni None, sino {type(original_columns)}. Se dejará como está.")
+
     # Condiciones
     if "conditions" in structured_info:
-        for cond in structured_info["conditions"]:
-            if isinstance(cond, dict) and "column" in cond:
-                c_norm = normalize_name(cond["column"])
-                mapped = column_map.get(c_norm)
-                if mapped:
-                    cond["column"] = f"{mapped[0]}.{mapped[1]}"
+        original_conditions = structured_info.get("conditions")
+        if isinstance(original_conditions, list):
+            new_conditions = []
+            for cond in original_conditions:
+                if isinstance(cond, dict) and "column" in cond:
+                    original_column_in_cond = cond["column"]
+                    if original_column_in_cond is None:
+                        logging.warning("normalize_table_and_column_names: Columna None encontrada en una condición. La condición se mantendrá tal cual.")
+                        # Potentially skip this condition or handle more gracefully if it causes issues downstream
+                        # new_conditions.append(cond) # or skip: continue
+                    elif not isinstance(original_column_in_cond, str):
+                        logging.warning(f"normalize_table_and_column_names: Columna no string '{original_column_in_cond}' en condición. Se mantendrá original.")
+                    else:
+                        c_norm = normalize_name(original_column_in_cond)
+                        mapped_data = column_map.get(c_norm)
+                        if isinstance(mapped_data, tuple) and len(mapped_data) == 2:
+                            table_name_map, column_name_map = mapped_data
+                            if table_name_map and column_name_map:
+                                cond["column"] = f"{table_name_map}.{column_name_map}"
+                            elif column_name_map:
+                                cond["column"] = column_name_map
+                            # else: keep original cond["column"]
+                        elif isinstance(mapped_data, str): # Direct mapping
+                            cond["column"] = mapped_data
+                new_conditions.append(cond) # Add modified or original condition
+            structured_info["conditions"] = new_conditions
+        elif original_conditions is None:
+            structured_info["conditions"] = []
+        else:
+            logging.warning(f"normalize_table_and_column_names: 'conditions' en structured_info no es una lista ni None. Se dejará como está.")
+
     # Joins
     if "joins" in structured_info:
-        for join in structured_info["joins"]:
-            if isinstance(join, dict):
-                for k in ["table", "foreign_table"]:
-                    if k in join:
-                        t_norm = normalize_name(join[k])
-                        mapped = table_map.get(t_norm, join[k])
-                        join[k] = mapped
-                for k in ["column", "foreign_column"]:
-                    if k in join:
-                        c_norm = normalize_name(join[k])
-                        mapped = column_map.get(c_norm)
-                        if mapped:
-                            join[k] = mapped[1]
+        original_joins = structured_info.get("joins")
+        if isinstance(original_joins, list):
+            new_joins = []
+            for join in original_joins:
+                if isinstance(join, dict):
+                    for k_table in ["table", "foreign_table"]:
+                        if k_table in join:
+                            original_table_in_join = join[k_table]
+                            if original_table_in_join is None:
+                                logging.warning(f"normalize_table_and_column_names: Tabla None en join.{k_table}. Se mantendrá None.")
+                            elif not isinstance(original_table_in_join, str):
+                                logging.warning(f"normalize_table_and_column_names: Tabla no string '{original_table_in_join}' en join.{k_table}. Se mantendrá original.")
+                            else:
+                                t_norm = normalize_name(original_table_in_join)
+                                join[k_table] = table_map.get(t_norm, original_table_in_join)
+                    
+                    for k_col in ["column", "foreign_column"]:
+                        if k_col in join:
+                            original_column_in_join = join[k_col]
+                            if original_column_in_join is None:
+                                logging.warning(f"normalize_table_and_column_names: Columna None en join.{k_col}. Se mantendrá None.")
+                            elif not isinstance(original_column_in_join, str):
+                                logging.warning(f"normalize_table_and_column_names: Columna no string '{original_column_in_join}' en join.{k_col}. Se mantendrá original.")
+                            else:
+                                col_to_normalize = original_column_in_join.split('.')[-1] if '.' in original_column_in_join else original_column_in_join
+                                c_norm = normalize_name(col_to_normalize)
+                                mapped_data = column_map.get(c_norm)
+                                if isinstance(mapped_data, tuple) and len(mapped_data) == 2 and mapped_data[1]:
+                                    join[k_col] = mapped_data[1] # Use only column part from mapping
+                                elif isinstance(mapped_data, str): # Direct mapping to column name
+                                    join[k_col] = mapped_data
+                                # else: keep original join[k_col]
+                new_joins.append(join)
+            structured_info["joins"] = new_joins
+        elif original_joins is None:
+            structured_info["joins"] = []
+        else:
+            logging.warning(f"normalize_table_and_column_names: 'joins' en structured_info no es una lista ni None. Se dejará como está.")
+            
     return structured_info
 
 def check_table_references(structured_info: dict) -> dict:
@@ -677,7 +781,7 @@ def generate_sql(structured_info: Dict[str, Any], db_structure: Dict[str, Any],
     Genera una consulta SQL robusta a partir de la información estructurada, aplicando normalización semántica,
     validación y corrección de nombres, y manejo de errores. Utiliza LLM y RAG si están disponibles.
     """
-    try:
+    try: # OUTER TRY
         # Importación local de SQLGenerator para evitar ciclos en la carga inicial de módulos
         from src.sql_generator import SQLGenerator
 
@@ -687,60 +791,155 @@ def generate_sql(structured_info: Dict[str, Any], db_structure: Dict[str, Any],
         
         # 2) Validar que las tablas existan en el esquema
         tablas = structured_info.get("tables", [])
-        tablas_validas = [t for t in tablas if t in db_structure]
+        # Filtrar Nones potenciales que podrían venir de una normalización defectuosa o datos de entrada
+        tablas_validas = [t for t in tablas if t and t in db_structure]
+
         if not tablas_validas:
-            logging.error(f"Ninguna tabla válida identificada: {tablas}")
-            return "SELECT 'No se identificaron tablas válidas' AS mensaje"
+            logging.error(f"Ninguna tabla válida identificada después del filtrado: {tablas}")
+            return "SELECT 'No se identificaron tablas válidas para la consulta' AS mensaje"
         structured_info["tables"] = tablas_validas
 
         # 3) Generar SQL (usando generador LLM o heurístico)
-        sql_query = None
-        params = []
-        try:
-            allowed_tables_list = list(db_structure.keys())
-            allowed_columns_map = {table: list(cols.keys()) for table, cols in db_structure.items()}
+        sql_query_str: Optional[str] = None
+        params_list: List[Any] = []
+        
+        try: # INNER TRY (catches e_gensql for generation/validation/execution issues)
+            # Asegurarse de que db_structure y sus elementos son accedidos de forma segura
+            allowed_tables_list = list(db_structure.keys()) if db_structure else []
+            
+            allowed_columns_map = {}
+            if db_structure:
+                for table_name_for_map, cols_data in db_structure.items():
+                    if isinstance(cols_data, dict) and isinstance(cols_data.get('columns'), list):
+                        # Extraer nombres de columnas, asegurándose de que sean strings
+                        col_names_for_map = []
+                        for col_entry in cols_data['columns']:
+                            if isinstance(col_entry, dict) and isinstance(col_entry.get('name'), str):
+                                col_names_for_map.append(col_entry['name'])
+                            elif isinstance(col_entry, str): # Si la columna es solo un string
+                                col_names_for_map.append(col_entry)
+                        allowed_columns_map[table_name_for_map] = col_names_for_map
+                    else:
+                        allowed_columns_map[table_name_for_map] = [] # Fallback a lista vacía
+            
             sql_gen = SQLGenerator(allowed_tables=allowed_tables_list, allowed_columns=allowed_columns_map)
 
-            sql_query, params = sql_gen.generate_sql(structured_info)
+            returned_from_generate_sql = sql_gen.generate_sql(structured_info, db_structure, None)
+            logging.debug("JUST RETURNED FROM sql_gen.generate_sql()")
 
-            logging.info("DEBUG: [pipeline.py] JUST RETURNED FROM sql_gen.generate_sql()")
-            print("STDOUT DEBUG: [pipeline.py] JUST RETURNED FROM sql_gen.generate_sql()")
+            if isinstance(returned_from_generate_sql, tuple) and len(returned_from_generate_sql) == 2:
+                sql_query_str, params_list = returned_from_generate_sql
+                if not isinstance(sql_query_str, str): # Asegurar que la query es string
+                    logging.error(f"SQLGenerator.generate_sql devolvió una tupla, pero el primer elemento no es string: {type(sql_query_str)}")
+                    sql_query_str = None # Invalidar para que se maneje como error abajo
+                logging.debug(f"SQL Query Type: {type(sql_query_str)}, Value: {sql_query_str}")
+                logging.debug(f"Params Type: {type(params_list)}, Value: {params_list}")
+            elif isinstance(returned_from_generate_sql, str):
+                sql_query_str = returned_from_generate_sql
+                logging.debug(f"SQL Query (str) Type: {type(sql_query_str)}, Value: {sql_query_str}")
+            else:
+                logging.error(f"SQLGenerator.generate_sql devolvió un tipo inesperado: {type(returned_from_generate_sql)}. Valor: {returned_from_generate_sql}")
+                # sql_query_str permanece None, será manejado más adelante
 
-            logging.info(f"DEBUG: [pipeline.py] SQL Query Type: {type(sql_query)}, Value: {sql_query}")
-            print(f"STDOUT DEBUG: [pipeline.py] SQL Query Type: {type(sql_query)}, Value: {sql_query}")
-            logging.info(f"DEBUG: [pipeline.py] Params Type: {type(params)}, Value: {params}")
-            print(f"STDOUT DEBUG: [pipeline.py] Params Type: {type(params)}, Value: {params}")
+            if sql_query_str: # Solo proceder si tenemos una cadena SQL
+                logging.debug(f"SQL generado (antes de validación): {sql_query_str}")
+                logging.debug(f"Parámetros (antes de validación): {params_list}")
 
-            if not sql_query: # Comprobación si la consulta es None o vacía
-                logging.error("[pipeline.py] SQLGenerator devolvió una consulta vacía o None.")
-                print("STDOUT ERROR: [pipeline.py] SQLGenerator devolvió una consulta vacía o None.")
-                return "SELECT 'Error: No se pudo generar la consulta SQL' AS mensaje"
-            
-            logging.info(f"DEBUG: [pipeline.py] SQL generado (después de chequeo): {sql_query}")
-            print(f"STDOUT DEBUG (pipeline.py): SQL generado (después de chequeo): {sql_query}")
-            logging.info(f"DEBUG: [pipeline.py] Parámetros (después de chequeo): {params}")
-            print(f"STDOUT DEBUG (pipeline.py): Parámetros (después de chequeo): {params}")
+                logging.info("Paso 6.1: Validando consulta SQL (estructurada) con whitelist...")
+                
+                allowed_tables_for_validation = list(db_structure.keys()) if db_structure else []
+                allowed_columns_for_validation = {}
+                if db_structure:
+                    for table_name, table_data in db_structure.items():
+                        if isinstance(table_data, dict) and 'columns' in table_data and isinstance(table_data['columns'], list):
+                            column_names = []
+                            for col_info in table_data['columns']:
+                                if isinstance(col_info, dict) and isinstance(col_info.get('name'), str):
+                                    column_names.append(col_info['name'])
+                                elif isinstance(col_info, str):
+                                    column_names.append(col_info)
+                            allowed_columns_for_validation[table_name.upper()] = [col.upper() for col in column_names if col] # Asegurar mayúsculas y que col no sea None
+                        else:
+                            logging.warning(f"Estructura inesperada para la tabla '{table_name}' en db_structure al preparar para validación.")
+                            allowed_columns_for_validation[table_name.upper()] = []
+                
+                is_safe, validation_msg = new_whitelist_validate_query(structured_info, allowed_tables_for_validation, allowed_columns_for_validation)
+                logging.info(f"Paso 6.1 completado. ¿Validación de partes estructuradas segura? {is_safe}, Mensaje: {validation_msg}")
+
+                if not is_safe:
+                    logging.error(f"Validación de whitelist de partes estructuradas fallida: {validation_msg} para structured_info: {structured_info}")
+                    return {"response": f"Error: La consulta generada no es segura según la validación de estructura. {validation_msg}", 
+                            "sql_query": sql_query_str, "params": params_list, "structured_info": structured_info} # type: ignore
+
+                logging.info(f"Paso 6.2: Ejecutando SQL: {sql_query_str} con params: {params_list}")
+                # result = None # No se usa 'result' más adelante en este bloque
+                try:
+                    if db_connector:
+                        logging.debug("Llamando a db_connector.execute_query...")
+                        # La ejecución real se hace en chatbot_pipeline, aquí solo generamos y validamos.
+                        # result = db_connector.execute_query(sql_query_str, params_list) 
+                        logging.debug(f"Llamada a db_connector.execute_query (simulada/omitida en generate_sql) completada.")
+                    else:
+                        logging.error("db_connector no está inicializado. No se puede ejecutar la consulta (simulación).")
+                        return {"response": "Error crítico: El conector de base de datos no está disponible.", 
+                                "sql_query": sql_query_str, "params": params_list, "structured_info": structured_info} # type: ignore
+                except Exception as e_exec: # Captura de error de ejecución (si se hiciera aquí)
+                    logging.error(f"Error al ejecutar la consulta SQL (simulación): {e_exec}", exc_info=True)
+                    return {"response": "Error al ejecutar la consulta SQL (simulación).", "sql_query": sql_query_str, "params": params_list} # type: ignore
+            # else: sql_query_str es None o no es string. Se manejará después del bloque try-except interno.
 
         except Exception as e_gensql:
-            logging.error(f"DEBUG: [pipeline.py] EXCEPCIÓN durante o inmediatamente después de generate_sql: {e_gensql}", exc_info=True)
-            print(f"STDOUT DEBUG: [pipeline.py] EXCEPCIÓN durante o inmediatamente después de generate_sql: {e_gensql}")
-            return "SELECT 'Error durante la generación de SQL' AS mensaje"
+            logging.error(f"DEBUG: [pipeline.py] EXCEPCIÓN durante la generación/validación de SQL interna: {e_gensql}", exc_info=True)
+            # Devolver un string SQL de error es lo esperado por el resto del pipeline
+            return "SELECT 'Error durante la generación interna de SQL' AS mensaje"
+
+        # ---- FIN DEL BLOQUE try...except e_gensql ----
+
+        # Verificar si sql_query_str se generó correctamente.
+        # Si sql_query_str es None en este punto, significa que SQLGenerator.generate_sql no produjo una cadena válida
+        # y no se manejó como un error que retornara antes.
+        if sql_query_str is None:
+            logging.error("Fallo crítico en la generación de SQL: sql_query_str es None después del bloque de generación.")
+            return "SELECT 'Error: Fallo interno crítico en la generación de SQL (query_str nula)' AS mensaje"
+
+        # A partir de aquí, sql_query_str DEBE ser una cadena SQL.
+        # Las funciones de corrección y validación operarán sobre esta cadena.
+        # La variable `sql_query` que se usaba antes se reemplaza por el uso directo de `sql_query_str`
+        # o una variable renombrada para claridad.
 
         # 4) Corregir nombres de columnas/tablas en el SQL
-        sql_query = correct_column_names(sql_query, tablas_validas, db_structure)
-        sql_query = validate_table_names(sql_query, db_structure)
+        # Se asume que correct_column_names y validate_table_names esperan y devuelven string.
+        # Y que `tablas_validas` es una lista de strings.
+        corrected_sql_query = correct_column_names(sql_query_str, tablas_validas, db_structure)
+        if corrected_sql_query is None: # Chequeo de seguridad
+             logging.error("correct_column_names devolvió None.")
+             return "SELECT 'Error: Fallo en la corrección de nombres de columna (resultado nulo)' AS mensaje"
 
-        # 5) Validar el SQL final
-        if not validate_sql_query(sql_query, db_connector):
-            logging.error(f"SQL inválido tras corrección: {sql_query}")
-            return "SELECT 'Error: SQL inválido tras corrección' AS mensaje"
+        final_sql_query = validate_table_names(corrected_sql_query, db_structure)
+        if final_sql_query is None: # Chequeo de seguridad
+             logging.error("validate_table_names devolvió None.")
+             return "SELECT 'Error: Fallo en la validación de nombres de tabla (resultado nulo)' AS mensaje"
 
-        # 6) Devolver la consulta final
-        return sql_query
 
-    except Exception as e:
-        logging.error(f"Error en generate_sql: {e}")
-        return "SELECT 'Error al generar SQL' AS mensaje"
+        # 5) Validar el SQL final (sintaxis básica, etc., si validate_sql_query lo hace)
+        # Asumimos que db_connector es necesario para esta validación.
+        if not validate_sql_query(final_sql_query, db_connector): # type: ignore
+            logging.error(f"SQL inválido tras corrección y validación final: {final_sql_query}")
+            return "SELECT 'Error: SQL inválido tras corrección final' AS mensaje"
+
+        # 6) Devolver la consulta final y sus parámetros
+        # La función está tipada para devolver str, pero el pipeline maneja (str, list) o dict.
+        # Por ahora, devolvemos solo el string SQL como antes, y los params se manejan en chatbot_pipeline.
+        # Si la función debe devolver también params_list, la signatura y el manejo deben cambiar.
+        # Por coherencia con el error de "TypeError: argument of type 'NoneType' is not iterable"
+        # el problema principal es que se pasaba None a funciones que esperaban string.
+        # El retorno de esta función es usado por chatbot_pipeline, que espera un string o un dict.
+        # Si todo va bien, devolvemos el string SQL. params_list se usa en chatbot_pipeline.
+        return final_sql_query 
+    
+    except Exception as e: # OUTER CATCH
+        logging.error(f"Error en generate_sql (captura externa): {e}", exc_info=True)
+        return "SELECT 'Error al generar SQL (captura externa)' AS mensaje"
 
 def correct_column_names(sql_query, tables, db_structure):
     # --- NUEVO: Normalizar nombres de columnas y tablas usando mappings semánticos antes de aplicar heurísticas ---
@@ -908,24 +1107,19 @@ def chatbot_pipeline(
             logger.info(f"DEBUG: [pipeline.py] Tablas identificadas en Paso 3: {initial_identified_tables}")
             logger.info(f"DEBUG: [pipeline.py] Tipo de consulta identificado en Paso 3: {initial_query_type}")
             
-            logger.info("DEBUG: [pipeline.py] Paso 4: Determinando structured_info (tablas) con LLM...")
-            
-            # Asegurarse de que structured_info esté inicializado antes de este bloque si no lo estaba ya.
-            # Esta es una salvaguarda adicional, aunque ya se inicializa arriba.
-            if structured_info is None: # Aunque ya se inicializó arriba, por si acaso.
+            # Asegurarse de que structured_info esté inicializado
+            if structured_info is None: 
                 structured_info = {}
 
-            # --- INICIO CAMBIO: Poblar structured_info con valores iniciales de preprocess_question ---
-            # Esto sirve como fallback si el LLM no identifica tablas o tipo de consulta.
-            if not structured_info.get("tables") and initial_identified_tables:
+            if initial_identified_tables:
                 structured_info["tables"] = initial_identified_tables
                 logger.info(f"DEBUG: [pipeline.py] structured_info['tables'] poblado con tablas de Paso 3: {initial_identified_tables}")
 
-            if not structured_info.get("query_type") and initial_query_type:
+            if initial_query_type:
                 structured_info["query_type"] = initial_query_type
                 logger.info(f"DEBUG: [pipeline.py] structured_info['query_type'] poblado con tipo de consulta de Paso 3: {initial_query_type}")
-            # --- FIN CAMBIO ---
-
+            
+            # Cargar esquemas necesarios
             db_schema_str_simple = load_schema_as_string(SCHEMA_SIMPLE_PATH)
             if not db_schema_str_simple:
                 logger.warning(f"ADVERTENCIA: No se pudo cargar el esquema simple desde {SCHEMA_SIMPLE_PATH}. Se usará un JSON vacío.")
@@ -938,408 +1132,264 @@ def chatbot_pipeline(
             
             db_schema_str_full_details = load_schema_as_string(SCHEMA_FULL_PATH)
             if not db_schema_str_full_details:
-                logger.warning(f"ADVERTENCIA: No se pudo cargar el esquema completo desde {SCHEMA_FULL_PATH}. La normalización podría ser menos precisa.")
-                # Si el esquema completo no se carga, normalizamos structured_info aquí.
-                # structured_info podría no estar completamente poblado por el LLM si este paso falla.
-                structured_info = normalize_structured_info(structured_info) # Asegura que sea un dict con claves esperadas
+                logger.warning(f"ADVERTENCIA: No se pudo cargar el esquema completo desde {SCHEMA_FULL_PATH}.")
             
-            if not isinstance(structured_info, dict):
-                logger.error(f"DEBUG: [pipeline.py] Error: structured_info no es un dict después de la interacción con LLM y antes de la normalización final del Paso 4. Valor: {structured_info}")
-                logger.info(f"DEBUG: [pipeline.py] Reintentando normalización o inicialización de structured_info.")
-                structured_info = normalize_structured_info(structured_info if isinstance(structured_info, dict) else {})
-                if not isinstance(structured_info, dict): # Si sigue sin ser un dict, es un error grave
-                    return {"response": f"Error crítico: La información estructurada no es válida tras el LLM. Valor: {structured_info}", "sql": None, "tables": [], "columns": []}
+            # Si no se identificaron tablas en el Paso 3, intentar fallback con LLM
+            if not structured_info.get("tables"):
+                logger.info("DEBUG: [pipeline.py] No hay tablas de Paso 3. Intentando fallback con LLM para identificar tablas...")
+                table_synonyms = terms_dict.get('table_synonyms', {})
+                table_common_terms = terms_dict.get('table_common_terms', {})
+                # table_mappings = terms_dict.get('table_mappings', {}) # No usado en el prompt actual
+                prompt = (
+                    "No se identificaron tablas relevantes de forma directa. "
+                    "A continuación tienes la lista de tablas y sus sinónimos más comunes extraídos del diccionario:\n"
+                )
+                for table, syns in table_synonyms.items():
+                    prompt += f"- {table}: {', '.join(syns)}\n"
+                for table, syns in table_common_terms.items():
+                    prompt += f"- {table}: {', '.join(syns)}\n"
+                prompt += "\nPregunta del usuario: " + question + "\n"
+                prompt += "\nResponde SOLO con el nombre exacto de la tabla más relevante para la consulta."
+                
+                llm_config = {
+                    "api_key": os.environ.get("DEEPSEEK_API_KEY"),
+                    "base_url": os.environ.get("DEEPSEEK_API_URL"),
+                    "model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+                    "provider": "deepseek",
+                    "temperature": 0.0,
+                    "max_tokens": 50
+                }
+                messages = [
+                    {"role": "system", "content": "Eres un asistente experto en SQL y bases de datos médicas."},
+                    {"role": "user", "content": prompt}
+                ]
+                try:
+                    from src.llm_utils import call_llm_with_fallbacks
+                except ImportError:
+                    from llm_utils import call_llm_with_fallbacks
+                
+                llm_response = call_llm_with_fallbacks(messages, llm_config)
+                
+                if llm_response and isinstance(llm_response, str):
+                    cleaned_llm_response = llm_response.strip()
+                    identified_table_from_llm = None
+                    known_tables = list(db_structure.keys()) if db_structure else []
+                    
+                    if not known_tables:
+                        logger.warning("La lista de tablas conocidas (db_structure.keys()) está vacía. La extracción de tablas del LLM puede no ser fiable.")
+                        identified_table_from_llm = cleaned_llm_response.split()[0] if cleaned_llm_response.split() else None
+                    elif cleaned_llm_response in known_tables:
+                        identified_table_from_llm = cleaned_llm_response
+                        logger.info(f"Tabla identificada por LLM fallback (coincidencia exacta): {identified_table_from_llm}")
+                    else:
+                        words_in_response = cleaned_llm_response.replace(",", " ").replace(";", " ").split()
+                        for word in words_in_response:
+                            if word in known_tables:
+                                identified_table_from_llm = word
+                                logger.info(f"Tabla encontrada en respuesta LLM fallback '{cleaned_llm_response}' buscando palabras conocidas: {identified_table_from_llm}")
+                                break
+                        if not identified_table_from_llm:
+                            potential_table_name = cleaned_llm_response.split()[0] if cleaned_llm_response.split() else None
+                            if potential_table_name:
+                                if potential_table_name not in known_tables and known_tables:
+                                    logger.warning(f"Fallback: La tabla '{potential_table_name}' (primera palabra de '{cleaned_llm_response}') no es una tabla conocida. Se usará igualmente.")
+                                elif not known_tables:
+                                     logger.info(f"Fallback: Usando primera palabra '{potential_table_name}' de '{cleaned_llm_response}' (lista de tablas conocidas vacía).")
+                                elif potential_table_name in known_tables:
+                                     logger.info(f"Fallback: Usando primera palabra '{potential_table_name}' de '{cleaned_llm_response}' (es una tabla conocida).")
+                                else:
+                                     logger.info(f"Fallback: Usando primera palabra '{potential_table_name}' de '{cleaned_llm_response}' (no es un sinónimo conocido, pero es la primera palabra).")
+                                identified_table_from_llm = potential_table_name
+                            else:
+                                logger.warning(f"LLM fallback no pudo extraer un nombre de tabla de la respuesta: '{cleaned_llm_response}'")
 
-            # --- INICIO CAMBIO: Reforzar tablas y query_type después del LLM ---
-            # Si el LLM eliminó las tablas o el query_type, y teníamos unos iniciales, los restauramos.
-            if not structured_info.get("tables") and initial_identified_tables:
-                logger.info(f"DEBUG: [pipeline.py] LLM no devolvió tablas. Restaurando desde Paso 3: {initial_identified_tables}")
-                structured_info["tables"] = initial_identified_tables
-            
-            if not structured_info.get("query_type") and initial_query_type:
-                logger.info(f"DEBUG: [pipeline.py] LLM no devolvió query_type. Restaurando desde Paso 3: {initial_query_type}")
-                structured_info["query_type"] = initial_query_type
+                    if identified_table_from_llm:
+                        structured_info["tables"] = [identified_table_from_llm]
+                        logger.info(f"DEBUG: [pipeline.py] structured_info['tables'] poblado por LLM fallback: {[identified_table_from_llm]}")
+                        # Asegurar que query_type esté presente
+                        if not structured_info.get("query_type") and initial_query_type:
+                            structured_info["query_type"] = initial_query_type
+                        elif not structured_info.get("query_type"):
+                            structured_info["query_type"] = "SELECT" # Default
+                    else:
+                        logger.error(f"LLM fallback no pudo identificar una tabla válida de la respuesta: '{llm_response}'")
+                else:
+                    logger.error(f"LLM fallback no devolvió una respuesta de texto válida. Respuesta: {llm_response}")
             
             # Asegurar que query_type exista, por defecto a 'SELECT' si aún no está.
             if not structured_info.get("query_type"):
-                logger.warning(f"DEBUG: [pipeline.py] query_type sigue ausente. Estableciendo a 'SELECT' por defecto.")
-                structured_info["query_type"] = "SELECT"
-            # --- FIN CAMBIO ---
+                if initial_query_type:
+                    structured_info["query_type"] = initial_query_type
+                else:
+                    logger.warning(f"DEBUG: [pipeline.py] query_type sigue ausente. Estableciendo a 'SELECT' por defecto.")
+                    structured_info["query_type"] = "SELECT"
 
-            logger.info(f"DEBUG: [pipeline.py] structured_info ANTES de Paso 5 (normalización final del LLM): {structured_info}")
-            structured_info = normalize_structured_info(structured_info) # Normaliza de nuevo para asegurar estructura
-            logger.info(f"DEBUG: [pipeline.py] structured_info DESPUÉS de Paso 5 (normalización final del LLM): {structured_info}")
+            logger.info(f"DEBUG: [pipeline.py] structured_info ANTES de Paso 5 (normalización): {structured_info}")
+            structured_info = normalize_structured_info(structured_info) 
+            logger.info(f"DEBUG: [pipeline.py] structured_info DESPUÉS de Paso 5 (normalización): {structured_info}")
 
+            # --- INICIO: Heurística para extraer condiciones de ID de paciente si están vacías ---
+            if structured_info.get("tables") and not structured_info.get("conditions"):
+                main_table = structured_info["tables"][0]
+                # Usar enriched_question o question original. enriched_question puede tener [QUERY_TYPE]
+                question_text_for_ids = question # Usar la pregunta original sin procesar para buscar IDs
+                numbers_in_question = re.findall(r'\b\d+\b', question_text_for_ids)
+                
+                if numbers_in_question and "paciente" in question_text_for_ids.lower():
+                    patient_id_value = None
+                    try:
+                        patient_id_value = int(numbers_in_question[0])
+                    except ValueError:
+                        logger.warning(f"No se pudo convertir el ID extraído '{numbers_in_question[0]}' a entero.")
+
+                    if patient_id_value is not None:
+                        id_column_name = None
+                        # Lógica mejorada para encontrar la columna de ID de paciente
+                        if main_table in db_structure:
+                            # Prioridad 1: FK a una tabla de pacientes conocida (ej. PATI_PATIENTS)
+                            for fk in db_structure[main_table].get('foreign_keys', []):
+                                if fk.get('referenced_table', '').upper() == 'PATI_PATIENTS':
+                                    id_column_name = fk.get('foreign_key_column')
+                                    logger.info(f"Columna ID paciente encontrada por FK a PATI_PATIENTS: {id_column_name} en tabla {main_table}")
+                                    break
+                            
+                            # Prioridad 2: Nombres de columna comunes para ID de paciente en la tabla actual
+                            if not id_column_name:
+                                for col_info in db_structure[main_table].get('columns', []):
+                                    col_name_upper = col_info.get('name','').upper()
+                                    # Lista más exhaustiva de posibles nombres de columnas de ID de paciente
+                                    if col_name_upper in ["PATI_ID", "PACIENTE_ID", "PPA_PATIENT_ID", "PATIENT_ID", "ID_PACIENTE"]:
+                                        id_column_name = col_info.get('name')
+                                        logger.info(f"Columna ID paciente encontrada por nombre común: {id_column_name} en tabla {main_table}")
+                                        break
+                            
+                            # Prioridad 3: Si la tabla es PATI_PATIENTS, usar su PK
+                            if not id_column_name and main_table.upper() == "PATI_PATIENTS":
+                                for col_info in db_structure[main_table].get('columns', []):
+                                    if col_info.get('primary_key'):
+                                        id_column_name = col_info.get('name')
+                                        logger.info(f"Columna ID paciente encontrada por PK en PATI_PATIENTS: {id_column_name}")
+                                        break
+                        
+                        if not id_column_name: # Fallback si no se encuentra nada mejor
+                             id_column_name = "PATI_ID" # Asunción común
+                             logger.warning(f"No se encontró una columna de ID de paciente clara para {main_table}. Asumiendo '{id_column_name}'.")
+
+                        condition = {"column": id_column_name, "operator": "=", "value": patient_id_value}
+                        structured_info["conditions"] = [condition]
+                        logger.info(f"DEBUG: [pipeline.py] Condición de paciente extraída heurísticamente: {condition}")
+                else:
+                    logger.info(f"DEBUG: [pipeline.py] No se aplicó heurística de ID de paciente (no 'paciente' en pregunta, no números, o tabla no relevante).")
+            # --- FIN: Heurística para extraer condiciones de ID de paciente ---
+
+            # Verificación final: si después de todos los intentos (Paso 3 y fallback LLM y heurística) no hay tablas
             if not isinstance(structured_info, dict) or not structured_info.get("tables"):
-                 # Si después de todo esto, no tenemos tablas, es un problema.
-                logger.error(f"DEBUG: [pipeline.py] Error CRÍTICO: structured_info no es un dict o no contiene tablas después del Paso 5. Valor: {structured_info}")
-                if initial_identified_tables: # Último recurso
-                    logger.warning(f"DEBUG: [pipeline.py] REINTENTO FINAL: Usando tablas de Paso 3: {initial_identified_tables}")
-                    structured_info["tables"] = initial_identified_tables
-                    structured_info["query_type"] = initial_query_type if initial_query_type else "SELECT"
-                else:
-                    return {"response": "Error: No se pudieron identificar las tablas necesarias para la consulta.", "sql": None, "tables": [], "columns": []}
-
-            logger.info("DEBUG: [pipeline.py] Paso 5 completado.")
-
-            logger.info("DEBUG: [pipeline.py] Paso 6: Mejorando structured_info...")
-            # Guardar el query_type antes de enhance_structured_info, ya que a veces lo modifica incorrectamente.
-            current_query_type = structured_info.get("query_type", initial_query_type) # Priorizar el del LLM si existe
+                logger.error(f"DEBUG: [pipeline.py] Error CRÍTICO FINAL: structured_info no es un dict o no contiene tablas DESPUÉS de todos los intentos. Valor: {structured_info}")
+                return {"response": "Error: No se pudieron identificar las tablas necesarias para la consulta (todos los intentos fallaron).", "sql": None, "tables": [], "columns": []}
             
-            structured_info = enhance_structured_info(structured_info, enriched_question)
-            
-            if not isinstance(structured_info, dict):
-                logger.error("DEBUG: [pipeline.py] Error: structured_info no es un dict después de enhance_structured_info.")
-                # Intentar recuperar usando la copia antes de enhance o los valores iniciales
-                structured_info = normalize_structured_info(structured_info_copy_before_enhance if 'structured_info_copy_before_enhance' in locals() else {})
-                if not structured_info.get("tables") and initial_identified_tables: structured_info["tables"] = initial_identified_tables
-                if not structured_info.get("query_type") and current_query_type: structured_info["query_type"] = current_query_type
-                if not structured_info.get("query_type"): structured_info["query_type"] = "SELECT"
+            # structured_info_copy se asigna aquí, DESPUÉS de que structured_info haya sido modificado.
+            structured_info_copy = structured_info.copy() if isinstance(structured_info, dict) else {}
+            logger.info(f"DEBUG: [pipeline.py] structured_info_copy preparada para normalización (Paso 6): {structured_info_copy}") # Este log puede ser confuso, structured_info_copy es para el siguiente paso.
 
-                if not isinstance(structured_info, dict) or not structured_info.get("tables"):
-                     return {"response": f"Error al estructurar la consulta (mejora): {structured_info}", "sql": None, "tables": [], "columns": []}
-
-            # --- INICIO CAMBIO: Restaurar query_type si enhance_structured_info lo alteró indebidamente ---
-            if current_query_type and structured_info.get("query_type") != current_query_type:
-                logger.warning(f"DEBUG: [pipeline.py] query_type fue modificado por enhance_structured_info de '{structured_info.get('query_type')}' a '{current_query_type}'. Restaurando.")
-                structured_info["query_type"] = current_query_type
-            elif not structured_info.get("query_type") and current_query_type: # Si enhance lo eliminó
-                logger.warning(f"DEBUG: [pipeline.py] query_type fue eliminado por enhance_structured_info. Restaurando a '{current_query_type}'.")
-                structured_info["query_type"] = current_query_type
-            elif not structured_info.get("query_type"): # Si sigue sin existir
-                 logger.warning(f"DEBUG: [pipeline.py] query_type sigue ausente después de enhance. Estableciendo a 'SELECT'.")
-                 structured_info["query_type"] = "SELECT"
-            # --- FIN CAMBIO ---
-            
-            # Asegurar que las tablas iniciales estén presentes si structured_info las perdió
-            if not structured_info.get("tables") and initial_identified_tables:
-                logger.warning(f"DEBUG: [pipeline.py] Tablas perdidas después de enhance_structured_info. Restaurando desde Paso 3: {initial_identified_tables}")
-                structured_info["tables"] = initial_identified_tables
-
-            logger.info(f"DEBUG: [pipeline.py] structured_info DESPUÉS de enhance_structured_info (y corrección de query_type): {structured_info}")
-            logger.info("DEBUG: [pipeline.py] Paso 6 completado.")
-
-            # structured_info_copy es lo que se pasará a SQLGenerator
-            # Crear la copia DESPUÉS de todas las manipulaciones de structured_info
-            structured_info_copy = {}
-            if isinstance(structured_info, dict):
-                structured_info_copy = structured_info.copy()
-            else: # Fallback por si structured_info no es un dict a estas alturas
-                logger.error("ERROR CRÍTICO: structured_info no es un diccionario antes de crear structured_info_copy.")
-                structured_info_copy["tables"] = initial_identified_tables if initial_identified_tables else []
-                structured_info_copy["query_type"] = initial_query_type if initial_query_type else "SELECT"
-                structured_info_copy["conditions"] = [] # Añadir otras claves necesarias con valores por defecto
-
-            # Asegurar que structured_info_copy tenga los elementos mínimos
-            if "tables" not in structured_info_copy: structured_info_copy["tables"] = initial_identified_tables if initial_identified_tables else []
-            if "query_type" not in structured_info_copy: structured_info_copy["query_type"] = initial_query_type if initial_query_type else "SELECT"
-            if "columns" not in structured_info_copy: structured_info_copy["columns"] = []
-            if "conditions" not in structured_info_copy: structured_info_copy["conditions"] = []
-            if "joins" not in structured_info_copy: structured_info_copy["joins"] = []
-            # ... añadir otras claves que SQLGenerator espera con valores por defecto
-
-        # --- INICIO: Lógica para Multi-Hop Joins ---
-        if structured_info and isinstance(structured_info.get("tables"), list) and len(structured_info["tables"]) > 1:
-            logger.info("DEBUG: [pipeline.py] Iniciando lógica de Multi-Hop Joins.")
-            
-            relationships_from_dict = terms_dict.get("table_relationships") 
-            
-            if not relationships_from_dict:
-                logger.warning("DEBUG: [pipeline.py] 'table_relationships' no encontrado en dictionary.json. No se puede realizar Multi-Hop Join avanzado.")
-            else:
-                formatted_relationships_for_graph = {}
-                if isinstance(relationships_from_dict, list): # Asegurar que es una lista
-                    for rel in relationships_from_dict:
-                        if isinstance(rel, dict): # Asegurar que cada elemento es un dict
-                            from_table = rel.get("from_table")
-                            if from_table: # Asegurar que from_table existe
-                                if from_table not in formatted_relationships_for_graph:
-                                    formatted_relationships_for_graph[from_table] = []
-                                
-                                # Solo añadir si la relación tiene la información necesaria
-                                if rel.get("from_column") and rel.get("to_table") and rel.get("to_column"):
-                                    formatted_relationships_for_graph[from_table].append({
-                                        "column": rel.get("from_column"),
-                                        "foreign_table": rel.get("to_table"),
-                                        "foreign_column": rel.get("to_column"),
-                                        "type": "FK_DICT_JSON"
-                                    })
-                                else:
-                                    logger.warning(f"DEBUG: [pipeline.py] Relación incompleta en dictionary.json para from_table '{from_table}': {rel}")
-                            else:
-                                logger.warning(f"DEBUG: [pipeline.py] Relación sin 'from_table' en dictionary.json: {rel}")
-                        else:
-                            logger.warning(f"DEBUG: [pipeline.py] Elemento no diccionario en 'table_relationships': {rel}")
-                else:
-                    logger.warning(f"DEBUG: [pipeline.py] 'table_relationships' en dictionary.json no es una lista: {type(relationships_from_dict)}")
-
-                logger.debug(f"DEBUG: [pipeline.py] Relaciones formateadas para grafo: {formatted_relationships_for_graph}")
-                
-                relationship_graph = build_relationship_graph(db_connector, table_relationships=formatted_relationships_for_graph, db_structure=db_structure)
-                logger.debug(f"DEBUG: [pipeline.py] Grafo de relaciones construido para Multi-Hop: {relationship_graph}")
-
-                current_tables_in_query = set(structured_info.get("tables", []))
-                existing_joins = structured_info.get("joins", [])
-                
-                for join_def in existing_joins:
-                    if isinstance(join_def, dict):
-                        current_tables_in_query.add(join_def.get("table"))
-                        current_tables_in_query.add(join_def.get("foreign_table"))
-                current_tables_in_query.discard(None)
-
-                if len(current_tables_in_query) > 1:
-                    main_query_table = structured_info["tables"][0] if structured_info.get("tables") else (list(current_tables_in_query)[0] if current_tables_in_query else None)
-
-                    if main_query_table:
-                        covered_by_join = {main_query_table}
-                        for join_def in existing_joins:
-                            if isinstance(join_def, dict):
-                                covered_by_join.add(join_def.get("table"))
-                                covered_by_join.add(join_def.get("foreign_table"))
-                        covered_by_join.discard(None)
-
-                        newly_added_joins = []
-                        
-                        tables_to_connect_iteratively = list(current_tables_in_query - covered_by_join)
-                        
-                        # Bucle para intentar conectar tablas progresivamente
-                        max_connection_passes = len(tables_to_connect_iteratively) + 1 # Como máximo, tantas pasadas como tablas a conectar
-                        for _pass_num in range(max_connection_passes):
-                            if not tables_to_connect_iteratively: # Todas conectadas
-                                break
-                            
-                            logger.debug(f"DEBUG: [pipeline.py] Pase de conexión Multi-Hop #{_pass_num + 1}. Tablas pendientes: {tables_to_connect_iteratively}, Cubiertas: {covered_by_join}")
-                            
-                            connected_in_this_pass = set()
-
-                            for target_table_to_connect in list(tables_to_connect_iteratively): # Iterar sobre copia para poder modificar original
-                                if target_table_to_connect in covered_by_join: 
-                                    connected_in_this_pass.add(target_table_to_connect)
-                                    continue
-
-                                best_path_found = None
-                                
-                                for origin_table_already_covered in list(covered_by_join):
-                                    if origin_table_already_covered == target_table_to_connect: continue
-
-                                    logger.debug(f"DEBUG: [pipeline.py] Buscando camino de {origin_table_already_covered} a {target_table_to_connect}")
-                                    path = find_join_path(relationship_graph, origin_table_already_covered, target_table_to_connect, max_depth=config.get("max_join_depth", 3))
-                                    
-                                    if path and (best_path_found is None or len(path) < len(best_path_found)):
-                                        best_path_found = path
-                                
-                                if best_path_found:
-                                    logger.info(f"DEBUG: [pipeline.py] Camino Multi-Hop encontrado para {target_table_to_connect}: {best_path_found}")
-                                    path_joins = generate_join_path(relationship_graph, best_path_found) # Asumo que generate_join_path usa el grafo para obtener cols
-                                    logger.debug(f"DEBUG: [pipeline.py] Joins para el camino: {path_joins}")
-                                    
-                                    for p_join in path_joins:
-                                        is_duplicate = False
-                                        for ex_join in existing_joins + newly_added_joins:
-                                            if (isinstance(ex_join, dict) and isinstance(p_join, dict) and
-                                                {ex_join.get("table"), ex_join.get("foreign_table")} == {p_join.get("table"), p_join.get("foreign_table")} and
-                                                ex_join.get("column") == p_join.get("column") and
-                                                ex_join.get("foreign_column") == p_join.get("foreign_column")):
-                                                is_duplicate = True
-                                                break
-                                        if not is_duplicate:
-                                            newly_added_joins.append(p_join)
-                                            if isinstance(p_join, dict): # Añadir tablas del join a cubiertas
-                                                covered_by_join.add(p_join.get("table"))
-                                                covered_by_join.add(p_join.get("foreign_table"))
-                                                covered_by_join.discard(None)
-                                    
-                                    connected_in_this_pass.add(target_table_to_connect) # Marcar como conectada en este pase
-                                else:
-                                    logger.warning(f"DEBUG: [pipeline.py] No se encontró camino para conectar {target_table_to_connect} en este pase.")
-                            
-                            # Actualizar la lista de tablas pendientes
-                            tables_to_connect_iteratively = [t for t in tables_to_connect_iteratively if t not in connected_in_this_pass]
-
-                        if newly_added_joins:
-                            logger.info(f"DEBUG: [pipeline.py] Añadiendo {len(newly_added_joins)} JOINs inferidos por Multi-Hop: {newly_added_joins}")
-                            structured_info.setdefault("joins", []).extend(newly_added_joins)
-                            for join_def in newly_added_joins:
-                                 if isinstance(join_def, dict):
-                                    structured_info.setdefault("tables", []).append(join_def.get("table"))
-                                    structured_info.setdefault("tables", []).append(join_def.get("foreign_table"))
-                            structured_info["tables"] = sorted(list(set(filter(None, structured_info.get("tables",[])))))
-                        
-                        if tables_to_connect_iteratively: # Si aún quedan tablas sin conectar
-                            logger.warning(f"DEBUG: [pipeline.py] No se pudieron conectar todas las tablas requeridas. Pendientes: {tables_to_connect_iteratively}")
-
-
-        logger.info(f"DEBUG: [pipeline.py] structured_info ANTES de SQLGenerator (después de Multi-Hop): {structured_info}")
-        # --- FIN: Lógica para Multi-Hop Joins ---
-
-        # --- Flujo común para generación de SQL y ejecución --- 
-        logger.info(f"DEBUG: [pipeline.py] Paso 8: Generando SQL... (Flujo común)")
-        print(f"STDOUT DEBUG: [pipeline.py] Paso 8: Generando SQL... (Flujo común)", flush=True)
+        # --- INICIO CAMBIO: Normalizar structured_info antes de pasar a SQLGenerator ---
+        # La variable structured_info ya está normalizada y verificada.
+        logger.info(f"DEBUG: [pipeline.py] Usando structured_info para Paso 6: {structured_info}")
+        if not isinstance(structured_info, dict) or not structured_info.get("tables"): # Doble check, debería ser redundante si la lógica anterior es correcta
+            logger.error(f"DEBUG: [pipeline.py] Error CRÍTICO (inesperado): structured_info no es un dict o no contiene tablas antes de generar SQL. Valor: {structured_info}")
+            return {"response": "Error crítico: La información estructurada no es válida antes de la generación de SQL.", "sql": None, "tables": [], "columns": []}
+        # --- FIN CAMBIO: Normalizar structured_info antes de pasar a SQLGenerator ---
+        logger.info(f"DEBUG: [pipeline.py] Paso 6: Generando SQL a partir de structured_info...")
         
-        logger.info(f"DEBUG: [pipeline.py] structured_info_copy ANTES de SQLGenerator: {structured_info_copy}")
-        print(f"STDOUT DEBUG: [pipeline.py] structured_info_copy ANTES de SQLGenerator: {structured_info_copy}", flush=True)
-
-        sql_query = None
-        params = []
-        
-        try: # Línea 875
-            if not db_structure: # Comprobación crucial añadida aquí también por si acaso, aunque ya está arriba.
-                logger.error("[pipeline.py] db_structure no está disponible en el bloque de generación de SQL. No se puede proceder.")
-                return {
-                    "response": "Error interno: la estructura de la base de datos no está disponible para la generación de SQL.",
-                    "sql": None, "tables": [], "columns": [], "data": None,
-                    "intermediate_steps": {"error_db_structure_pre_sqlgen": "db_structure is None or empty"}
-                }
-
-            allowed_tables_list = list(db_structure.keys())
-            allowed_columns_map = {
-                table_name: [
-                    col_data['name']
-                    for col_data in table_details.get('columns', [])
-                    if isinstance(col_data, dict) and 'name' in col_data
-                ]
-                for table_name, table_details in db_structure.items()
-                if isinstance(table_details, dict)
-            }
-            sql_gen_instance = SQLGenerator(allowed_tables=allowed_tables_list, allowed_columns=allowed_columns_map)
-
-            current_sql_query, current_params = sql_gen_instance.generate_sql(structured_info_copy) # Línea 880
-
-            # Inicio de la corrección del IndentationError y la lógica faltante
-            sql_query = current_sql_query
-            params = current_params
-
-            if not sql_query:
-                logger.error("[pipeline.py] SQLGenerator devolvió una consulta vacía o None en el flujo común.")
-                # Considerar devolver un error o una respuesta indicativa aquí si es crítico
-                # return {"response": "Error: No se pudo generar la consulta SQL (flujo común).", "sql": None, "tables": [], "columns": [], "data": None, "intermediate_steps": {}}
-
-            logger.info(f"DEBUG: [pipeline.py] SQL generado (flujo común): {sql_query}")
-            logger.info(f"DEBUG: [pipeline.py] Parámetros (flujo común): {params}")
-
-        except Exception as e_gensql_common:
-            logger.error(f"DEBUG: [pipeline.py] EXCEPCIÓN durante la generación de SQL (flujo común): {e_gensql_common}", exc_info=True)
-            return {
-                "response": f"Lo siento, ocurrió un error al intentar generar la consulta SQL: {e_gensql_common}",
-                "sql": None,
-                "tables": structured_info_copy.get("tables", []),
-                "columns": structured_info_copy.get("columns", []),
-                "data": None,
-                "intermediate_steps": {"error_generating_sql_common": str(e_gensql_common)}
-            }
-
-        # Continuación del pipeline después de la generación de SQL
-        logger.info(f"DEBUG: [pipeline.py] Paso 9: Validando partes de la consulta generada...")
-
-        # Validar las partes de la consulta (structured_info_copy) usando new_whitelist_validate_query
-        # allowed_tables_list y allowed_columns_map ya están definidos y en ámbito.
-        
-        are_parts_valid, parts_validation_msg = new_whitelist_validate_query(
-            structured_info_copy, 
-            allowed_tables_list, 
-            allowed_columns_map
-        )
-        if not are_parts_valid:
-            logger.error(f"Partes de la consulta inválidas según whitelist: {structured_info_copy}. Razón: {parts_validation_msg}")
-            return {
-                "response": f"Las partes de la consulta generada no son válidas: {parts_validation_msg}",
-                "sql": sql_query, # El sql_query actual
-                "tables": structured_info_copy.get("tables", []),
-                "columns": structured_info_copy.get("columns", []),
-                "data": None,
-                "intermediate_steps": {"sql_parts_validation_error": parts_validation_msg}
-            }
-        logger.info(f"DEBUG: [pipeline.py] Partes de la consulta validadas exitosamente (whitelist).")
-
-        logger.info(f"DEBUG: [pipeline.py] Paso 10: Ejecutando SQL: {sql_query} con params: {params}")
-        results, column_names_from_db = db_connector.execute_query(sql_query, params if params else None)
-
-        if results is None: # Asumiendo que None indica un error o fallo en la ejecución
-            logger.error(f"La ejecución de la consulta SQL ({sql_query}) no devolvió resultados o falló.")
-            return {
-                "response": "La consulta se ejecutó pero no produjo resultados o hubo un error interno.",
-                "sql": sql_query,
-                "tables": structured_info_copy.get("tables", []),
-                "columns": structured_info_copy.get("columns", []),
-                "data": [],
-                "intermediate_steps": {"execution_issue": "No results or internal error"}
-            }
-
-        logger.info(f"DEBUG: [pipeline.py] Paso 11: Formateando resultados...")
-        formatted_results = format_results(results, column_names_from_db)
-        logger.info(f"DEBUG: [pipeline.py] Resultados formateados (primeros 200 chars): {str(formatted_results)[:200]}...")
-
-        logger.info("DEBUG: [pipeline.py] Paso 12: Generando respuesta en lenguaje natural desde resultados SQL...")
-        natural_language_response_prompt = (
-            f"Dada la pregunta del usuario: '{question}'\\n"
-            f"Y los siguientes resultados de la base de datos:\\n{formatted_results}\\n\\n"
-            f"Por favor, genera una respuesta concisa y clara en lenguaje natural para el usuario. "
-            f"Si los resultados están vacíos o no son informativos, indícalo amablemente."
+        # --- INICIO CAMBIO: Manejo explícito de la salida de generate_sql ---
+        returned_from_generate_sql = generate_sql(
+            structured_info=structured_info, 
+            db_structure=db_structure, 
+            db_connector=db_connector,
+            rag=None, 
+            config=config
         )
         
+        sql_query_str: Optional[str] = None
+        params_list: List[Any] = []
+
+        if isinstance(returned_from_generate_sql, tuple) and len(returned_from_generate_sql) == 2:
+            sql_query_str, params_list = returned_from_generate_sql
+            if not isinstance(sql_query_str, str) or not isinstance(params_list, list):
+                logger.error(f"DEBUG: [pipeline.py] generate_sql devolvió una tupla, pero los tipos son incorrectos: q_type={type(sql_query_str)}, p_type={type(params_list)}")
+                return {"response": "Error: Tipos inesperados en la consulta SQL generada.", "sql": None, "tables": [], "columns": []}
+        elif isinstance(returned_from_generate_sql, str):
+            sql_query_str = returned_from_generate_sql
+            # params_list ya es []
+        else:
+            logger.error(f"DEBUG: [pipeline.py] Salida inesperada de generate_sql: {returned_from_generate_sql}")
+            return {"response": "Error: Formato inesperado de la consulta SQL generada.", "sql": None, "tables": [], "columns": []}
+
+        logger.info(f"DEBUG: [pipeline.py] SQL generado (str): {sql_query_str}")
+        logger.info(f"DEBUG: [pipeline.py] Parámetros generados: {params_list}")
+
+        if not sql_query_str:
+            logger.error("DEBUG: [pipeline.py] Error al generar la consulta SQL. SQL string es None o vacío.")
+            return {"response": "Error: No se pudo generar la consulta SQL.", "sql": None, "tables": [], "columns": []}
+        # --- FIN CAMBIO: Manejo explícito de la salida de generate_sql ---
+
+        # Los logs de depuración del usuario que siguen deberían ahora reflejar sql_query_str y params_list
+        # Ejemplo: logger.info(f"STDOUT DEBUG (pipeline.py): SQL generado (después de chequeo): {sql_query_str}")
+        # Ejemplo: logger.info(f"STDOUT DEBUG (pipeline.py): Parámetros (después de chequeo): {params_list}")
+
+        # --- INICIO CAMBIO: Validación del SQL generado ---
+        if not validate_sql_query(sql_query_str, db_connector):
+            logger.error(f"DEBUG: [pipeline.py] SQL inválido tras la generación: {sql_query_str}")
+            return {"response": "Error: SQL generado es inválido.", "sql": sql_query_str, "tables": structured_info.get("tables", []), "columns": structured_info.get("columns", [])} # Devolver SQL para depuración
+        # --- FIN CAMBIO: Validación del SQL generado ---   
+        logger.info(f"DEBUG: [pipeline.py] SQL validado correctamente: {sql_query_str}")
+        
+        # --- INICIO CAMBIO: Corrección de nombres de columnas y tablas en el SQL ---
+        sql_query_str = correct_column_names(sql_query_str, structured_info.get("tables", []), db_structure)
+        sql_query_str = validate_table_names(sql_query_str, db_structure)
+        logger.info(f"DEBUG: [pipeline.py] SQL corregido: {sql_query_str}")
+        # --- FIN CAMBIO: Corrección de nombres de columnas y tablas en el SQL ---
+        
+        # --- INICIO CAMBIO: Ejecución de la consulta SQL ---
+        logger.info(f"DEBUG: [pipeline.py] Paso 7: Ejecutando consulta SQL: '{sql_query_str}' con params: {params_list}")
+        # --- EJECUCIÓN REAL DE LA CONSULTA SQL ---
+        logger.info(f"DEBUG: A punto de ejecutar db_connector.execute_query con query: '{sql_query_str}' y params: {params_list}")
         try:
-            llm_config_for_nl_response = {
-                "api_key": os.environ.get("DEEPSEEK_API_KEY"),
-                "base_url": os.environ.get("DEEPSEEK_API_URL"),
-                "model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
-                "provider": "deepseek",
-                "temperature": 0.5,
-                "max_tokens": 300 # Aumentado ligeramente por si acaso
+            result = db_connector.execute_query(sql_query_str, params_list)
+            logger.info(f"DEBUG: Resultado de db_connector.execute_query: {result}")
+        except Exception as exec_err:
+            logger.error(f"ERROR: Excepción al ejecutar db_connector.execute_query: {exec_err}", exc_info=True)
+            result = [{"error": str(exec_err)}]
+        logger.info(f"DEBUG: [pipeline.py] Consulta SQL ejecutada. Resultado: {'(demasiado largo para loguear)' if isinstance(result, list) and len(result) > 5 else result}")
+        
+        # El log original del usuario para "result" puede ser muy verboso.
+        # Considerar loguear solo una parte o un resumen del resultado.
+        # logger.info(f"DEBUG: [pipeline.py] Consulta SQL ejecutada. Resultado: {result}") 
+
+        if result is None or (isinstance(result, list) and not result): # Manejar tanto None como lista vacía
+            logger.warning(f"DEBUG: [pipeline.py] La consulta SQL ('{sql_query_str}' con params {params_list}) no devolvió resultados o el resultado fue None.")
+            return {"response": "No se encontraron resultados para la consulta.", "sql": sql_query_str, "tables": structured_info.get("tables", []), "columns": structured_info.get("columns", []), "data": [] if result is None else result} # Devolver lista vacía si es None
+        # --- FIN CAMBIO: Ejecución de la consulta SQL ---
+        
+        # --- INICIO CAMBIO: Preparación de la respuesta final ---
+        response = {
+            "response": "Consulta ejecutada con éxito.",
+            "sql": sql_query_str,
+            "tables": structured_info.get("tables", []),
+            "columns": structured_info.get("columns", []),
+            "data": result,
+            "intermediate_steps": {
+                "structured_info": structured_info,
+                "sql_query": sql_query_str
             }
-            messages_for_nl_response = [{"role": "user", "content": natural_language_response_prompt}]
-
-            nl_response_from_llm = call_llm_with_fallbacks(
-                messages=messages_for_nl_response,
-                config=llm_config_for_nl_response
-            )
-
-            if not nl_response_from_llm or not isinstance(nl_response_from_llm, str) or not nl_response_from_llm.strip():
-                logger.warning("La respuesta del LLM para el lenguaje natural fue vacía o inválida. Usando resultados formateados directamente.")
-                final_response_text = formatted_results if formatted_results else "No se encontraron resultados para tu consulta."
-            else:
-                final_response_text = nl_response_from_llm.strip()
-                logger.info(f"Respuesta en lenguaje natural generada por LLM: {final_response_text}")
-
-        except Exception as e_nl_llm:
-            logger.error(f"Error al generar respuesta en lenguaje natural con LLM: {e_nl_llm}", exc_info=True)
-            final_response_text = f"Se obtuvieron los siguientes datos: {formatted_results}. (Hubo un problema al generar una explicación en lenguaje natural)."
-
-        # Preparar datos para el log final y la respuesta
-        intermediate_steps_dict = {
-            "question_preprocessed": enriched_question if 'enriched_question' in locals() else question,
-            "structured_info_final": structured_info_copy,
-            "generated_sql": sql_query,
-            "sql_params": params,
-            "raw_results_count": len(results) if results is not None else 0 # Asegurar que results no sea None
         }
-        # Añadir más detalles si están disponibles
-        if 'error_generating_sql_common' in locals() and e_gensql_common: # type: ignore
-            intermediate_steps_dict["error_generating_sql_common"] = str(e_gensql_common) # type: ignore
-        if 'sql_validation_error' in locals() and validation_msg: # type: ignore
-            intermediate_steps_dict["sql_validation_error"] = validation_msg # type: ignore
-
-
-        logger.info(f"DEBUG: [pipeline.py] Devolviendo respuesta final: {final_response_text[:100]}...")
-        return {
-            "response": final_response_text,
-            "sql": sql_query,
-            "tables": structured_info_copy.get("tables", []),
-            "columns": column_names_from_db if column_names_from_db else structured_info_copy.get("columns", []),
-            "data": results if results is not None else [], # Devolver lista vacía si results es None
-            "column_names": column_names_from_db if column_names_from_db else [],
-            "formatted_data": formatted_results if formatted_results else "",
-            "intermediate_steps": intermediate_steps_dict
-        }
-
-    except JSONDecodeError as json_err:
-        logger.error(f"DEBUG: [pipeline.py] Error JSONDecodeError en chatbot_pipeline: {json_err}", exc_info=True)
-        return {"response": f"Error al procesar JSON: {json_err}", "sql": None, "tables": [], "columns": []}
+        if output_intermediate_steps:
+            response["intermediate_steps"]["raw_question"] = question
+            response["intermediate_steps"]["enriched_question"] = enriched_question
+            response["intermediate_steps"]["db_structure"] = db_structure
+            response["intermediate_steps"]["terms_dict"] = terms_dict
+        logger.info(f"DEBUG: [pipeline.py] Respuesta final preparada: {response}")
+        # --- FIN CAMBIO: Preparación de la respuesta final ---
+        return response
     except Exception as e:
-        logger.error(f"DEBUG: [pipeline.py] Error catastrófico en chatbot_pipeline: {e}", exc_info=True)
-        print(f"ERROR: [pipeline.py] Error catastrófico en chatbot_pipeline: {e} (stdout)")
-        return {"response": f"Ocurrió un error interno en el pipeline: {str(e)}", "sql": None, "tables": [], "columns": []}
-    finally:
-        print("STDOUT DEBUG (pipeline.py): ENTERING MAIN FINALLY BLOCK OF CHATBOT_PIPELINE")
-        logger.info("DEBUG: [pipeline.py] Fin de chatbot_pipeline.")
-        print("STDOUT DEBUG (pipeline.py): Fin de chatbot_pipeline.")
-        print("STDOUT DEBUG (pipeline.py): EXITING MAIN FINALLY BLOCK OF CHATBOT_PIPELINE")
+        logger.error(f"DEBUG: [pipeline.py] Error al ejecutar el flujo de pipeline: {e}")
+        raise e

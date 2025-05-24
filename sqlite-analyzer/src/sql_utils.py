@@ -26,7 +26,7 @@ except ImportError:
     logging.warning("fuzzywuzzy no está instalado. La corrección de errores tipográficos será limitada.")
 
 # Fichero de mapeos de términos
-TERMS_FILE = "schema_rag_cache.json.bak" 
+TERMS_FILE = os.path.join(os.path.dirname(__file__), "data", "dictionary.json") # Nueva ruta al diccionario generado
 
 def validate_sql_query(sql_query: str, db_connector: Optional[Any] = None) -> bool:
     # El parámetro db_connector es opcional y no se usa en esta validación básica.
@@ -424,7 +424,7 @@ def load_terms_mapping(file_path: str = TERMS_FILE) -> Dict[str, Any]:
         column_descriptions[column] = desc
         column_synonyms[column] = synonyms
         for term in synonyms:
-            column_mappings[term.lower()] = column
+            column_mappings[term.lower()] = info  # Cambiado de 'column' a 'info'
             valid_terms.add(term.lower())
 
     return {
@@ -439,7 +439,7 @@ def load_terms_mapping(file_path: str = TERMS_FILE) -> Dict[str, Any]:
 
 def detect_table_from_question(question: str, terms_dict: Optional[Dict[str, Any]] = None, db_structure: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """
-    Detecta tablas relevantes para una pregunta utilizando LLM.
+    Detecta tablas relevantes para una pregunta utilizando LLM y heurísticas.
     
     Args:
         question: Pregunta del usuario
@@ -451,12 +451,10 @@ def detect_table_from_question(question: str, terms_dict: Optional[Dict[str, Any
     """
     logging.debug(f"Detectando tabla para pregunta: {question}")
     
-    # Verificar y salir inmediatamente si db_structure no es un diccionario
     if db_structure is not None and not isinstance(db_structure, dict):
         logging.warning("db_structure no es un diccionario, no se puede usar para detección de tablas")
-        return None  # Salir inmediatamente
+        return None
     
-    # Si no tenemos estructura de BD, no podemos hacer nada
     if not db_structure:
         logging.warning("No se proporcionó estructura de base de datos a detect_table_from_question")
         return None
@@ -466,18 +464,28 @@ def detect_table_from_question(question: str, terms_dict: Optional[Dict[str, Any
         "Como experto en bases de datos médicas, tu tarea es identificar la tabla más adecuada "
         "para responder a una pregunta. Considera el contexto y el significado de los términos médicos.\n\n"
         "INSTRUCCIONES:\n"
-        "- Analiza la pregunta y determina qué recurso o entidad es el foco principal\n"
-        "- Identifica la tabla más relevante de la lista proporcionada\n"
-        "- Responde SOLAMENTE con el nombre de la tabla, sin explicaciones adicionales\n"
+        "- Analiza la pregunta y determina qué recurso o entidad es el foco principal.\n"
+        "- Identifica la tabla más relevante de la lista proporcionada.\n"
+        "- Responde SOLAMENTE con el nombre de la tabla, sin explicaciones adicionales. Ejemplo: NOMBRETABLA\n"
     )
     
-    # Incluir lista de tablas disponibles
-    tables_list = "\n".join([f"- {table}: {list(info.get('columns', {}).keys())[:5]}" 
-                           for table, info in db_structure.items()])
+    tables_list_str = "\n".join([f"- {table_name}: {list(info.get('columns', {}).keys())[:3]}" # Mostrar menos columnas para brevedad
+                               for table_name, info in db_structure.items()])
     
+    # Añadir información de terms_dict al prompt si está disponible
+    term_hints = ""
+    if terms_dict and terms_dict.get("table_mappings"):
+        # Tomar algunos ejemplos de mapeos de términos a tablas
+        hint_mappings = {k: v for i, (k, v) in enumerate(terms_dict["table_mappings"].items()) if i < 5} # Limitar a 5 hints
+        if hint_mappings:
+            term_hints = "\nConsidera también estos términos y sus tablas asociadas:\n"
+            for term, table_name in hint_mappings.items():
+                term_hints += f"- El término '{term}' suele referirse a la tabla '{table_name}'.\n"
+
     user_message = (
         f"Pregunta del usuario: {question}\n\n"
-        f"Tablas disponibles en la base de datos:\n{tables_list}\n\n"
+        f"Tablas disponibles en la base de datos (nombre_tabla: [columnas_ejemplo]):\n{tables_list_str}\n"
+        f"{term_hints}\n"
         "¿Cuál es la tabla más relevante para responder esta pregunta? Responde solo con el nombre de la tabla."
     )
     
@@ -487,47 +495,113 @@ def detect_table_from_question(question: str, terms_dict: Optional[Dict[str, Any
     ]
     
     try:
-        # Configuración para el LLM
-        config = {"temperature": 0.1, "max_tokens": 50}
+        config = {"temperature": 0.0, "max_tokens": 50} # temperature 0 para más determinismo
+        response_text = call_llm(messages, config, step_name="Detección de tabla por LLM")
         
-        # Llamar al LLM
-        response = call_llm(messages, config, step_name="Detección de tabla")
-        
-        # Limpiar respuesta (eliminar comillas, espacios, etc.)
-        detected_table = response.strip().strip('"\'').strip()
-        
-        # Verificar si la tabla existe en la estructura
-        if detected_table in db_structure:
-            logging.info(f"Tabla finalmente detectada: {detected_table} (confianza: 100)")
-            return detected_table
+        # Limpieza más robusta de la respuesta
+        # Intentar extraer la primera palabra que parezca un nombre de tabla (mayúsculas, guiones bajos)
+        match = re.search(r'\b([A-Z0-9_]+)\b', response_text)
+        detected_table = None
+        if match:
+            detected_table = match.group(1)
         else:
-            # Intentar encontrar una coincidencia aproximada
-            matches = difflib.get_close_matches(detected_table, list(db_structure.keys()), n=1, cutoff=0.6)
+            # Si no hay un patrón claro, tomar la respuesta limpiada como antes
+            detected_table = response_text.strip().strip('\"\'').split()[0] if response_text else ""
+
+
+        if detected_table and detected_table in db_structure:
+            logging.info(f"Tabla detectada por LLM: {detected_table}")
+            return detected_table
+        elif detected_table:
+            logging.info(f"Tabla candidata por LLM '{detected_table}' no es exacta, intentando corrección.")
+            matches = difflib.get_close_matches(detected_table, list(db_structure.keys()), n=1, cutoff=0.7) # cutoff un poco más alto
             if matches:
-                logging.info(f"Tabla detectada (con corrección): {matches[0]} (confianza: 80)")
+                logging.info(f"Tabla corregida por LLM: {matches[0]}")
                 return matches[0]
             else:
-                logging.warning(f"La tabla detectada '{detected_table}' no existe en la estructura")
+                logging.warning(f"La tabla detectada por LLM '{detected_table}' no existe y no se pudo corregir.")
+        else:
+            logging.info("LLM no devolvió un nombre de tabla claro.")
+
     except Exception as e:
         logging.error(f"Error al detectar tabla con LLM: {e}")
     
-    # Si el LLM falla, intentar con búsqueda de patrones básica
-    question_words = set(re.findall(r'\b\w+\b', question.lower()))
+    logging.info("LLM no pudo determinar la tabla o falló. Intentando fallback...")
+
+    # Fallback mejorado:
+    # 1. Usar terms_dict si está disponible
+    if terms_dict and terms_dict.get("table_mappings"):
+        question_lower = question.lower()
+        # Buscar términos exactos del diccionario en la pregunta
+        for term, table_name in terms_dict["table_mappings"].items():
+            # Usar word boundaries para evitar coincidencias parciales dentro de otras palabras
+            if re.search(r'\b' + re.escape(term.lower()) + r'\b', question_lower):
+                if table_name in db_structure:
+                    logging.info(f"Tabla detectada por fallback (terms_dict): {table_name} (término: {term})")
+                    return table_name
+                else:
+                    logging.warning(f"Término '{term}' mapea a tabla '{table_name}' que no existe en db_structure.")
     
-    for word in question_words:
-        if len(word) >= 4:  # Solo palabras significativas
-            for table in db_structure:
-                table_name_lower = table.lower()
-                if (word in table_name_lower) or (table_name_lower in word):
-                    confidence = 70
-                    logging.info(f"Coincidencia alternativa: '{word}' → tabla '{table}' (confianza: {confidence})")
-                    return table
+    # 2. Fallback por coincidencia de nombres de tabla completos en la pregunta
+    question_lower_for_direct_match = question.lower()
+    for table_name_key in db_structure:
+        if f'\b{table_name_key.lower()}\b' in question_lower_for_direct_match:
+            logging.info(f"Tabla detectada por fallback (nombre completo en pregunta): {table_name_key}")
+            return table_name_key
+
+    # 3. Fallback con FuzzyWuzzy o Difflib para palabras individuales
+    question_words = set(re.findall(r'\b\w{4,}\b', question.lower())) # Palabras de al menos 4 caracteres
     
-    logging.warning("No se pudo detectar ninguna tabla relevante")
+    best_match_table = None
+    highest_score = 0
+
+    if FUZZY_AVAILABLE:
+        for table_name_key in db_structure:
+            score = 0
+            # Puntuación base por similitud del nombre de la tabla con la pregunta completa
+            score += fuzz.partial_ratio(question_lower, table_name_key.lower())
+            
+            # Bonus por cada palabra clave de la pregunta que esté en el nombre de la tabla
+            # o sea muy similar a él.
+            table_name_parts = set(table_name_key.lower().split('_'))
+            for word in question_words:
+                if word in table_name_parts:
+                    score += 30 # Bonus fuerte por coincidencia exacta de parte del nombre
+                else:
+                    # Bonus más pequeño por similitud de palabra con el nombre completo de la tabla
+                    word_to_table_similarity = fuzz.ratio(word, table_name_key.lower())
+                    if word_to_table_similarity > 70: # Si la palabra es bastante similar al nombre de la tabla
+                        score += word_to_table_similarity / 5 # Bonus proporcional
+
+            if score > highest_score:
+                highest_score = score
+                best_match_table = table_name_key
+        
+        # Ajustar el umbral según la escala de puntuación revisada
+        if best_match_table and highest_score > 90: # Umbral ajustado para fuzzy (puede necesitar calibración)
+            logging.info(f"Tabla detectada por fallback (fuzzywuzzy): {best_match_table} (score: {highest_score})")
+            return best_match_table
+    else:
+        # Fallback con difflib si fuzzywuzzy no está disponible (menos granular)
+        # Este enfoque es más simple: busca la mejor coincidencia para cada palabra de la pregunta
+        # contra la lista de nombres de tabla.
+        # Podríamos intentar sumar "confianzas" o contar "votos" si varias palabras apuntan a la misma tabla.
+        # Por simplicidad, mantenemos la lógica de devolver la primera buena coincidencia.
+        candidate_tables = {}
+        for word in question_words:
+            matches = difflib.get_close_matches(word, list(db_structure.keys()), n=1, cutoff=0.8) # cutoff alto para palabra individual
+            if matches:
+                # Contar cuántas palabras apuntan a esta tabla
+                candidate_tables[matches[0]] = candidate_tables.get(matches[0], 0) + 1
+        
+        if candidate_tables:
+            # Elegir la tabla con más "votos" (más palabras clave apuntando a ella)
+            best_fallback_table = max(candidate_tables, key=candidate_tables.get)
+            logging.info(f"Tabla detectada por fallback (difflib - más votada): {best_fallback_table}")
+            return best_fallback_table
+
+    logging.warning("Fallback no pudo detectar ninguna tabla relevante.")
     return None
-
-
-
 
 def whitelist_validate_query(query: str, allowed_tables: Set[str], allowed_columns: Dict[str, List[str]]) -> bool:
     """

@@ -96,14 +96,16 @@ class SQLGenerator:
         
         return valid_operators.get(operator, "=")
     
-    def generate_sql(self, structured_info):
+    def generate_sql(self, structured_info: Dict[str, Any], db_structure: Optional[Dict[str, Any]] = None, relations_map: Optional[Dict[str, Any]] = None) -> Tuple[str, List[Any]]:
         """
         Genera una consulta SQL a partir de información estructurada.
-        Corrige:
-        - FROM solo con la tabla principal
-        - JOINs con ON obligatoria
-        - No repite tablas ni usa comas tras JOINs
-        - Todas las condiciones tras los JOINs, en un único WHERE
+        Args:
+            structured_info: Diccionario con la información estructurada de la consulta.
+            db_structure: (Opcional) Diccionario con la estructura de la base de datos.
+            relations_map: (Opcional) Diccionario con el mapa de relaciones entre tablas.
+
+        Returns:
+            Una tupla con la consulta SQL generada y una lista de parámetros.
         """
         logging.info("[SQLGenerator] Iniciando generate_sql") # LOG INICIO MÉTODO
         params = []

@@ -1,0 +1,70 @@
+Orden de Preguntas (de más fácil a más difícil según saltos y complejidad):
+
+1.  **"¿Qué fármacos se utilizan comúnmente para tratar la 'hipertensión arterial sistémica' (HTA)?"**
+    *   Salto estimado: 0-1. Complejidad: Baja (búsqueda o join simple).
+
+Aquí tienes la lista de medicamentos asociados al tratamiento de la hipertensión arterial sistémica (HTA) según los grupos terapéuticos definidos en la base de datos:
+
+Amlodipino
+
+Atenolol
+
+Captopril
+
+Clortalidona
+
+Enalapril
+
+Hidroclorotiazida
+
+Losartán
+
+Metoprolol
+
+Nebivolol
+
+Olmesartán
+
+Propranolol
+
+Valsartán
+
+Estos fármacos pertenecen al grupo de antihipertensivos y se utilizan comúnmente para el manejo de la HTA. Si necesitas más detalles (dosis, vía de administración, historial de uso), avísame.
+
+
+
+2.  **"Pacientes que reportaron 'fuerte dolor de cabeza' y que finalmente fueron diagnosticados con 'migraña crónica'."**
+    *   Salto estimado: 1-2. Complejidad: Baja-Media (joins, semántica).
+
+
+
+
+3.  **"Listar todos los pacientes que NO han recibido la vacuna contra la 'influenza' este año y tienen más de 70 años."**
+    *   Salto estimado: 1-2. Complejidad: Media (join/subconsulta, negación, filtros).
+
+
+    Excel C:\Users\cpascual\PycharmProjects\pythonProject\cursos_actividades\sina_mcp\sqlite-analyzer\src\data\Pacientes_mayores_de_70_sin_vacuna_de_influenza_en_2025.csv
+
+
+
+
+4.  **"¿Qué medicamentos para la 'alergia' no contienen 'pseudoefedrina' y son aptos para niños menores de 12 años?"**
+    *   Salto estimado: 1-2. Complejidad: Media (joins, negación, filtros).
+
+5.  **"¿Qué médicos han tratado a pacientes diagnosticados con 'diabetes tipo 2' que también están tomando 'metformina'?"**
+    *   Salto estimado: 2-3 (multi-hop). Complejidad: Media-Alta (múltiples entidades y condiciones).
+
+6.  **"Listar las provincias donde se han registrado más de 10 casos de 'gripe A' en pacientes mayores de 60 años durante el último invierno."**
+    *   Salto estimado: 2-3 (multi-hop). Complejidad: Alta (agregación, group by, filtros múltiples).
+
+7.  **"¿Cuál es la edad promedio de los pacientes que fueron diagnosticados con 'cáncer de pulmón' en cada hospital durante 2023, y cuántos de ellos eran fumadores?"**
+    *   Salto estimado: 2-3 (multi-hop). Complejidad: Alta (múltiples agregaciones, group by, filtros).
+
+8.  **"¿Cuántos pacientes distintos recibieron al menos tres tipos diferentes de medicación el mes pasado, y cuál fue el coste total de esas medicaciones para cada paciente?"**
+    *   Salto estimado: 1-2 (pero con lógica compleja). Complejidad: Alta (agregaciones complejas, group by, subconsultas implícitas).
+
+9.  **"Mostrar los tratamientos aplicados a pacientes que previamente fueron diagnosticados con 'hipertensión' y posteriormente desarrollaron 'insuficiencia renal', y qué médico supervisó el tratamiento para la insuficiencia renal."**
+    *   Salto estimado: 3+ (multi-hop). Complejidad: Muy Alta (secuencia temporal, múltiples entidades y relaciones).
+
+10. **"Comparar el número de reingresos hospitalarios dentro de los 30 días posteriores al alta para pacientes con 'insuficiencia cardíaca' versus aquellos con 'neumonía', desglosado por grupo de edad (menores de 65 y 65 o más)."**
+    *   Salto estimado: 2-3 (multi-hop). Complejidad: Muy Alta (comparación de cohortes, condiciones temporales complejas, agregaciones, group by).
