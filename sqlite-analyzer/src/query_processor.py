@@ -4,6 +4,7 @@ import json
 
 from .sql_generator import SQLGenerator
 from .sql_validator import SQLValidator
+from .pipeline import execute_query_with_timeout
 
 # Configurar logging
 logging.basicConfig(
@@ -86,9 +87,21 @@ class QueryProcessor:
             logger.info(f"Ejecutando SQL parametrizado: {sql}")
             if params:
                 logger.info(f"Valores de parámetros: {params}")
-                results = self.db_connector.execute_query(sql, params)
+                results, error = execute_query_with_timeout(self.db_connector, sql, params, timeout_seconds=10)
+                if error:
+                    logger.error(f"Error al ejecutar consulta: {error}")
+                    return {
+                        'sql': sql,
+                        'results': [{'mensaje': f"Error: {error}"}]
+                    }
             else:
-                results = self.db_connector.execute_query(sql)
+                results, error = execute_query_with_timeout(self.db_connector, sql, timeout_seconds=10)
+                if error:
+                    logger.error(f"Error al ejecutar consulta: {error}")
+                    return {
+                        'sql': sql,
+                        'results': [{'mensaje': f"Error: {error}"}]
+                    }
             
             return {
                 'sql': sql,

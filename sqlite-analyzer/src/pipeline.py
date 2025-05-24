@@ -872,12 +872,32 @@ def generate_sql(structured_info: Dict[str, Any], db_structure: Dict[str, Any],
                             "sql_query": sql_query_str, "params": params_list, "structured_info": structured_info} # type: ignore
 
                 logging.info(f"Paso 6.2: Ejecutando SQL: {sql_query_str} con params: {params_list}")
+                
+                # NUEVO: Usar nuestra función con timeout
+                results, error_msg = execute_query_with_timeout(
+                    db_connector, sql_query_str, params_list, timeout_seconds=5
+                )
+                import logging as logger
+
+                if error_msg:
+                    logger.error(f"Error al ejecutar consulta: {error_msg}")
+                    return {
+                        "response": f"Error en la consulta a la base de datos: {error_msg}",
+                        "sql_query": sql_query_str,
+                        "params": params_list
+                    }
+    
                 # result = None # No se usa 'result' más adelante en este bloque
                 try:
                     if db_connector:
                         logging.debug("Llamando a db_connector.execute_query...")
                         # La ejecución real se hace en chatbot_pipeline, aquí solo generamos y validamos.
                         # result = db_connector.execute_query(sql_query_str, params_list) 
+                        # SIEMPRE usar timeout para evitar bloqueos
+                        # result, error = execute_query_with_timeout(db_connector, sql_query_str, params_list, timeout_seconds=10)
+                        # if error:
+                        #     return {"response": f"Error al ejecutar la consulta SQL: {error}", "sql_query": sql_query_str, "params": params_list}
+                        # return result
                         logging.debug(f"Llamada a db_connector.execute_query (simulada/omitida en generate_sql) completada.")
                     else:
                         logging.error("db_connector no está inicializado. No se puede ejecutar la consulta (simulación).")
@@ -886,7 +906,7 @@ def generate_sql(structured_info: Dict[str, Any], db_structure: Dict[str, Any],
                 except Exception as e_exec: # Captura de error de ejecución (si se hiciera aquí)
                     logging.error(f"Error al ejecutar la consulta SQL (simulación): {e_exec}", exc_info=True)
                     return {"response": "Error al ejecutar la consulta SQL (simulación).", "sql_query": sql_query_str, "params": params_list} # type: ignore
-            # else: sql_query_str es None o no es string. Se manejará después del bloque try-except interno.
+            # else: sql_query_str es None. Se manejará después del bloque try-except interno.
 
         except Exception as e_gensql:
             logging.error(f"DEBUG: [pipeline.py] EXCEPCIÓN durante la generación/validación de SQL interna: {e_gensql}", exc_info=True)
@@ -1295,7 +1315,7 @@ def chatbot_pipeline(
         # La variable structured_info ya está normalizada y verificada.
         logger.info(f"DEBUG: [pipeline.py] Usando structured_info para Paso 6: {structured_info}")
         if not isinstance(structured_info, dict) or not structured_info.get("tables"): # Doble check, debería ser redundante si la lógica anterior es correcta
-            logger.error(f"DEBUG: [pipeline.py] Error CRÍTICO (inesperado): structured_info no es un dict o no contiene tablas antes de generar SQL. Valor: {structured_info}")
+            logger.error(f"DEBUG: [pipeline.py] Error CRÍTICO (inesperado): structured_info no es un dict o no contiene tablas antes de la generación de SQL. Valor: {structured_info}")
             return {"response": "Error crítico: La información estructurada no es válida antes de la generación de SQL.", "sql": None, "tables": [], "columns": []}
         # --- FIN CAMBIO: Normalizar structured_info antes de pasar a SQLGenerator ---
         logger.info(f"DEBUG: [pipeline.py] Paso 6: Generando SQL a partir de structured_info...")
@@ -1351,14 +1371,13 @@ def chatbot_pipeline(
         
         # --- INICIO CAMBIO: Ejecución de la consulta SQL ---
         logger.info(f"DEBUG: [pipeline.py] Paso 7: Ejecutando consulta SQL: '{sql_query_str}' con params: {params_list}")
-        # --- EJECUCIÓN REAL DE LA CONSULTA SQL ---
-        logger.info(f"DEBUG: A punto de ejecutar db_connector.execute_query con query: '{sql_query_str}' y params: {params_list}")
-        try:
-            result = db_connector.execute_query(sql_query_str, params_list)
-            logger.info(f"DEBUG: Resultado de db_connector.execute_query: {result}")
-        except Exception as exec_err:
-            logger.error(f"ERROR: Excepción al ejecutar db_connector.execute_query: {exec_err}", exc_info=True)
-            result = [{"error": str(exec_err)}]
+        # --- EJECUCIÓN REAL DE LA CONSULTA SQL CON TIMEOUT ---
+        logger.info(f"DEBUG: A punto de ejecutar execute_query_with_timeout con query: '{sql_query_str}' y params: {params_list}")
+        result, error = execute_query_with_timeout(db_connector, sql_query_str, params_list, timeout_seconds=10)
+        if error:
+            logger.error(f"ERROR: {error}")
+            return {"response": f"Error al ejecutar la consulta SQL: {error}", "sql": sql_query_str, "tables": structured_info.get("tables", []), "columns": structured_info.get("columns", []), "data": []}
+        logger.info(f"DEBUG: Resultado de execute_query_with_timeout: {result}")
         logger.info(f"DEBUG: [pipeline.py] Consulta SQL ejecutada. Resultado: {'(demasiado largo para loguear)' if isinstance(result, list) and len(result) > 5 else result}")
         
         # El log original del usuario para "result" puede ser muy verboso.
@@ -1393,3 +1412,42 @@ def chatbot_pipeline(
     except Exception as e:
         logger.error(f"DEBUG: [pipeline.py] Error al ejecutar el flujo de pipeline: {e}")
         raise e
+
+# Añadir esta función en pipeline.py justo antes de chatbot_pipeline
+def execute_query_with_timeout(db_connector, sql_query, params, timeout_seconds=5):
+    """Ejecuta una consulta SQL con un timeout estricto"""
+    import threading
+    import time
+    
+    result = None
+    error = None
+    completed = False
+    
+    def execute_query_thread():
+        nonlocal result, error, completed
+        try:
+            result = db_connector.execute_query(sql_query, params)
+            completed = True
+        except Exception as e:
+            error = e
+            completed = True
+    
+    # Crear y arrancar el hilo
+    query_thread = threading.Thread(target=execute_query_thread)
+    query_thread.daemon = True  # El hilo se cerrará cuando el programa principal termine
+    
+    start_time = time.time()
+    query_thread.start()
+    
+    # Esperar al hilo con timeout
+    while time.time() - start_time < timeout_seconds and not completed:
+        time.sleep(0.1)  # Pequeña espera para no consumir CPU
+    
+    if not completed:
+        # Si llegamos aquí, ha habido timeout
+        return None, f"Timeout: La consulta tardó más de {timeout_seconds} segundos y fue cancelada."
+    
+    if error:
+        return None, f"Error en la consulta: {str(error)}"
+        
+    return result, None
