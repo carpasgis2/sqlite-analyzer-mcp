@@ -154,7 +154,8 @@ class DBConnector:
                             self.logger.error(f"Error convirtiendo fila a dict: {conv_err}")
                             row_dict = {str(i): value for i, value in enumerate(row)}
                         results.append(row_dict)
-                    self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}")
+                    self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}") # EXISTING LOG
+                    self.logger.info(f"DBConnector.execute_query: Attempting to return results. Result is list: {isinstance(results, list)}. Length if list: {len(results) if isinstance(results, list) else 'N/A'}.") # NEW LOG DB_A
                     return results
                 except Exception as fetch_err:
                     self.logger.error(f"Error al obtener o procesar resultados: {fetch_err}", exc_info=True)
@@ -176,11 +177,14 @@ class DBConnector:
             self.logger.error(f"Error no esperado al ejecutar la consulta: {e}", exc_info=True)
             return []
         finally:
+            self.logger.info("DBConnector.execute_query: Entering finally block.") # NEW LOG DB_B
             if cursor is not None:
                 try:
                     cursor.close()
+                    self.logger.info("DBConnector.execute_query: Cursor closed successfully.") # NEW LOG DB_C
                 except Exception as close_err:
-                    self.logger.error(f"Error al cerrar el cursor: {close_err}")
+                    self.logger.error(f"DBConnector.execute_query: Error closing cursor: {close_err}")
+            self.logger.info("DBConnector.execute_query: Exiting finally block.") # NEW LOG DB_D
 
     def execute_sql(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
         """Alias para execute_query para compatibilidad con el pipeline"""

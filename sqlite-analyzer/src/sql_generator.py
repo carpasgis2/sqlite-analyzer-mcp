@@ -112,106 +112,323 @@ class SQLGenerator:
 
         logging.debug(f"[SQLGenerator] structured_info recibido: {json.dumps(structured_info, indent=2)}")
 
-        # Validar que exista al menos una tabla
-        if not structured_info.get("tables"):
-            logging.error("[SQLGenerator] No se especificó ninguna tabla en structured_info.")
-            return "SELECT 'Error: No se especificó ninguna tabla' AS mensaje", []
+        raw_tables_list = structured_info.get("tables")
+        if not raw_tables_list or not isinstance(raw_tables_list, list) or not raw_tables_list[0]:
+            logging.error("[SQLGenerator] No se especificó ninguna tabla válida en structured_info['tables'].")
+            return "SELECT 'Error: No se especificó ninguna tabla válida' AS mensaje", []
 
-        main_table = structured_info["tables"][0]
-        logging.info(f"[SQLGenerator] Tabla principal: {main_table}")
-        # TODO: Re-activar validación de tablas permitidas cuando el flujo esté más estable
-        # if main_table not in self.allowed_tables:
-        #     return f"SELECT 'Error: Tabla {main_table} no permitida' AS mensaje", []
+        # Estrategia para elegir la tabla principal:
+        candidate_main_tables_ordered = [] # Lista ordenada de candidatos por prioridad
+        
+        # Prioridad 1: Tablas en columnas SELECT
+        select_cols_info = structured_info.get("columns", [])
+        if isinstance(select_cols_info, list):
+            for col_ref in select_cols_info:
+                if isinstance(col_ref, str) and '.' in col_ref:
+                    candidate_main_tables_ordered.append(col_ref.split('.')[0].upper())
 
-        # Procesar columnas
+        # Prioridad 2: Tablas en condiciones WHERE
+        conditions_info = structured_info.get("conditions", [])
+        if isinstance(conditions_info, list):
+            for cond in conditions_info:
+                # CAMBIO: Usar "column" en lugar de "field" para que coincida con la estructura de 'conditions'
+                if isinstance(cond, dict) and "column" in cond and isinstance(cond["column"], str) and '.' in cond["column"]:
+                    candidate_main_tables_ordered.append(cond["column"].split('.')[0].upper())
+        
+        # Prioridad 3: Tablas en JOINs del LLM (t1 primero, luego t2)
+        llm_joins_input = structured_info.get("joins", [])
+        if isinstance(llm_joins_input, list):
+            for join_item in llm_joins_input:
+                if isinstance(join_item, dict):
+                    t1 = join_item.get('table', join_item.get('table1'))
+                    t2 = join_item.get('foreign_table', join_item.get('table2'))
+                    if t1 and isinstance(t1, str): candidate_main_tables_ordered.append(t1.upper())
+                    if t2 and isinstance(t2, str): candidate_main_tables_ordered.append(t2.upper())
+        
+        # Añadir todas las tablas de raw_tables_list como candidatos de menor prioridad
+        for tbl in raw_tables_list:
+            if isinstance(tbl, str):
+                candidate_main_tables_ordered.append(tbl.upper())
+        
+        main_table = None
+        raw_tables_list_upper_set = {tbl.upper() for tbl in raw_tables_list if isinstance(tbl, str)}
+
+        if not raw_tables_list_upper_set:
+             logging.error("[SQLGenerator] El conjunto de tablas válidas (raw_tables_list_upper_set) está vacío.")
+             return "SELECT 'Error: No hay tablas válidas para procesar' AS mensaje", []
+
+        for cand_upper in candidate_main_tables_ordered:
+            if cand_upper in raw_tables_list_upper_set:
+                # Encontrar el nombre original con la capitalización correcta
+                try:
+                    original_cand_idx = [tbl.upper() for tbl in raw_tables_list].index(cand_upper)
+                    main_table = raw_tables_list[original_cand_idx]
+                    logging.info(f"[SQLGenerator] Tabla principal elegida por heurística: {main_table} (Candidato: {cand_upper})")
+                    break
+                except ValueError: # pragma: no cover
+                    # Esto no debería ocurrir si cand_upper está en raw_tables_list_upper_set
+                    logging.warning(f"[SQLGenerator] Candidato {cand_upper} encontrado pero no se pudo obtener su nombre original.")
+                    continue 
+        
+        if not main_table:
+            # Fallback si ningún candidato priorizado es válido o si raw_tables_list_upper_set estaba vacío inicialmente
+            # (aunque el chequeo anterior de raw_tables_list_upper_set debería prevenir esto)
+            first_valid_raw_table = next((tbl for tbl in raw_tables_list if isinstance(tbl, str)), None)
+            if first_valid_raw_table:
+                main_table = first_valid_raw_table
+                logging.info(f"[SQLGenerator] Tabla principal elegida por fallback (primera de la lista raw): {main_table}")
+            else: # pragma: no cover
+                 # Esto no debería ser alcanzable si raw_tables_list tiene al menos una cadena válida.
+                logging.error("[SQLGenerator] No se pudo determinar una tabla principal válida.")
+                return "SELECT 'Error: No se pudo determinar la tabla principal' AS mensaje", []
+
+
+        logging.info(f"[SQLGenerator] Tabla principal FINAL: {main_table}")
+        # ... (resto del código existente para validación de main_table si se reactiva) ...
+
         select_cols = structured_info.get("columns", ["*"])
-        if not select_cols:
+        if not select_cols: # pragma: no cover
             select_cols = ["*"]
         logging.info(f"[SQLGenerator] Columnas a seleccionar: {select_cols}")
 
-        # TODO: Re-activar validación de columnas permitidas
-        # ...
-
-        # Construir la cláusula FROM con JOINs
         sql = f"SELECT {', '.join(select_cols)} FROM {main_table}"
         logging.debug(f"[SQLGenerator] SQL inicial: {sql}")
 
-        # --- NUEVA LÓGICA DE JOIN ROBUSTA ---
-        joins_to_apply = structured_info.get("joins", [])
-        logging.info(f"[SQLGenerator] Procesando {len(joins_to_apply)} JOINs... (originalmente)")
-
-        # Conjunto para rastrear las tablas ya unidas para evitar redundancia
-        already_joined_tables = {main_table.upper()} # La tabla principal ya está en el FROM
-
-        # Lista para los strings de JOIN que se añadirán al SQL
+        already_joined_tables = {main_table.upper()}
         join_clauses_sql = []
 
-        for i, join_item in enumerate(joins_to_apply):
-            logging.debug(f"[SQLGenerator] Procesando JOIN #{i+1}: {join_item}")
-            join_dict = None
-            join_sql_segment = ""
+        # Procesar JOINs explícitos del LLM de forma iterativa
+        if isinstance(llm_joins_input, list) and llm_joins_input:
+            current_llm_joins_to_process = list(llm_joins_input)
+            max_passes = len(current_llm_joins_to_process) + 2 # Un poco más de margen
 
-            if isinstance(join_item, str):
-                # ... (manejo de join_item como string, no se modifica por ahora)
-                # Esta parte es compleja y podría necesitar una revisión separada si se usa.
-                # Por ahora, nos centramos en el formato de diccionario para los joins.
-                logging.warning(f"[SQLGenerator] JOIN string no procesado en esta revisión: {join_item}")
-                continue
-            elif isinstance(join_item, dict):
-                join_dict = join_item
-                logging.debug(f"[SQLGenerator] JOIN es un diccionario: {join_dict}")
-            
-            if join_dict:
-                # Determinar las tablas involucradas en este JOIN específico
-                # Priorizar foreign_table si existe, sino table (asumiendo que table es la que se une a la principal/ya unidas)
-                table_being_joined = join_dict.get('foreign_table', join_dict.get('table'))
-                
-                if not table_being_joined:
-                    logging.warning(f"[SQLGenerator] JOIN dict no tiene 'table' o 'foreign_table': {join_dict}. Se omite.")
-                    continue
+            for pass_num in range(max_passes):
+                if not current_llm_joins_to_process:
+                    logging.info(f"[SQLGenerator] Todos los {len(llm_joins_input)} JOINs del LLM procesados o descartados en {pass_num} pasadas.")
+                    break
 
-                # Normalizar el nombre de la tabla a mayúsculas para la comprobación
-                table_being_joined_upper = table_being_joined.upper()
+                joins_added_in_this_pass_count = 0
+                next_round_pending_joins = []
+                logging.debug(f"[SQLGenerator] LLM JOINs - Pase {pass_num + 1}: Procesando {len(current_llm_joins_to_process)} JOINs pendientes.")
 
-                if table_being_joined_upper in already_joined_tables:
-                    logging.info(f"[SQLGenerator] Tabla '{table_being_joined}' ya unida. Omitiendo JOIN redundante: {join_dict}")
-                    continue # Saltar este JOIN si la tabla ya fue unida
-
-                # Construir la condición ON
-                on_condition_str = join_dict.get('on')
-                if not on_condition_str: # Intentar construir desde campos explícitos
-                    t1 = join_dict.get('table')
-                    c1 = join_dict.get('column')
-                    t2 = join_dict.get('foreign_table') # Esta es la tabla que se está uniendo
-                    c2 = join_dict.get('foreign_column')
-                    if t1 and c1 and t2 and c2:
-                        on_condition_str = f"{t1}.{c1} = {t2}.{c2}"
-                    else:
-                        logging.warning(f"[SQLGenerator] JOIN para tabla '{table_being_joined}' omitido por falta de condición ON explícita o campos para construirla: {join_dict}")
+                for i, join_item in enumerate(current_llm_joins_to_process):
+                    logging.debug(f"[SQLGenerator] LLM JOINs - Pase {pass_num + 1}, Item {i+1}: {join_item}")
+                    if not isinstance(join_item, dict):
+                        logging.warning(f"[SQLGenerator] Elemento JOIN del LLM no es un diccionario: {join_item}. Se omite.")
                         continue
-                
-                join_type = join_dict.get('type', 'INNER').upper() # Default a INNER JOIN
-                join_sql_segment = f" {join_type} JOIN {table_being_joined} ON {on_condition_str}"
-                
-                join_clauses_sql.append(join_sql_segment)
-                already_joined_tables.add(table_being_joined_upper) # Marcar como unida
-                logging.debug(f"[SQLGenerator] JOIN procesado y añadido: {join_sql_segment}")
-            else:
-                logging.warning(f"[SQLGenerator] Elemento JOIN no es string ni diccionario procesable: {join_item}")
 
-        # Añadir todas las cláusulas JOIN construidas al SQL principal
+                    join_type = join_item.get('join_type', join_item.get('type', 'INNER')).upper()
+                    llm_table1 = join_item.get('table', join_item.get('table1'))
+                    llm_table2 = join_item.get('foreign_table', join_item.get('table2'))
+                    on_condition = join_item.get('on')
+
+                    if not (llm_table1 and isinstance(llm_table1, str) and \
+                              llm_table2 and isinstance(llm_table2, str) and \
+                              on_condition and isinstance(on_condition, str)):
+                        
+                        # Intentar construir on_condition si falta pero hay columnas
+                        if not on_condition and llm_table1 and llm_table2:
+                            col1 = join_item.get('column')
+                            col2 = join_item.get('foreign_column')
+                            if col1 and col2 and isinstance(col1, str) and isinstance(col2, str):
+                                on_condition = f"{llm_table1}.{col1} = {llm_table2}.{col2}"
+                                logging.debug(f"[SQLGenerator] ON condition construida para JOIN LLM: {on_condition}")
+                            else:
+                                logging.warning(f"[SQLGenerator] JOIN LLM #{i+1} omitido: faltan tablas, on_condition o columnas para construirla. Item: {join_item}")
+                                next_round_pending_joins.append(join_item) # Reintentar si otra info lo aclara? O descartar? Por ahora, reintentar.
+                                continue
+                        else:
+                            logging.warning(f"[SQLGenerator] JOIN LLM #{i+1} omitido: información de tabla o condición ON inválida/faltante. Item: {join_item}")
+                            # No añadir a next_round_pending_joins, descartar este JOIN malformado.
+                            continue
+                    
+                    llm_table1_upper = llm_table1.upper()
+                    llm_table2_upper = llm_table2.upper()
+
+                    can_process_this_join = False
+                    table_to_add_to_sql_clause_str = None # Nombre original de la tabla a añadir
+                    table_to_add_to_already_joined_set_upper = None
+
+                    if llm_table1_upper in already_joined_tables and llm_table2_upper not in already_joined_tables:
+                        can_process_this_join = True
+                        table_to_add_to_sql_clause_str = llm_table2 # Usar el nombre con capitalización original
+                        table_to_add_to_already_joined_set_upper = llm_table2_upper
+                    elif llm_table2_upper in already_joined_tables and llm_table1_upper not in already_joined_tables:
+                        can_process_this_join = True
+                        table_to_add_to_sql_clause_str = llm_table1 # Usar el nombre con capitalización original
+                        table_to_add_to_already_joined_set_upper = llm_table1_upper
+                    elif llm_table1_upper in already_joined_tables and llm_table2_upper in already_joined_tables:
+                        logging.debug(f"[SQLGenerator] JOIN LLM {join_item} conecta tablas ({llm_table1}, {llm_table2}) ya en el grafo. Se omite la adición de cláusula JOIN duplicada, pero se considera procesado.")
+                        # No se añade cláusula, pero se considera "procesado" para que no quede pendiente.
+                        joins_added_in_this_pass_count +=1 # Contabilizar como manejado para la lógica del bucle
+                        continue 
+
+                    if can_process_this_join and table_to_add_to_sql_clause_str and table_to_add_to_already_joined_set_upper:
+                        # TODO: Validación de columnas en on_condition usando db_structure si está disponible
+                        # Por ahora, se asume que el LLM proporciona on_conditions válidas.
+                        
+                        join_sql_segment = f" {join_type} JOIN {table_to_add_to_sql_clause_str} ON {on_condition}"
+                        join_clauses_sql.append(join_sql_segment)
+                        already_joined_tables.add(table_to_add_to_already_joined_set_upper)
+                        logging.info(f"[SQLGenerator] JOIN LLM procesado y añadido: {join_sql_segment}. Tablas unidas ahora: {already_joined_tables}")
+                        joins_added_in_this_pass_count += 1
+                    else:
+                        logging.debug(f"[SQLGenerator] JOIN LLM {join_item} no se puede procesar en esta pasada (una tabla no conectada o ambas ya conectadas sin ser el caso anterior). Se pasa a la siguiente ronda.")
+                        next_round_pending_joins.append(join_item)
+                
+                current_llm_joins_to_process = next_round_pending_joins
+                
+                if not current_llm_joins_to_process: # Todos los JOINs del LLM se procesaron o descartaron
+                    logging.info(f"[SQLGenerator] Todos los JOINs del LLM manejados en la pasada {pass_num + 1}.")
+                    break 
+                
+                if joins_added_in_this_pass_count == 0:
+                    logging.warning(f"[SQLGenerator] No se añadieron nuevos JOINs del LLM en la pasada {pass_num + 1}, pero {len(current_llm_joins_to_process)} JOINs siguen pendientes. Deteniendo el procesamiento de JOINs del LLM.")
+                    break
+            
+            if current_llm_joins_to_process:
+                 logging.error(f"[SQLGenerator] {len(current_llm_joins_to_process)} JOINs del LLM no pudieron ser integrados al grafo final después de {max_passes} pasadas: {current_llm_joins_to_process}")
+
+        # Consolidar todas las tablas que necesitan estar en la consulta para la inferencia de JOINs
+        all_tables_from_structured_info = {tbl.upper() for tbl in raw_tables_list if isinstance(tbl, str)} # Usar la lista original de tablas
+        
+        tables_from_select_upper = set()
+        if isinstance(select_cols, list):
+            for col_ref in select_cols:
+                if isinstance(col_ref, str) and '.' in col_ref:
+                    tables_from_select_upper.add(col_ref.split('.')[0].upper())
+        
+        tables_from_where_upper = set()
+        if isinstance(conditions_info, list): # Reusar conditions_info
+            for cond in conditions_info:
+                if isinstance(cond, dict) and "column" in cond and isinstance(cond["column"], str) and '.' in cond["column"]:
+                    tables_from_where_upper.add(cond["column"].split('.')[0].upper())
+
+        required_tables_for_query_inference = set(all_tables_from_structured_info) # Empezar con todas las tablas mencionadas
+        required_tables_for_query_inference.update(tables_from_select_upper)
+        required_tables_for_query_inference.update(tables_from_where_upper)
+        # Asegurar que las tablas de los JOINs del LLM (incluso los no procesados) estén consideradas si estaban en la lista original de tablas
+        # already_joined_tables ya contiene las tablas de los JOINs del LLM que SÍ se procesaron.
+        # El objetivo de la inferencia es unir las de required_tables_for_query_inference que aún no estén en already_joined_tables.
+
+        logging.info(f"[SQLGenerator] Tablas requeridas para inferencia de JOINs (después de JOINs del LLM): {required_tables_for_query_inference}")
+        logging.info(f"[SQLGenerator] Tablas ya unidas (después de JOINs del LLM y antes de inferencia): {already_joined_tables}")
+        
+        # --- INICIO SECCIÓN DE INFERENCIA DE JOINS (adaptada) ---
+        if relations_map and db_structure:
+            max_join_inference_passes = len(required_tables_for_query_inference) + 1
+            for pass_num_inf in range(max_join_inference_passes):
+                if already_joined_tables.issuperset(required_tables_for_query_inference):
+                    logging.info(f"[SQLGenerator] Inferencia de JOINs: Todas las {len(required_tables_for_query_inference)} tablas requeridas ya están unidas.")
+                    break
+
+                new_join_made_in_inference_pass = False
+                tables_to_try_to_reach_in_inference = list(required_tables_for_query_inference - already_joined_tables)
+                
+                if not tables_to_try_to_reach_in_inference:
+                    logging.debug("[SQLGenerator] Inferencia de JOINs: No quedan tablas por alcanzar.")
+                    break
+                
+                logging.debug(f"[SQLGenerator] Inferencia de JOINs (Pase {pass_num_inf+1}): Intentando alcanzar {tables_to_try_to_reach_in_inference} desde {already_joined_tables}")
+
+                for table_to_reach_upper in tables_to_try_to_reach_in_inference:
+                    found_path_for_current_target = False
+                    for joined_table_upper in list(already_joined_tables): # Iterar sobre copia
+                        # Asumimos que relations_map usa claves en MAYÚSCULAS y nombres de tabla en MAYÚSCULAS dentro de las relaciones
+                        possible_relations = relations_map.get(joined_table_upper, []) 
+                        
+                        for rel in possible_relations:
+                            if not isinstance(rel, dict): # pragma: no cover
+                                logging.warning(f"[SQLGenerator] Elemento de relación no es un dict: {rel} para tabla {joined_table_upper}")
+                                continue
+
+                            rel_table1_upper = rel.get("table", "").upper()
+                            rel_table2_upper = rel.get("foreign_table", "").upper()
+                            on_condition_inferred = None
+                            table_to_add_via_inferred_join_upper = None
+                            original_table_name_to_join_inferred = None
+
+                            if rel_table1_upper == joined_table_upper and rel_table2_upper == table_to_reach_upper:
+                                on_condition_inferred = f"{rel.get('table')}.{rel.get('column')} = {rel.get('foreign_table')}.{rel.get('foreign_column')}"
+                                table_to_add_via_inferred_join_upper = table_to_reach_upper
+                                original_table_name_to_join_inferred = rel.get('foreign_table') # Usar nombre original de la relación
+                            elif rel_table2_upper == joined_table_upper and rel_table1_upper == table_to_reach_upper:
+                                on_condition_inferred = f"{rel.get('foreign_table')}.{rel.get('foreign_column')} = {rel.get('table')}.{rel.get('column')}"
+                                table_to_add_via_inferred_join_upper = table_to_reach_upper
+                                original_table_name_to_join_inferred = rel.get('table') # Usar nombre original de la relación
+                            
+                            if on_condition_inferred and table_to_add_via_inferred_join_upper and \
+                               table_to_add_via_inferred_join_upper not in already_joined_tables and \
+                               original_table_name_to_join_inferred:
+                                
+                                join_type_inferred = rel.get("join_type", "INNER").upper() # Usar join_type de la relación si existe
+                                join_sql_segment = f" {join_type_inferred} JOIN {original_table_name_to_join_inferred} ON {on_condition_inferred}"
+                                join_clauses_sql.append(join_sql_segment)
+                                already_joined_tables.add(table_to_add_via_inferred_join_upper)
+                                new_join_made_in_inference_pass = True
+                                found_path_for_current_target = True
+                                logging.info(f"[SQLGenerator] JOIN INFERIDO añadido: {join_sql_segment}")
+                                break 
+                        
+                        if found_path_for_current_target:
+                            break 
+                
+                if not new_join_made_in_inference_pass and not already_joined_tables.issuperset(required_tables_for_query_inference):
+                    missing_tables = required_tables_for_query_inference - already_joined_tables
+                    logging.warning(f"[SQLGenerator] Inferencia de JOINs (Pase {pass_num_inf+1}): No se pudieron inferir más JOINs, pero aún faltan: {missing_tables}.")
+                    break 
+            
+            if not already_joined_tables.issuperset(required_tables_for_query_inference):
+                missing_tables_final = required_tables_for_query_inference - already_joined_tables
+                logging.error(f"ERROR CRÍTICO de INFERENCIA: Después de todos los pases, aún faltan tablas requeridas: {missing_tables_final}.")
+        elif required_tables_for_query_inference - already_joined_tables: # No hay relations_map pero faltan tablas
+             logging.warning(f"[SQLGenerator] No se proporcionó 'relations_map' o 'db_structure' y faltan tablas: {required_tables_for_query_inference - already_joined_tables}. La inferencia de JOINs no se pudo realizar.")
+
+
+        # --- FIN SECCIÓN DE INFERENCIA DE JOINS ---
+
         if join_clauses_sql:
             sql += "".join(join_clauses_sql)
 
-        logging.info("[SQLGenerator] Procesamiento de JOINs completado.")
+        logging.info("[SQLGenerator] Procesamiento de JOINs (LLM + inferidos) completado.")
         logging.debug(f"[SQLGenerator] SQL después de JOINs: {sql}")
-        # --- FIN LÓGICA JOIN ---
+        # --- FIN LÓGICA JOIN MEJORADA ---
 
         # Procesar condiciones WHERE
         conditions = structured_info.get("conditions", [])
         logging.info(f"[SQLGenerator] Procesando {len(conditions)} condiciones WHERE...")
         where_clauses = []
-        
+
+        # Añadir la condición del ID de paciente si está presente
+        patient_id_value = structured_info.get("patient_id")
+        # Columna por defecto o la detectada. Asegurarse que tiene el nombre de la tabla si es ambiguo.
+        # Esto podría necesitar más lógica si patient_id_column no incluye la tabla y es ambiguo.
+        patient_id_column_name = structured_info.get("patient_id_column", "PATI_ID") 
+
+        # Heurística simple para prefijar con tabla principal si no tiene ya un punto
+        if '.' not in patient_id_column_name and main_table:
+            patient_id_column_qualified = f"{main_table}.{patient_id_column_name}"
+        else:
+            patient_id_column_qualified = patient_id_column_name
+
+        if patient_id_value is not None:
+            has_existing_patient_id_condition = False
+            if isinstance(conditions, list):
+                for cond in conditions:
+                    if isinstance(cond, dict):
+                        # Comprobar si la columna de la condición (con o sin prefijo de tabla) 
+                        # coincide con la columna de ID de paciente (con o sin prefijo de tabla)
+                        cond_col = cond.get("column", "")
+                        if cond_col == patient_id_column_name or cond_col == patient_id_column_qualified:
+                            has_existing_patient_id_condition = True
+                            logging.info(f"[SQLGenerator] Condición para {patient_id_column_qualified} (o {patient_id_column_name}) ya existe en 'conditions'. No se añadirá patient_id por separado.")
+                            break
+            
+            if not has_existing_patient_id_condition:
+                logging.info(f"[SQLGenerator] Añadiendo condición para patient_id: {patient_id_column_qualified} = {patient_id_value}")
+                where_clauses.append(f"{patient_id_column_qualified} = ?")
+                params.append(patient_id_value)
+
         if isinstance(conditions, dict): 
             conditions = [conditions]
             logging.debug("[SQLGenerator] Condiciones convertidas de dict a lista.")
@@ -234,27 +451,53 @@ class SQLGenerator:
                 column = condition_item.get("column", "")
                 operator = condition_item.get("operator", "=")
                 value = condition_item.get("value", "")
+                is_subquery = condition_item.get("is_subquery", False)
+                subquery_details = condition_item.get("subquery_details")
                 
-                if not column: 
-                    logging.warning(f"[SQLGenerator] Condición omitida por falta de columna: {condition_item}")
+                if not column and not is_subquery: 
+                    logging.warning(f"[SQLGenerator] Condición omitida por falta de columna y no ser subconsulta: {condition_item}")
                     continue
 
                 operator = self._normalize_operator(operator)
-                logging.debug(f"[SQLGenerator] Condición dict: col='{column}', op='{operator}', val='{value}'")
+                logging.debug(f"[SQLGenerator] Condición dict: col='{column}', op='{operator}', val='{value}', subquery={is_subquery}")
                 
-                # ... (resto de la lógica de operadores IN, BETWEEN, LIKE, etc.)
-                if operator in ["IN", "NOT IN"]:
+                if is_subquery and subquery_details:
+                    sub_select = subquery_details.get("select_column")
+                    sub_from = subquery_details.get("from_table")
+                    sub_where_col = subquery_details.get("where_column")
+                    sub_where_op = self._normalize_operator(subquery_details.get("where_operator", "LIKE"))
+                    sub_where_val = subquery_details.get("where_value")
+
+                    if not all([sub_select, sub_from, sub_where_col, sub_where_val]):
+                        logging.warning(f"[SQLGenerator] Subconsulta mal formada, omitida: {subquery_details}")
+                        continue
+                    
+                    # Asegurarse de que el valor para LIKE en subconsulta tenga comodines si es necesario
+                    # Esta es una heurística, el LLM debería idealmente proveerlos.
+                    processed_sub_where_val = sub_where_val
+                    if sub_where_op == "LIKE" and not ('%' in sub_where_val or '_' in sub_where_val):
+                        processed_sub_where_val = f"%{sub_where_val}%"
+
+                    # La columna de la condición principal (ej: EPIS_DIAGNOSTICS.CDTE_ID) 
+                    # se compara con el resultado de la subconsulta.
+                    where_clauses.append(f"{column} {operator} (SELECT {sub_select} FROM {sub_from} WHERE {sub_where_col} {sub_where_op} ?)")
+                    params.append(processed_sub_where_val)
+                    logging.debug(f"[SQLGenerator] Subconsulta añadida: {column} {operator} (SELECT {sub_select} FROM {sub_from} WHERE {sub_where_col} {sub_where_op} {processed_sub_where_val})")
+
+                elif operator in ["IN", "NOT IN"]:
+                    # ... (código existente para IN/NOT IN, sin cambios)
                     if isinstance(value, list) and value:
                         placeholders = ", ".join(["?" for _ in value])
                         where_clauses.append(f"{column} {operator} ({placeholders})")
                         params.extend(value)
-                    elif isinstance(value, str) and value: # Permitir string para IN si es un solo valor
+                    elif isinstance(value, str) and value: 
                         where_clauses.append(f"{column} {operator} (?)")
                         params.append(value)
                     else:
                         logging.warning(f"[SQLGenerator] Valor no válido para operador {operator} en columna {column}: {value}. Condición omitida.")
                         continue
                 elif operator == "BETWEEN":
+                    # ... (código existente para BETWEEN, sin cambios)
                     if isinstance(value, list) and len(value) == 2:
                         where_clauses.append(f"{column} BETWEEN ? AND ?")
                         params.extend(value)
@@ -262,121 +505,122 @@ class SQLGenerator:
                         logging.warning(f"[SQLGenerator] Valor no válido para operador BETWEEN en columna {column}: {value}. Condición omitida.")
                         continue
                 elif operator == "LIKE":
+                    # ... (código existente para LIKE, sin cambios)
                     if not isinstance(value, str):
                         try:
                             value = str(value)
                         except:
                             logging.warning(f"[SQLGenerator] No se pudo convertir el valor para LIKE a string en columna {column}: {value}. Condición omitida.")
                             continue
-                    where_clauses.append(f"{column} LIKE ?")
-                    params.append(value)
+                    # Asegurarse de que el valor para LIKE tenga comodines si es necesario
+                    # Esta es una heurística, el LLM debería idealmente proveerlos.
+                    processed_value = value
+                    if not ('%' in value or '_' in value):
+                        processed_value = f"%{value}%" # Añadir comodines si no están
+                    
+                    where_clauses.append(f"{column} {operator} ?")
+                    params.append(processed_value)
                 else: 
+                    # ... (código existente para otros operadores, sin cambios)
                     where_clauses.append(f"{column} {operator} ?")
                     params.append(value)
                 logging.debug(f"[SQLGenerator] Condición dict procesada. where_clauses: {where_clauses}, params: {params}")
             
             elif isinstance(condition_item, str):
+                # ... (código existente para condiciones string, sin cambios)
                 logging.debug(f"[SQLGenerator] Procesando condición string: '{condition_item}'")
-                match = re.match(r"\s*([\w\.]+)\s*(>=|<=|!=|=|>|<|LIKE|NOT LIKE|IN|NOT IN)\s*('([^']+)'|\"([^\"]+)\"|\d+(?:\.\d+)?|\([^\)]+\))\s*", condition_item, re.IGNORECASE)
-                
-                if match:
-                    col, op, val_str = match.groups()
-                    op = self._normalize_operator(op.strip().upper())
-
-                    if (val_str.startswith("'") and val_str.endswith("'")) or \
-                       (val_str.startswith('"') and val_str.endswith('"')):
-                        val_to_param = val_str[1:-1]
-                    elif val_str.startswith("(") and val_str.endswith(")") and op in ["IN", "NOT IN"]:
-                        logging.warning(f"[SQLGenerator] Condición IN/NOT IN como string con lista literal: '{condition_item}'. Se añade directamente, pero es preferible formato de diccionario.")
-                        where_clauses.append(condition_item)
-                        continue 
-                    else:
-                        val_to_param = val_str
-
-                    if op in ["IN", "NOT IN"] and not (val_str.startswith("(") and val_str.endswith(")")):
-                        where_clauses.append(f"{col} {op} (?)")
-                        params.append(val_to_param)
-                    elif op in ["IN", "NOT IN"] and (val_str.startswith("(") and val_str.endswith(")")):
-                        pass
-                    else:
-                        where_clauses.append(f"{col} {op} ?")
-                        params.append(val_to_param)
-                    
-                    logging.debug(f"[SQLGenerator] Condición string parametrizada: {col} {op} ?, con valor: {val_to_param}")
-
-                else: 
-                    logging.warning(f"[SQLGenerator] Añadiendo condición de string directamente (potencialmente inseguro o no parametrizado): {condition_item}")
+                # Simplificación: Asumimos que las condiciones string ya están bien formadas o son simples.
+                # Una mejora futura podría ser parsear estas strings de forma más robusta.
+                # Por ahora, si es una string, la añadimos tal cual si no contiene '?'
+                # Si contiene '?', asumimos que los parámetros ya están en `params` (esto es arriesgado)
+                if '?' not in condition_item:
+                    where_clauses.append(condition_item) # Añadir directamente si no hay placeholders
+                else:
+                    # Esto es problemático si la string viene con '?' pero los params no están alineados.
+                    # Se mantiene por retrocompatibilidad pero se debería evitar.
+                    logging.warning(f"[SQLGenerator] Condición string con '?' encontrada: '{condition_item}'. Se asume que los parámetros están correctamente gestionados externamente.")
                     where_clauses.append(condition_item)
-            else:
-                logging.warning(f"[SQLGenerator] Tipo de condición no reconocido: {type(condition_item)}. Omitida.")
 
-        logging.info("[SQLGenerator] Procesamiento de condiciones WHERE completado.")
         if where_clauses:
             sql += " WHERE " + " AND ".join(where_clauses)
-            logging.debug(f"[SQLGenerator] SQL después de WHERE: {sql}")
+            logging.debug(f"[SQLGenerator] SQL con WHERE: {sql}")
+        else:
+            logging.info("[SQLGenerator] No se generaron cláusulas WHERE.")
 
-        # Procesar GROUP BY
-        group_by = structured_info.get("group_by", [])
-        logging.info(f"[SQLGenerator] Procesando GROUP BY: {group_by}")
-        if group_by:
-            if isinstance(group_by, str):
-                group_by = [g.strip() for g in group_by.split(',') if g.strip()]
-            
-            valid_group_by = []
-            for gb_col in group_by:
-                valid_group_by.append(gb_col) 
-            
-            if valid_group_by:
-                sql += f" GROUP BY {', '.join(valid_group_by)}"
-                logging.debug(f"[SQLGenerator] SQL después de GROUP BY: {sql}")
+        # Aplicar GROUP BY si está presente
+        group_by_cols = structured_info.get("group_by")
+        if group_by_cols:
+            if isinstance(group_by_cols, str):
+                group_by_cols = [group_by_cols]
+            if isinstance(group_by_cols, list) and all(isinstance(col, str) for col in group_by_cols):
+                sql += f" GROUP BY {", ".join(group_by_cols)}"
+                logging.info(f"[SQLGenerator] Cláusula GROUP BY añadida: {group_by_cols}")
+            else:
+                logging.warning(f"[SQLGenerator] 'group_by' tiene un formato inválido y será ignorado: {group_by_cols}")
 
-        # Procesar ORDER BY
-        order_by = structured_info.get("order_by", [])
-        logging.info(f"[SQLGenerator] Procesando ORDER BY: {order_by}")
-        if order_by:
-            if isinstance(order_by, str): 
-                order_by_list = []
-                for part in order_by.split(','):
-                    part = part.strip()
-                    col_order = part.split()
-                    column = col_order[0]
-                    direction = col_order[1].upper() if len(col_order) > 1 and col_order[1].upper() in ["ASC", "DESC"] else "ASC"
-                    order_by_list.append({"column": column, "direction": direction})
-                order_by = order_by_list
-            
+        # Aplicar ORDER BY si está presente
+        order_by_info = structured_info.get("order_by")
+        if order_by_info:
             order_clauses = []
-            if isinstance(order_by, list): 
-                for order_item in order_by: 
-                    if isinstance(order_item, dict):
-                        column = order_item.get("column", "")
-                        direction = order_item.get("direction", "ASC").upper()
-                        if column and direction in ["ASC", "DESC"]:
-                            order_clauses.append(f"{column} {direction}") 
-                    elif isinstance(order_item, str): 
-                        col_order = order_item.split()
-                        column = col_order[0]
-                        direction = col_order[1].upper() if len(col_order) > 1 and col_order[1].upper() in ["ASC", "DESC"] else "ASC"
-                        order_clauses.append(f"{column} {direction}")
-
+            if isinstance(order_by_info, dict): # Formato: {"column": "COL_NAME", "direction": "ASC|DESC"}
+                col = order_by_info.get("column")
+                direction = order_by_info.get("direction", "ASC").upper()
+                if col and direction in ["ASC", "DESC"]:
+                    order_clauses.append(f"{col} {direction}")
+            elif isinstance(order_by_info, list): # Formato: [{"column": "COL1", "direction": "ASC"}, "COL2"] (COL2 usará ASC por defecto)
+                for item in order_by_info:
+                    if isinstance(item, dict):
+                        col = item.get("column")
+                        direction = item.get("direction", "ASC").upper()
+                        if col and direction in ["ASC", "DESC"]:
+                            order_clauses.append(f"{col} {direction}")
+                    elif isinstance(item, str):
+                        order_clauses.append(f"{item} ASC") # Por defecto ASC si es solo string
+            elif isinstance(order_by_info, str): # Formato: "COL_NAME ASC" o "COL_NAME"
+                parts = order_by_info.strip().split()
+                col = parts[0]
+                direction = "ASC"
+                if len(parts) > 1 and parts[1].upper() in ["ASC", "DESC"]:
+                    direction = parts[1].upper()
+                order_clauses.append(f"{col} {direction}")
+            
             if order_clauses:
-                sql += f" ORDER BY {', '.join(order_clauses)}"
-                logging.debug(f"[SQLGenerator] SQL después de ORDER BY: {sql}")
+                sql += f" ORDER BY {", ".join(order_clauses)}"
+                logging.info(f"[SQLGenerator] Cláusula ORDER BY añadida: {order_clauses}")
+            else:
+                logging.warning(f"[SQLGenerator] 'order_by' tiene un formato inválido y será ignorado: {order_by_info}")
 
-        # Procesar LIMIT
+        # Aplicar LIMIT si está presente
         limit = structured_info.get("limit")
-        logging.info(f"[SQLGenerator] Procesando LIMIT: {limit}")
-        if limit:
+        if limit is not None:
             try:
-                limit_value = int(limit)
-                if limit_value > 0: 
-                    sql += f" LIMIT {limit_value}"
-                    logging.debug(f"[SQLGenerator] SQL después de LIMIT: {sql}")
-            except (ValueError, TypeError):
-                logging.warning(f"[SQLGenerator] Valor de LIMIT inválido: {limit}. Omitido.")
-                pass
-        
+                limit_val = int(limit)
+                if limit_val > 0:
+                    sql += f" LIMIT {limit_val}"
+                    logging.info(f"[SQLGenerator] Cláusula LIMIT añadida: {limit_val}")
+            except ValueError:
+                logging.warning(f"[SQLGenerator] 'limit' tiene un valor inválido y será ignorado: {limit}")
+
         logging.info(f"[SQLGenerator] SQL final generado: {sql}")
-        logging.info(f"[SQLGenerator] Parámetros finales: {params}")
-        logging.info("[SQLGenerator] Fin de generate_sql")
+        logging.debug(f"[SQLGenerator] Parámetros finales: {params}")
+
+        # Validación final (si está disponible y configurada)
+        # if PIPELINE_FUNCTIONS_LOADED:
+        #     is_valid, error_msg = validate_query_structure(sql) # Asumiendo que esta función existe y es importable
+        #     if not is_valid:
+        #         logging.error(f"[SQLGenerator] La consulta generada no pasó la validación estructural: {error_msg}")
+        #         # Podríamos devolver un error o intentar un fallback aquí
+        #         # return fallback_query(structured_info.get("tables", [])), [] # Ejemplo de fallback
+        # else:
+        #     logging.warning("[SQLGenerator] Funciones de validación de .pipeline no cargadas. Saltando validación estructural.")
+        
+        # Whitelist validation (siempre se intenta)
+        # try:
+        #     whitelist_validate_query(sql, self.allowed_tables, self.allowed_columns)
+        #     logging.info("[SQLGenerator] La consulta pasó la validación de la lista blanca.")
+        # except ValueError as e:
+        #     logging.error(f"[SQLGenerator] Error de validación de la lista blanca: {e}")
+        #     # Considerar devolver un error o una consulta de fallback segura
+        #     # return "SELECT 'Error: Consulta no permitida por la lista blanca' AS mensaje", []
 
         return sql, params

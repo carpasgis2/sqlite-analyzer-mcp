@@ -25,16 +25,17 @@ from db_config import get_db_connector, DBConnector # Añadido DBConnector por s
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)  # Nivel base, puedes cambiar a logging.DEBUG para más detalle
 
+# Definir log_formatter y log_file_path aquí para que estén disponibles globalmente en este módulo
+log_formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] [%(name)s:%(funcName)s:%(lineno)d] %(message)s"
+)
+log_file_path = os.path.join(os.path.dirname(__file__), "chatbot_agent.log")
+
 # Evitar añadir múltiples handlers si el script se recarga (común en algunos entornos)
 if not logger.handlers:
-    # Formato del log detallado
-    log_formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)s] [%(name)s:%(funcName)s:%(lineno)d] %(message)s"
-    )
-
     # Handler para guardar en archivo
-    log_file_path = os.path.join(os.path.dirname(__file__), "chatbot_agent.log")
-    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+    # Cambiado a mode='w' para que los logs se creen en un archivo nuevo (sobrescribiendo si existe)
+    file_handler = logging.FileHandler(log_file_path, mode='w', encoding='utf-8') 
     file_handler.setFormatter(log_formatter)
     logger.addHandler(file_handler)
 
@@ -42,6 +43,10 @@ if not logger.handlers:
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(log_formatter)
     logger.addHandler(stream_handler)
+    
+    logger.info(f"Logging configurado. Los logs se guardarán en: {log_file_path} (modo overwrite)")
+else:
+    logger.info(f"El logger ya tiene handlers. Los logs continuarán en: {log_file_path} (modo overwrite)")
 # --- FIN CONFIGURACIÓN DE LOGGING ---
 
 # Configuración de la API de Deepseek (preferiblemente desde variables de entorno)
@@ -62,7 +67,7 @@ def safe_process_results(query: str) -> str:
     try:
         logger.info(f"Procesando consulta: '{query}' (con timeout de 90s)")
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(chatbot_pipeline, query, db_connector)
+            future = executor.submit(chatbot_pipeline, query, db_connector, logger) # Añadido logger
             try:
                 pipeline_result = future.result(timeout=90)
             except concurrent.futures.TimeoutError:
@@ -79,21 +84,65 @@ def safe_process_results(query: str) -> str:
         if not isinstance(pipeline_result, dict):
             logger.error(f"Pipeline devolvió un tipo inesperado: {type(pipeline_result)}")
             return f"Error: Resultado con formato inválido. Por favor reporta este error."
-        if "response" not in pipeline_result:
-            logger.error(f"Pipeline devolvió un diccionario sin clave 'response'. Claves: {list(pipeline_result.keys())}")
-            if "sql_query" in pipeline_result:
-                return f"Se ejecutó la consulta '{pipeline_result['sql_query']}' pero no se pudo procesar el resultado."
-            return "La consulta se ejecutó pero no pude formatear la respuesta correctamente."
-        logger.info("Resultado del pipeline procesado correctamente")
-        response = pipeline_result["response"]
-        if not isinstance(response, (str, int, float)):
-            logger.warning(f"La respuesta no es un tipo básico serializable: {type(response)}")
+        
+        response_message = pipeline_result.get("response", "La consulta se ejecutó pero no pude formatear la respuesta correctamente.")
+        data_results = pipeline_result.get("data")
+
+        logger.info(f"Resultado del pipeline procesado: Mensaje='{response_message}', Datos presentes: {data_results is not None}")
+
+        # Formatear los datos si existen
+        formatted_data = ""
+        MAX_ROWS_FOR_AGENT_OBSERVATION = 10 # Limitar la cantidad de datos crudos en la observación
+        if data_results:
+            if isinstance(data_results, list):
+                num_rows = len(data_results)
+                if num_rows > 0:
+                    try:
+                        # Convertir lista de dicts a una cadena JSON bonita para la respuesta
+                        import json
+                        # Truncar datos para la observación del agente si son demasiados
+                        data_to_format = data_results
+                        if num_rows > MAX_ROWS_FOR_AGENT_OBSERVATION:
+                            logger.info(f"Truncando datos para la observación del agente de {num_rows} a {MAX_ROWS_FOR_AGENT_OBSERVATION} filas.")
+                            data_to_format = data_results[:MAX_ROWS_FOR_AGENT_OBSERVATION]
+                        
+                        formatted_data = json.dumps(data_to_format, indent=2, ensure_ascii=False)
+                        
+                    except Exception as e:
+                        logger.error(f"Error al formatear los datos a JSON: {e}")
+                        formatted_data = str(data_results[:MAX_ROWS_FOR_AGENT_OBSERVATION]) # Fallback a string simple del subconjunto
+            elif not isinstance(data_results, list): # Dato único, no lista
+                 formatted_data = str(data_results)
+            # Si data_results es una lista vacía, formatted_data permanecerá vacío.
+
+        # Combinar el mensaje de respuesta con los datos formateados
+        final_response_str = response_message
+        if formatted_data:
+            # Añadir nota si los datos fueron truncados en la observación
+            if isinstance(data_results, list) and len(data_results) > MAX_ROWS_FOR_AGENT_OBSERVATION:
+                final_response_str += f"\\n(Mostrando primeros {MAX_ROWS_FOR_AGENT_OBSERVATION} registros en esta observación detallada)"
+            final_response_str += f"\\nDatos:\\n{formatted_data}"
+        elif "no devolvió filas" in response_message or "no se encontraron resultados" in response_message: # Si no hay datos y el mensaje ya lo indica
+            pass # No añadir "Datos:" si el mensaje ya es claro sobre la ausencia de resultados
+        elif not data_results and response_message: # No hay datos, pero el mensaje no lo dice explícitamente
+             final_response_str += "\\nNo se encontraron datos para esta consulta."
+        
+        # Asegurar que la respuesta final sea un string simple si es necesario
+        if not isinstance(final_response_str, (str, int, float)):
+            logger.warning(f"La respuesta combinada no es un tipo básico serializable: {type(final_response_str)}")
             try:
-                import json
-                response = json.dumps(response, ensure_ascii=False)
-            except:
-                response = str(response)
-        return response
+                final_response_str = str(final_response_str)
+            except Exception as e:
+                logger.error(f"Error al convertir final_response_str a string: {e}")
+                return "Error al procesar la respuesta final."
+                
+        # Limitar la longitud total de la observación para evitar errores de contexto del LLM
+        MAX_OBSERVATION_LENGTH = 10000  # Ajustar según sea necesario (en caracteres)
+        if len(final_response_str) > MAX_OBSERVATION_LENGTH:
+            logger.warning(f"La observación final excede los {MAX_OBSERVATION_LENGTH} caracteres ({len(final_response_str)}). Truncando...")
+            final_response_str = final_response_str[:MAX_OBSERVATION_LENGTH] + "... (Observación truncada)"
+
+        return final_response_str
     except Exception as e:
         logger.error(f"Error en safe_process_results: {e}", exc_info=True)
         return f"Error al procesar la consulta: {str(e)}"
@@ -101,9 +150,11 @@ def safe_process_results(query: str) -> str:
 chatbot_tool = Tool(
     name="SQLMedicalChatbot",
     func=safe_process_results,  # Usar nuestra función robusta
-    description="""Responde preguntas específicas sobre la base de datos médica, como buscar información de pacientes, citas, diagnósticos, etc.
-Usa esta herramienta para cualquier pregunta que implique obtener datos de la base de datos.
-Ejemplos de cuándo usarla: 'Busca al paciente con ID 123', '¿Cuáles son las alergias del paciente X?', 'Muéstrame las citas para mañana'."""
+    description="""Responde preguntas específicas sobre la base de datos médica. Útil para:
+- Buscar información de pacientes, citas, diagnósticos, alergias, etc. (ej: 'Busca al paciente con ID 123', '¿Cuáles son las alergias del paciente X?').
+- Obtener descripciones para códigos o IDs específicos de tablas de catálogo (ej: si obtienes un ALTY_ID = 1, puedes preguntar 'Cuál es la descripción para ALTY_ID 1 en ALLE_ALLERGY_TYPES' o generar directamente la consulta SQL 'SELECT ALTY_DESCRIPTION_ES FROM ALLE_ALLERGY_TYPES WHERE ALTY_ID = 1').
+Usa esta herramienta para cualquier pregunta que implique obtener datos directamente de la base de datos.
+Evita preguntas ambiguas; si necesitas traducir un ID a una descripción, formula una pregunta clara para obtener esa descripción de su tabla respectiva."""
 )
 
 # --- Herramienta para información general y SinaSuite ---
@@ -143,23 +194,90 @@ Ejemplos de cuándo usarla: 'Hola', '¿Qué es SinaSuite?', '¿Quién eres?', 'A
 
 def custom_handle_parsing_errors(error: OutputParserException) -> str:
     """
-    Función personalizada para manejar errores de parseo del agente.
-    Intenta dar una guía más específica al LLM para que se autocorrija.
+    Genera un mensaje de error personalizado y prescriptivo cuando el LLM no sigue el formato ReAct.
+    Intenta extraer la salida problemática del LLM para incluirla en el mensaje de corrección.
     """
-    problematic_output = getattr(error, 'llm_output', getattr(error, 'observation', 'No se pudo obtener la salida problemática.'))
-    
-    # Registrar el error para depuración
-    logger.error(f"ERROR DE PARSEO DEL AGENTE DETECTADO: {error}", exc_info=True)
-    logger.error(f"SALIDA PROBLEMÁTICA DEL LLM QUE CAUSÓ EL ERROR:\n---\n{problematic_output}\n---")
+    response_str = str(error) # Mensaje completo de la excepción
 
-    # Mensaje más detallado para el LLM
-    return (
-        "ERROR: Tu respuesta no siguió el formato ReAct esperado. "
-        "Recuerda, debes generar una línea 'Action: [nombre de la herramienta]' "
-        "seguida de una línea 'Action Input: [entrada para la herramienta]'.\n"
-        f"La salida que generaste y causó el error fue:\n'''{problematic_output}'''\n"
-        "Por favor, revisa el formato ReAct, asegúrate de que la acción sea una de las herramientas disponibles "
-        "([SQLMedicalChatbot, SinaSuiteAndGeneralInformation]), y vuelve a intentarlo."
+    # Intentar extraer la salida real del LLM que causó el problema
+    problematic_output = getattr(error, 'llm_output', None)
+    if problematic_output is None: # Si error.llm_output no está disponible o es None
+        # Intentar parsear desde el string de la excepción
+        # Formatos comunes de OutputParserException:
+        # "Parsing LLM output produced both a final answer and a parse-able action:: [ACTUAL_LLM_OUTPUT]"
+        # "Could not parse LLM output: [ACTUAL_LLM_OUTPUT]"
+        # "Invalid Format: [ACTUAL_LLM_OUTPUT]" (y otros)
+        prefixes_to_check = [
+            "Parsing LLM output produced both a final answer and a parse-able action:: ",
+            "Could not parse LLM output: ",
+            "Invalid Format: ",
+            "Invalid tool `", # Para errores como "Invalid tool `XYZ`. Did you mean one of [valid_tools]?"
+        ]
+        
+        parsed_from_str = False
+        for prefix in prefixes_to_check:
+            if response_str.startswith(prefix):
+                # Tomar el resto del string después del prefijo
+                # Para "Invalid tool", el output problemático es el nombre de la herramienta incorrecta.
+                if prefix == "Invalid tool `":
+                    end_of_tool_name = response_str.find("`")
+                    if end_of_tool_name != -1:
+                         problematic_output = response_str[len(prefix):end_of_tool_name]
+                         parsed_from_str = True
+                         break
+                else:
+                    problematic_output = response_str[len(prefix):]
+                    parsed_from_str = True
+                    break
+        
+        if not parsed_from_str:
+            # Si no se pudo parsear con los prefijos conocidos, usar el mensaje de error completo como fallback
+            # (aunque esto podría ser menos útil para el LLM)
+            problematic_output = response_str 
+    else: # Si error.llm_output está disponible
+        problematic_output = str(problematic_output)
+
+    # Loguear la salida problemática específica que se enviará al LLM para corrección
+    logging.error(f"Salida problemática del LLM (para corrección):\\n---\\n{problematic_output}\\n---")
+
+    # Mensaje prescriptivo para el LLM
+    # (El resto de la función que construye el mensaje de error para el LLM permanece igual)
+    # ... (código existente para construir el mensaje de error prescriptivo)
+    # ...
+    # Asegurarse de que el logger de root también capture la salida problemática real que se envía al LLM
+    # (el logger actual en el manejador de errores del agente ya lo hace si error.llm_output está poblado)
+
+    # El mensaje que se devuelve al LLM para que lo corrija:
+    # (Este es el formato que ya tenías y es bueno, solo nos aseguramos que `problematic_output` sea más preciso)
+    # (El código original para construir el mensaje prescriptivo sigue aquí)
+    # ... (resto del código de la función) ...
+    # Por ejemplo:
+    error_message_template = (
+        "CRITICAL ERROR: Your response was not in the correct ReAct format. "
+        "You MUST respond with either a valid 'Action:' line followed by an 'Action Input:' line, "
+        "OR a 'Final Answer:' line. "
+        "DO NOT provide explanations or conversational text outside of the 'Thought:' field. "
+        "The available tools are: {tool_names}. "
+        "Ensure your Action is one of these tools if you are using an action. "
+        "Your problematic output was:\\n'''{problematic_llm_output}'''\\n"
+        "Correct your response to strictly follow the ReAct format (Thought, Action, Action Input, or Final Answer)."
+    )
+    # Obtener nombres de herramientas (asumiendo que están disponibles en algún contexto o globalmente)
+    # Esto es solo un ejemplo, necesitarías acceso a `self.tools` o similar si esto está en una clase.
+    # Si es una función global, los nombres de las herramientas tendrían que pasarse o ser accesibles.
+    # Por ahora, lo omito para mantener el cambio enfocado en la extracción de `problematic_output`.
+    # tool_names_str = ", ".join([tool.name for tool in self.tools]) if hasattr(self, 'tools') else "Not available here"
+    
+    # Para este ejemplo, usaré un placeholder para tool_names
+    tool_names_str = "[SQLMedicalChatbot, SinaSuiteAndGeneralInformation]" # Placeholder
+
+    # Re-loguear la salida problemática que se usará en el prompt de corrección
+    # logging.error(f"Salida problemática del LLM (para corrección del LLM):\\n---\\n{problematic_output}\\n---")
+    # Este logging ya se hizo arriba.
+
+    return error_message_template.format(
+        tool_names=tool_names_str,
+        problematic_llm_output=problematic_output
     )
 
 def get_langchain_agent():

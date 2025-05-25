@@ -237,19 +237,72 @@ def extract_info_from_question_llm(question: str, db_schema_str_full_details: st
     system_message_template = """
 Eres un asistente experto en SQL y bases de datos médicas. Tu tarea es analizar la pregunta del usuario
 y extraer la siguiente información en formato JSON:
-1.  `tables`: Lista de tablas principales necesarias para responder la pregunta.
-2.  `columns`: Lista de columnas que se deben seleccionar. Incluye el nombre de la tabla (ej: "TABLE.COLUMN").
+1.  `tables`: Lista de tablas principales necesarias para responder la pregunta. Identifica TODAS las tablas implicadas por las condiciones y columnas solicitadas. La primera tabla de esta lista será la tabla principal en la cláusula FROM.
+2.  `columns`: Lista de columnas que se deben seleccionar. Por defecto, selecciona todas las columnas (`["*"]`) de la tabla principal si no se especifican columnas. Si se mencionan explícitamente, inclúyelas con el nombre de la tabla (ej: "TABLE.COLUMN").
 3.  `conditions`: Lista de condiciones para la cláusula WHERE. Cada condición debe ser un diccionario con "column", "operator" y "value".
-    Extrae valores directamente de la pregunta (ej: PATI_ID = 1931 de "¿Qué alergias tiene el paciente 1931?").
-4.  `joins`: Lista de JOINs necesarios. Cada JOIN debe ser un diccionario con "type" (INNER, LEFT, etc.), "table1", "table2", y "on" (la condición del join).
-    Utiliza el esquema y las relaciones proporcionadas para determinar los joins.
+    -   Identifica la columna correcta para cada parte de la pregunta. Por ejemplo, si la pregunta es "Pacientes con síntoma X y diagnóstico Y", X podría estar en `EPIS_DIAGNOSTICS.DIAG_OBSERVATION` y Y podría ser un código en `EPIS_DIAGNOSTICS.CDTE_ID` o también texto en `EPIS_DIAGNOSTICS.DIAG_OBSERVATION`.
+    -   Para frases como "reportaron 'síntoma A'", la condición podría ser `{{"column": "TRIA_SYMPTOMS.SYMP_DESCRIPTION", "operator": "LIKE", "value": "%síntoma A%"}}` (asumiendo que los síntomas están en TRIA_SYMPTOMS).
+    -   Para frases como "diagnosticados con 'enfermedad B'", si 'enfermedad B' es un texto descriptivo, considera usar la columna de observaciones o notas (ej: `{{"column": "EPIS_DIAGNOSTICS.DIAG_OBSERVATION", "operator": "LIKE", "value": "%enfermedad B%"}}`). Si 'enfermedad B' es un código de diagnóstico, utiliza la columna correspondiente (ej: `{{"column": "EPIS_DIAGNOSTICS.CDTE_ID", "operator": "=", "value": "CODIGO_ENFERMEDAD"}}`).
+    -   Extrae valores directamente de la pregunta (ej: PATI_ID = 1931 de "¿Qué alergias tiene el paciente 1931?").
+4.  `joins`: Lista de JOINs necesarios para conectar las tablas.
+    -   DEBES incluir un JOIN si las columnas en `columns` o `conditions` pertenecen a tablas diferentes de la primera tabla listada en `tables` (la tabla principal del FROM).
+    -   DEBES incluir JOINs para conectar cualquier tabla adicional listada en `tables` (después de la primera) con la tabla principal o con otras tablas ya unidas.
+    -   Utiliza el esquema y las relaciones proporcionadas para determinar las condiciones ON correctas.
+    -   Cada JOIN debe ser un diccionario con "type" (INNER, LEFT, etc.), "table1" (la tabla ya presente en el FROM o unida previamente), "table2" (la nueva tabla a unir), y "on" (la condición del join completa, ej: "TABLE1.ID_RELACION = TABLE2.ID_RELACION").
 
 Contexto de la Base de Datos:
 Esquema Simplificado:
-{}
+{0}
 
 Relaciones entre Tablas:
-{}
+{1}
+
+Ejemplo de pregunta 1: "Mostrar los síntomas reportados por pacientes diagnosticados con 'gripe común'."
+Asumir que los síntomas están en `TRIA_SYMPTOMS (SYMP_DESCRIPTION)` y los diagnósticos en `EPIS_DIAGNOSTICS (DIAG_OBSERVATION, CDTE_ID)`. Ambas tablas pueden tener `EPIS_ID` y/o `PATI_ID`. `PATI_ID` también está en `PATI_PATIENTS`.
+Posible JSON (si `TRIA_SYMPTOMS` es la tabla principal y se une con `EPIS_DIAGNOSTICS`):
+{{
+  "tables": ["TRIA_SYMPTOMS", "EPIS_DIAGNOSTICS"],
+  "columns": ["TRIA_SYMPTOMS.SYMP_DESCRIPTION"],
+  "conditions": [
+    {{"column": "EPIS_DIAGNOSTICS.DIAG_OBSERVATION", "operator": "LIKE", "value": "%gripe común%"}}
+  ],
+  "joins": [
+    {{
+      "type": "INNER",
+      "table1": "TRIA_SYMPTOMS",
+      "table2": "EPIS_DIAGNOSTICS",
+      "on": "TRIA_SYMPTOMS.EPIS_ID = EPIS_DIAGNOSTICS.EPIS_ID"
+    }}
+  ]
+}}
+
+Ejemplo de pregunta 2: "Pacientes con nombre 'Juan Pérez' que reportaron 'fuerte dolor de cabeza' como síntoma y fueron diagnosticados con 'migraña crónica'."
+Tablas involucradas: `PATI_PATIENTS` (para nombre), `TRIA_SYMPTOMS` (para síntomas), `EPIS_DIAGNOSTICS` (para diagnósticos).
+Asumir relaciones: `PATI_PATIENTS.PATI_ID = TRIA_SYMPTOMS.PATI_ID` (si síntomas tiene PATI_ID) o `PATI_PATIENTS.PATI_ID = EPIS_DIAGNOSTICS.PATI_ID` y luego `TRIA_SYMPTOMS` se une a `EPIS_DIAGNOSTICS` por `EPIS_ID`.
+Posible JSON (usando `PATI_PATIENTS` como tabla principal):
+{{
+  "tables": ["PATI_PATIENTS", "TRIA_SYMPTOMS", "EPIS_DIAGNOSTICS"],
+  "columns": ["PATI_PATIENTS.PATI_ID", "PATI_PATIENTS.PATI_NAME", "TRIA_SYMPTOMS.SYMP_DESCRIPTION", "EPIS_DIAGNOSTICS.DIAG_OBSERVATION"],
+  "conditions": [
+    {{"column": "PATI_PATIENTS.PATI_NAME", "operator": "LIKE", "value": "%Juan Pérez%"}},
+    {{"column": "TRIA_SYMPTOMS.SYMP_DESCRIPTION", "operator": "LIKE", "value": "%fuerte dolor de cabeza%"}},
+    {{"column": "EPIS_DIAGNOSTICS.DIAG_OBSERVATION", "operator": "LIKE", "value": "%migraña crónica%"}}
+  ],
+  "joins": [
+    {{
+      "type": "INNER",
+      "table1": "PATI_PATIENTS",
+      "table2": "EPIS_DIAGNOSTICS",
+      "on": "PATI_PATIENTS.PATI_ID = EPIS_DIAGNOSTICS.PATI_ID"
+    }},
+    {{
+      "type": "INNER",
+      "table1": "EPIS_DIAGNOSTICS", 
+      "table2": "TRIA_SYMPTOMS",
+      "on": "EPIS_DIAGNOSTICS.EPIS_ID = TRIA_SYMPTOMS.EPIS_ID"
+    }}
+  ]
+}}
 
 Responde ÚNICAMENTE con el objeto JSON. No incluyas explicaciones adicionales.
 """
@@ -278,6 +331,30 @@ Responde ÚNICAMENTE con el objeto JSON. No incluyas explicaciones adicionales.
 
     if not extracted_json:
         logging.warning(f"[extract_info_from_question_llm] No se pudo extraer JSON de la respuesta del LLM: {response_text}")
+        # Fallback: Si no hay JSON, intentar al menos obtener las tablas si la pregunta es compleja
+        if " versus " in question.lower() or " compar" in question.lower() or " desglosado por " in question.lower():
+            logging.info(f"[extract_info_from_question_llm] Pregunta compleja detectada, intentando extracción de tablas simple.")
+            # Re-llamar al LLM con un prompt más simple solo para tablas
+            simple_table_prompt = f'''Dada la pregunta del usuario, identifica las tablas principales de la base de datos que serían necesarias para responderla.
+Pregunta: {question}
+Esquema Simplificado:
+{db_schema_str_simple}
+Relaciones entre Tablas:
+{relaciones_tablas_str}
+Responde ÚNICAMENTE con un objeto JSON que contenga una clave "tables" con la lista de nombres de tablas. Ejemplo: {{"tables": ["TABLE_X", "TABLE_Y"]}}'''
+            
+            messages_simple_tables = [
+                {"role": "system", "content": "Eres un asistente experto en SQL y bases de datos médicas."},
+                {"role": "user", "content": simple_table_prompt}
+            ]
+            config_simple_tables = {**llm_config, "max_tokens": 200}
+            
+            response_simple_tables = call_llm_with_fallbacks(messages_simple_tables, config_simple_tables, step_name="ExtractTablesForComplexQuery")
+            json_simple_tables = extract_json_from_llm_response(response_simple_tables)
+            
+            if json_simple_tables and "tables" in json_simple_tables:
+                logging.info(f"[extract_info_from_question_llm] Tablas extraídas para pregunta compleja (fallback): {json_simple_tables['tables']}")
+                return {"tables": json_simple_tables["tables"], "columns": [], "conditions": [], "joins": [], "is_complex_fallback": True} # Marcar que es un fallback
         return {}
 
     logging.info(f"[extract_info_from_question_llm] JSON extraído: {extracted_json}")

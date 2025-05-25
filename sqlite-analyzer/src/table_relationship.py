@@ -2,9 +2,10 @@ import os
 import json
 import logging
 from typing import Dict, Any, List, Optional
+from collections import defaultdict
 
 # Constante para el archivo de esquema
-SCHEMA_ENHANCER_FILE = "schema_rag_cache.json.bak"
+SCHEMA_ENHANCER_FILE = "schema_enhanced.json"
 
 def ensure_schema_file_exists(schema_path: str = SCHEMA_ENHANCER_FILE) -> None:
     """Crea un archivo de esquema básico si no existe"""
@@ -365,28 +366,97 @@ def infer_patient_relationship(table_name_or_structure, db_structure=None):
     logging.warning(f"No se pudo inferir relación para {table_name} con {patient_table}")
     return {}
 
-def ensure_relationships_map(db_structure: Dict[str, Any], force_rebuild: bool = False):
+def ensure_relationships_map(db_structure: Dict[str, Dict], existing_relationships: Optional[Dict[str, List[Dict]]] = None) -> Dict[str, any]:
     """
-    Asegura que existe un mapa de relaciones entre tablas, generándolo si es necesario
+    Asegura que el mapa de relaciones esté completo, infiriendo relaciones faltantes
+    y registrando advertencias para tablas centrales si no se pueden conectar.
     
     Args:
         db_structure: Estructura de la base de datos
         force_rebuild: Si es True, regenera el mapa aunque ya exista
     """
-    relationships = {} if force_rebuild else load_table_relationships()
+    table_names = list(db_structure.keys())
+    relationships_map = defaultdict(list)
     
-    if not relationships or force_rebuild:
-        logging.info("Generando nuevo mapa de relaciones entre tablas...")
-        relationships = generate_table_relationships_map(db_structure)
-        if relationships:
-            save_table_relationships(relationships)
-            logging.info(f"Mapa de relaciones generado con {len(relationships)} relaciones")
-        else:
-            logging.warning("No se pudieron generar relaciones entre tablas")
-    else:
-        logging.info(f"Usando mapa de relaciones existente con {len(relationships)} relaciones")
+    # Añadir relaciones explícitas existentes primero (ej. de un archivo JSON)
+    if existing_relationships:
+        for table1, relations in existing_relationships.items():
+            for rel in relations:
+                table2 = rel.get("related_table")
+                if table1 in table_names and table2 in table_names:
+                    relationships_map[table1].append({
+                        "related_table": table2,
+                        "join_condition": rel.get("join_condition"),
+                        "type": rel.get("type", "inferred") # Marcar como 'explicit' o 'inferred'
+                    })
+
+    # Lista de tablas consideradas centrales para las cuales se emitirán advertencias si no se pueden conectar
+    # central_tables_for_warnings = ["PATI_PATIENTS", "EPIS_EPISODES", "ACCI_PATIENT_CONDITIONS"]
+    central_tables_for_warnings = ["PATI_PATIENTS", "EPIS_EPISODES"] # ACCI_PATIENT_CONDITIONS eliminada
     
-    return relationships
+    # Identificar la tabla de pacientes (necesaria para algunas lógicas de inferencia)
+    patient_table = None
+    for t_name in table_names:
+        if "PATI_PATIENTS" in t_name.upper(): # Asumiendo un nombre común
+            patient_table = t_name
+            break
+    if not patient_table:
+        logging.warning("Tabla de pacientes no identificada, algunas inferencias de relación pueden ser limitadas.")
+
+    # Inferir relaciones basadas en FKs de db_structure si no están en existing_relationships
+    for table_name, table_info in db_structure.items():
+        if 'foreign_keys' in table_info:
+            for fk_info in table_info['foreign_keys']:
+                related_table = fk_info.get('referenced_table')
+                if related_table in table_names:
+                    # Comprobar si esta relación ya existe para evitar duplicados
+                    exists = False
+                    for rel_entry in relationships_map.get(table_name, []):
+                        if rel_entry.get("related_table") == related_table and \
+                           rel_entry.get("join_condition") == f"{table_name}.{fk_info.get('foreign_key_column')} = {related_table}.{fk_info.get('referenced_column')}":
+                            exists = True
+                            break
+                    if not exists:
+                        relationships_map[table_name].append({
+                            "related_table": related_table,
+                            "join_condition": f"{table_name}.{fk_info.get('foreign_key_column')} = {related_table}.{fk_info.get('referenced_column')}",
+                            "type": "foreign_key"
+                        })
+                        # Añadir también la relación inversa para facilitar búsquedas bidireccionales
+                        relationships_map[related_table].append({
+                            "related_table": table_name,
+                            "join_condition": f"{related_table}.{fk_info.get('referenced_column')} = {table_name}.{fk_info.get('foreign_key_column')}",
+                            "type": "foreign_key_reverse"
+                        })
+    
+    # Lógica para construir un grafo y encontrar caminos (simplificada o adaptada de tu código)
+    # Esta parte necesitaría las funciones build_graph y find_path o una implementación similar.
+    # Por ahora, nos centraremos en la advertencia.
+    # Ejemplo de cómo podría ser la lógica de advertencia (requiere un grafo y una función de búsqueda de ruta):
+    
+    # graph = build_graph_from_relationships(relationships_map, table_names) # Necesitarías esta función
+
+    # for central_table in central_tables_for_warnings:
+    #     if central_table not in table_names:
+    #         logging.warning(f"Tabla central '{central_table}' no encontrada en db_structure.")
+    #         continue
+            
+    #     # Comprobar conectividad a otras tablas importantes (ej. patient_table si es diferente)
+    #     # Esto es un placeholder, la lógica real de conectividad es más compleja
+    #     connected_to_patient = False
+    #     if patient_table and central_table != patient_table:
+    #         # path = find_path(graph, central_table, patient_table) # Necesitarías esta función
+    #         # if path:
+    #         #    connected_to_patient = True
+    #         # else:
+    #         #    logging.warning(f"No se pudo inferir relación para {central_table} con {patient_table}")
+    #         pass # Placeholder para la lógica de búsqueda de ruta
+
+        # Advertir si una tabla central no tiene relaciones directas o inferidas (excepto con ella misma)
+        # if not any(rel.get("related_table") != central_table for rel in relationships_map.get(central_table, [])):
+        #    logging.warning(f"No se encontraron relaciones salientes para la tabla central '{central_table}'.")
+
+    return dict(relationships_map)
 
 def normalize_join_format(join_data: Dict[str, Any]) -> Dict[str, Any]:
     """
