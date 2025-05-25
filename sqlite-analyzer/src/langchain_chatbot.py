@@ -56,9 +56,51 @@ LLM_PROVIDER = "deepseek"
 db_connector: DBConnector = get_db_connector()
 
 # Herramienta para interactuar con la base de datos médica
+def safe_process_results(query: str) -> str:
+    """Procesa la consulta de manera segura con mejor manejo de errores y conversión de resultados. Nunca bloquea."""
+    import concurrent.futures
+    try:
+        logger.info(f"Procesando consulta: '{query}' (con timeout de 90s)")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(chatbot_pipeline, query, db_connector)
+            try:
+                pipeline_result = future.result(timeout=90)
+            except concurrent.futures.TimeoutError:
+                logger.error("chatbot_pipeline excedió el tiempo máximo de 90s y fue cancelado")
+                return "Error: El procesamiento de la consulta tardó demasiado y fue cancelado. Por favor, intenta con una consulta más simple."
+            except Exception as e:
+                logger.error(f"Error inesperado ejecutando chatbot_pipeline: {e}", exc_info=True)
+                return f"Error inesperado al procesar la consulta: {str(e)}"
+
+        logger.info(f"Pipeline ejecutado. Tipo de resultado: {type(pipeline_result)}")
+        if pipeline_result is None:
+            logger.error("Pipeline devolvió None")
+            return "No pude obtener resultados para esta consulta."
+        if not isinstance(pipeline_result, dict):
+            logger.error(f"Pipeline devolvió un tipo inesperado: {type(pipeline_result)}")
+            return f"Error: Resultado con formato inválido. Por favor reporta este error."
+        if "response" not in pipeline_result:
+            logger.error(f"Pipeline devolvió un diccionario sin clave 'response'. Claves: {list(pipeline_result.keys())}")
+            if "sql_query" in pipeline_result:
+                return f"Se ejecutó la consulta '{pipeline_result['sql_query']}' pero no se pudo procesar el resultado."
+            return "La consulta se ejecutó pero no pude formatear la respuesta correctamente."
+        logger.info("Resultado del pipeline procesado correctamente")
+        response = pipeline_result["response"]
+        if not isinstance(response, (str, int, float)):
+            logger.warning(f"La respuesta no es un tipo básico serializable: {type(response)}")
+            try:
+                import json
+                response = json.dumps(response, ensure_ascii=False)
+            except:
+                response = str(response)
+        return response
+    except Exception as e:
+        logger.error(f"Error en safe_process_results: {e}", exc_info=True)
+        return f"Error al procesar la consulta: {str(e)}"
+
 chatbot_tool = Tool(
-    name="SQLMedicalChatbot",  # Nombre sin espacios para evitar problemas con algunos LLMs
-    func=lambda q: chatbot_pipeline(q, db_connector)["response"],
+    name="SQLMedicalChatbot",
+    func=safe_process_results,  # Usar nuestra función robusta
     description="""Responde preguntas específicas sobre la base de datos médica, como buscar información de pacientes, citas, diagnósticos, etc.
 Usa esta herramienta para cualquier pregunta que implique obtener datos de la base de datos.
 Ejemplos de cuándo usarla: 'Busca al paciente con ID 123', '¿Cuáles son las alergias del paciente X?', 'Muéstrame las citas para mañana'."""

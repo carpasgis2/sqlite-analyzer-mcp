@@ -893,11 +893,6 @@ def generate_sql(structured_info: Dict[str, Any], db_structure: Dict[str, Any],
                         logging.debug("Llamando a db_connector.execute_query...")
                         # La ejecución real se hace en chatbot_pipeline, aquí solo generamos y validamos.
                         # result = db_connector.execute_query(sql_query_str, params_list) 
-                        # SIEMPRE usar timeout para evitar bloqueos
-                        # result, error = execute_query_with_timeout(db_connector, sql_query_str, params_list, timeout_seconds=10)
-                        # if error:
-                        #     return {"response": f"Error al ejecutar la consulta SQL: {error}", "sql_query": sql_query_str, "params": params_list}
-                        # return result
                         logging.debug(f"Llamada a db_connector.execute_query (simulada/omitida en generate_sql) completada.")
                     else:
                         logging.error("db_connector no está inicializado. No se puede ejecutar la consulta (simulación).")
@@ -950,10 +945,6 @@ def generate_sql(structured_info: Dict[str, Any], db_structure: Dict[str, Any],
         # 6) Devolver la consulta final y sus parámetros
         # La función está tipada para devolver str, pero el pipeline maneja (str, list) o dict.
         # Por ahora, devolvemos solo el string SQL como antes, y los params se manejan en chatbot_pipeline.
-        # Si la función debe devolver también params_list, la signatura y el manejo deben cambiar.
-        # Por coherencia con el error de "TypeError: argument of type 'NoneType' is not iterable"
-        # el problema principal es que se pasaba None a funciones que esperaban string.
-        # El retorno de esta función es usado por chatbot_pipeline, que espera un string o un dict.
         # Si todo va bien, devolvemos el string SQL. params_list se usa en chatbot_pipeline.
         return final_sql_query 
     
@@ -1046,6 +1037,8 @@ def chatbot_pipeline(
     logger = logging.getLogger(__name__) 
     logger.info(f"DEBUG: [pipeline.py] Inicio de chatbot_pipeline. Pregunta: '{question}', Tablas Relevantes: {tablas_relevantes}, Condiciones: {condiciones_relevantes}")
     print(f"DEBUG: [pipeline.py] Inicio de chatbot_pipeline. Pregunta: '{question}', Tablas Relevantes: {tablas_relevantes}, Condiciones: {condiciones_relevantes} (stdout)")
+    pipeline_start_time = time.time()
+    logger.info(f"PIPELINE_BENCHMARK: chatbot_pipeline START")
 
     # Inicializar structured_info a un diccionario vacío si aún no está definido.
     structured_info: Dict[str, Any] = {}
@@ -1078,6 +1071,7 @@ def chatbot_pipeline(
 
     logger.info("DEBUG: [pipeline.py] Cargando diccionario de términos (común)...")
     terms_dict = load_terms_dictionary()
+    logger.info(f"PIPELINE_BENCHMARK: terms_dict loaded - {(time.time() - pipeline_start_time):.4f}s")
 
     try:
         if tablas_relevantes:
@@ -1103,6 +1097,7 @@ def chatbot_pipeline(
             # Normalizar y validar la información estructurada inicial
             structured_info = normalize_structured_info(structured_info)
             logger.info(f"structured_info después de normalización inicial (forzado): {structured_info}")
+            logger.info(f"PIPELINE_BENCHMARK: Forced structured_info processed - {(time.time() - pipeline_start_time):.4f}s")
             
             # Se omite la parte de preprocess_question y enhance_structured_info 
             # ya que la información viene forzada y el LLM no interviene en su formación inicial.
@@ -1126,6 +1121,7 @@ def chatbot_pipeline(
             logger.info(f"DEBUG: [pipeline.py] Paso 3 completado. Pregunta enriquecida: {enriched_question}")
             logger.info(f"DEBUG: [pipeline.py] Tablas identificadas en Paso 3: {initial_identified_tables}")
             logger.info(f"DEBUG: [pipeline.py] Tipo de consulta identificado en Paso 3: {initial_query_type}")
+            logger.info(f"PIPELINE_BENCHMARK: Question preprocessed - {(time.time() - pipeline_start_time):.4f}s")
             
             # Asegurarse de que structured_info esté inicializado
             if structured_info is None: 
@@ -1247,6 +1243,7 @@ def chatbot_pipeline(
             logger.info(f"DEBUG: [pipeline.py] structured_info ANTES de Paso 5 (normalización): {structured_info}")
             structured_info = normalize_structured_info(structured_info) 
             logger.info(f"DEBUG: [pipeline.py] structured_info DESPUÉS de Paso 5 (normalización): {structured_info}")
+            logger.info(f"PIPELINE_BENCHMARK: structured_info normalized - {(time.time() - pipeline_start_time):.4f}s")
 
             # --- INICIO: Heurística para extraer condiciones de ID de paciente si están vacías ---
             if structured_info.get("tables") and not structured_info.get("conditions"):
@@ -1321,6 +1318,7 @@ def chatbot_pipeline(
         logger.info(f"DEBUG: [pipeline.py] Paso 6: Generando SQL a partir de structured_info...")
         
         # --- INICIO CAMBIO: Manejo explícito de la salida de generate_sql ---
+        generate_sql_start_time = time.time()
         returned_from_generate_sql = generate_sql(
             structured_info=structured_info, 
             db_structure=db_structure, 
@@ -1343,6 +1341,7 @@ def chatbot_pipeline(
         else:
             logger.error(f"DEBUG: [pipeline.py] Salida inesperada de generate_sql: {returned_from_generate_sql}")
             return {"response": "Error: Formato inesperado de la consulta SQL generada.", "sql": None, "tables": [], "columns": []}
+        logger.info(f"PIPELINE_BENCHMARK: SQL generated - {(time.time() - generate_sql_start_time):.4f}s (Total: {(time.time() - pipeline_start_time):.4f}s)")
 
         logger.info(f"DEBUG: [pipeline.py] SQL generado (str): {sql_query_str}")
         logger.info(f"DEBUG: [pipeline.py] Parámetros generados: {params_list}")
@@ -1373,20 +1372,21 @@ def chatbot_pipeline(
         logger.info(f"DEBUG: [pipeline.py] Paso 7: Ejecutando consulta SQL: '{sql_query_str}' con params: {params_list}")
         # --- EJECUCIÓN REAL DE LA CONSULTA SQL CON TIMEOUT ---
         logger.info(f"DEBUG: A punto de ejecutar execute_query_with_timeout con query: '{sql_query_str}' y params: {params_list}")
+        execute_query_start_time = time.time()
         result, error = execute_query_with_timeout(db_connector, sql_query_str, params_list, timeout_seconds=10)
         if error:
             logger.error(f"ERROR: {error}")
             return {"response": f"Error al ejecutar la consulta SQL: {error}", "sql": sql_query_str, "tables": structured_info.get("tables", []), "columns": structured_info.get("columns", []), "data": []}
-        logger.info(f"DEBUG: Resultado de execute_query_with_timeout: {result}")
-        logger.info(f"DEBUG: [pipeline.py] Consulta SQL ejecutada. Resultado: {'(demasiado largo para loguear)' if isinstance(result, list) and len(result) > 5 else result}")
         
-        # El log original del usuario para "result" puede ser muy verboso.
-        # Considerar loguear solo una parte o un resumen del resultado.
-        # logger.info(f"DEBUG: [pipeline.py] Consulta SQL ejecutada. Resultado: {result}") 
-
-        if result is None or (isinstance(result, list) and not result): # Manejar tanto None como lista vacía
-            logger.warning(f"DEBUG: [pipeline.py] La consulta SQL ('{sql_query_str}' con params {params_list}) no devolvió resultados o el resultado fue None.")
-            return {"response": "No se encontraron resultados para la consulta.", "sql": sql_query_str, "tables": structured_info.get("tables", []), "columns": structured_info.get("columns", []), "data": [] if result is None else result} # Devolver lista vacía si es None
+        # Loguear información sobre el resultado sin imprimirlo directamente si es grande
+        if isinstance(result, list):
+            logger.info(f"DEBUG: Resultado de execute_query_with_timeout: type=list, len={len(result)}. Primer elemento tipo: {type(result[0]).__name__ if result else 'N/A'}")
+        elif result is not None:
+            logger.info(f"DEBUG: Resultado de execute_query_with_timeout: type={type(result).__name__}. No es lista.")
+        else:
+            logger.info("DEBUG: Resultado de execute_query_with_timeout: None")
+            
+        logger.info(f"DEBUG: [pipeline.py] Consulta SQL ejecutada. Resultado (controlado): {'(demasiado largo para loguear)' if isinstance(result, list) and len(result) > 5 else result}")
         # --- FIN CAMBIO: Ejecución de la consulta SQL ---
         
         # --- INICIO CAMBIO: Preparación de la respuesta final ---
@@ -1406,7 +1406,32 @@ def chatbot_pipeline(
             response["intermediate_steps"]["enriched_question"] = enriched_question
             response["intermediate_steps"]["db_structure"] = db_structure
             response["intermediate_steps"]["terms_dict"] = terms_dict
-        logger.info(f"DEBUG: [pipeline.py] Respuesta final preparada: {response}")
+        
+        # Loguear un resumen de la respuesta en lugar de la respuesta completa
+        response_summary_for_log = {
+            "response_message": response.get("response"),
+            "sql_present": response.get("sql") is not None,
+            "tables_count": len(response.get("tables", []) if response.get("tables") is not None else []),
+            "columns_count": len(response.get("columns", []) if response.get("columns") is not None else []),
+        }
+        data_for_log = response.get("data")
+        if isinstance(data_for_log, list):
+            response_summary_for_log["data_rows"] = len(data_for_log)
+            if data_for_log:
+                 response_summary_for_log["data_first_row_type"] = type(data_for_log[0]).__name__
+        elif data_for_log is not None:
+            response_summary_for_log["data_type"] = type(data_for_log).__name__
+        else:
+            response_summary_for_log["data_present"] = False
+
+        intermediate_steps_for_log = response.get("intermediate_steps")
+        if isinstance(intermediate_steps_for_log, dict):
+            response_summary_for_log["intermediate_steps_keys"] = list(intermediate_steps_for_log.keys())
+        elif intermediate_steps_for_log is not None:
+            response_summary_for_log["intermediate_steps_type"] = type(intermediate_steps_for_log).__name__
+        
+        logger.info(f"DEBUG: [pipeline.py] Respuesta final preparada (resumen): {response_summary_for_log}")
+        logger.info(f"PIPELINE_BENCHMARK: chatbot_pipeline END - {(time.time() - pipeline_start_time):.4f}s")
         # --- FIN CAMBIO: Preparación de la respuesta final ---
         return response
     except Exception as e:

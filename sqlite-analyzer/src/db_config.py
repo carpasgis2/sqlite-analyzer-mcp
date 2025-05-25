@@ -114,85 +114,73 @@ class DBConnector:
 
     def execute_query(self, query: str, params: List[Any] = None) -> Union[List[Dict[str, Any]], int]:
         """
-        Ejecuta una consulta con control de timeout interno y mejor manejo de threads.
+        Ejecuta una consulta con control robusto de errores y garantiza nunca bloquearse.
+        Siempre retorna una respuesta (lista vacía, int o error), nunca se queda colgado.
         """
         if not query:
             self.logger.error("Se intentó ejecutar una consulta vacía")
             return []
-        
-        # Registrar información básica
+
         current_thread_id = threading.get_ident()
         self.logger.info(f"Ejecutando consulta en thread {current_thread_id}: \"{query}\" con parámetros: {params}")
-        
-        # Obtener la conexión thread-safe
+
         connection = self.get_connection()
-        
-        # Implementar timeout interno (máximo 10 segundos)
         connection.execute("PRAGMA busy_timeout = 10000")  # 10 segundos en milisegundos
-        
+
+        cursor = None
         try:
-            # Crear un cursor específico para esta consulta
             cursor = connection.cursor()
-            
-            # Ejecutar la consulta (si hay params)
+            # Ejecutar la consulta
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            
-            # Para SELECT/PRAGMA, obtener resultados y convertir a diccionarios
+
+            # SELECT/PRAGMA: obtener resultados y convertir a dicts
             if query.strip().upper().startswith(("SELECT", "PRAGMA")):
-                # Obtener todos los resultados de una vez (no stream)
-                rows = cursor.fetchall()
-                
-                # Obtener nombres de columnas
-                column_names = [col[0] for col in cursor.description] if cursor.description else []
-                
-                # Convertir resultados a lista de diccionarios (procesar una vez, no iterar después)
-                results = []
-                for row in rows:
-                    row_dict = {}
-                    for i, value in enumerate(row):
-                        row_dict[column_names[i]] = value
-                    results.append(row_dict)
-                
-                # Cerrar cursor explícitamente
-                cursor.close()
-                
-                # Log con el conteo de filas (no el contenido completo)
-                self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}")
-                
-                # Retornar resultados
-                return results
+                try:
+                    rows = cursor.fetchall()
+                    # Limitar resultados para evitar bloqueos por grandes volúmenes
+                    MAX_ROWS = 10000
+                    if len(rows) > MAX_ROWS:
+                        self.logger.warning(f"Demasiadas filas devueltas ({len(rows)}), truncando a {MAX_ROWS}")
+                        rows = rows[:MAX_ROWS]
+                    column_names = [col[0] for col in cursor.description] if cursor.description else []
+                    results = []
+                    for row in rows:
+                        try:
+                            row_dict = {column_names[i]: value for i, value in enumerate(row)}
+                        except Exception as conv_err:
+                            self.logger.error(f"Error convirtiendo fila a dict: {conv_err}")
+                            row_dict = {str(i): value for i, value in enumerate(row)}
+                        results.append(row_dict)
+                    self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}")
+                    return results
+                except Exception as fetch_err:
+                    self.logger.error(f"Error al obtener o procesar resultados: {fetch_err}", exc_info=True)
+                    return []
             else:
-                # Para INSERT/UPDATE/DELETE, obtener rowcount
+                # INSERT/UPDATE/DELETE: solo rowcount
                 rowcount = cursor.rowcount
-                
-                # Cerrar cursor explícitamente
-                cursor.close()
-                
-                # Log con las filas afectadas
                 self.logger.info(f"Consulta de modificación ejecutada. Filas afectadas: {rowcount}")
-                
-                # Retornar rowcount
                 return rowcount
-    
         except sqlite3.Error as e:
             self.logger.error(f"Error de SQLite al ejecutar la consulta: {e}", exc_info=True)
-            
-            # Intentar rollback en caso de error
             try:
                 if connection.in_transaction:
                     connection.rollback()
             except Exception as rollback_error:
                 self.logger.error(f"Error adicional durante rollback: {rollback_error}")
-            
-            # Retornar lista vacía en caso de error
             return []
-        
         except Exception as e:
             self.logger.error(f"Error no esperado al ejecutar la consulta: {e}", exc_info=True)
             return []
+        finally:
+            if cursor is not None:
+                try:
+                    cursor.close()
+                except Exception as close_err:
+                    self.logger.error(f"Error al cerrar el cursor: {close_err}")
 
     def execute_sql(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
         """Alias para execute_query para compatibilidad con el pipeline"""
