@@ -534,12 +534,27 @@ class SQLGenerator:
                     logging.warning(f"[SQLGenerator] Inferencia de JOINs (Pase {pass_num_inf+1}): No se pudieron inferir más JOINs, pero aún faltan: {missing_tables}.")
                     break 
             
-            if not already_joined_tables.issuperset(required_tables_for_query_inference):
-                missing_tables_final = required_tables_for_query_inference - already_joined_tables
-                logging.error(f"ERROR CRÍTICO de INFERENCIA: Después de todos los pases, aún faltan tablas requeridas: {missing_tables_final}.")
-        elif required_tables_for_query_inference - already_joined_tables: # No hay relations_map pero faltan tablas
-             logging.warning(f"[SQLGenerator] No se proporcionó 'relations_map' o 'db_structure' y faltan tablas: {required_tables_for_query_inference - already_joined_tables}. La inferencia de JOINs no se pudo realizar.")
-
+        # Después de todos los intentos de JOIN (LLM e inferidos), verificar si todas las tablas requeridas están conectadas.
+        final_missing_tables = required_tables_for_query_inference - already_joined_tables
+        if final_missing_tables:
+            error_detail = f"Faltan tablas: {', '.join(sorted(list(final_missing_tables)))}" # sorted para consistencia en logs/mensajes
+            
+            # Determinar la causa del fallo
+            if not (relations_map and db_structure) and required_tables_for_query_inference != already_joined_tables:
+                # No se pudo intentar la inferencia porque faltaba relations_map/db_structure, y se necesitaban JOINs.
+                log_message = (f"[SQLGenerator] No se proporcionó 'relations_map' y/o 'db_structure'. "
+                               f"{error_detail}. La inferencia de JOINs no se pudo realizar.")
+                error_query_message = (f"Error: Falta mapa de relaciones y/o estructura DB y no se pudieron unir las tablas. "
+                                       f"{error_detail}")
+            else:
+                # La inferencia se intentó (relations_map y db_structure estaban disponibles) pero falló en conectar todo.
+                log_message = f"[SQLGenerator] ERROR CRÍTICO de INFERENCIA: Después de todos los pases, {error_detail}."
+                error_query_message = f"Error: No se pudieron conectar todas las tablas requeridas para la consulta. {error_detail}"
+            
+            logging.error(log_message)
+            # Escapar comillas simples en el mensaje de error para que sea una cadena SQL válida
+            safe_error_query_message = error_query_message.replace("'", "''")
+            return f"SELECT '{safe_error_query_message}' AS mensaje_error_sql_generator", []
 
         # --- FIN SECCIÓN DE INFERENCIA DE JOINS ---
 
@@ -664,6 +679,7 @@ class SQLGenerator:
                     processed_sub_where_val = sub_where_val
                     if sub_where_op == "LIKE" and not ('%' in sub_where_val or '_' in sub_where_val):
                         processed_sub_where_val = f"%{sub_where_val}%"
+
 
                     where_clauses.append(f"{actual_column_name} {operator} (SELECT {actual_sub_select} FROM {sub_from} WHERE {actual_sub_where_col} {sub_where_op} ?)")
                     params.append(processed_sub_where_val)

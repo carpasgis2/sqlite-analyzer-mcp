@@ -296,17 +296,36 @@ def validate_sql_entities(sql_query: str, db_structure: Dict[str, Any]) -> Tuple
     sql_query_upper_for_keywords = sql_query.upper()
 
     # 1. Extraer tablas y sus alias
-    table_references = {}  # alias.upper() -> real_table_name.upper()
+    table_references = {}  # alias.upper() -> real_table_name.upper() (o marcador para subconsulta)
     actual_tables_in_query = set()  # Store real table names (UPPER) found
 
-    # Regex para FROM y JOIN clauses. Simplificado.
+    # Regex para FROM y JOIN clauses.
+    # Modificado para capturar también subconsultas con alias.
     from_join_clauses_match = re.search(r'\bFROM\s+(.+?)(?=(\bWHERE\b|\bGROUP BY\b|\bORDER BY\b|\bLIMIT\b|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|;|\Z))', sql_query, re.IGNORECASE | re.DOTALL)
     
     if from_join_clauses_match:
         full_from_join_segment = from_join_clauses_match.group(1)
         
-        # Split by JOIN first, then by comma for tables in FROM
-        # This handles "FROM table1 t1 JOIN table2 t2 ON ..., table3 t3" - though table3 t3 is unusual here, it focuses on typical JOINs
+        # Primero, buscar subconsultas con alias en el segmento FROM/JOIN
+        # Ejemplo: JOIN (SELECT ... ) AS alias_subconsulta ON ...
+        # Ejemplo: FROM (SELECT ... ) alias_subconsulta, otra_tabla ...
+        # Este regex es una simplificación y podría no cubrir todos los casos complejos de subconsultas anidadas.
+        subquery_alias_pattern = r'\(\s*SELECT.*?\)\s*(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]+)'
+        
+        # Iterar sobre las coincidencias de subconsultas con alias
+        for sub_match in re.finditer(subquery_alias_pattern, full_from_join_segment, re.IGNORECASE | re.DOTALL):
+            alias_name = sub_match.group(2)
+            alias_upper = alias_name.upper()
+            # Marcar este alias como proveniente de una subconsulta.
+            # No tenemos un "nombre real de tabla" para él, pero el alias es válido.
+            table_references[alias_upper] = "__SUBQUERY__" 
+            logger.info(f"Subconsulta con alias \'{alias_name}\' detectada y registrada.")
+            # Eliminar la subconsulta procesada del segmento para evitar que se procese como tabla normal
+            # Esto es complicado de hacer correctamente sin un parseador SQL completo.
+            # Por ahora, confiamos en que el procesamiento posterior de tablas no se confunda demasiado.
+            # Una mejora sería reemplazar la subconsulta con un placeholder o eliminarla con más cuidado.
+
+        # Procesamiento existente de tablas y alias (puede necesitar ajustes si la subconsulta no se eliminó bien)
         join_segments = re.split(r'\bJOIN\b', full_from_join_segment, flags=re.IGNORECASE)
         
         processed_segments = []
@@ -429,25 +448,35 @@ def validate_sql_entities(sql_query: str, db_structure: Dict[str, Any]) -> Tuple
         actual_table_name_for_qualified_col = table_references.get(tbl_ref_upper)
 
         if not actual_table_name_for_qualified_col:
-            # If the prefix is not a known table alias or table name from FROM/JOIN
-            if tbl_ref_upper not in select_aliases: # And it's not a SELECT alias either
-                 msg = f"Referencia de tabla/alias desconocida '{tbl_ref_name}' en columna cualificada '{tbl_ref_name}.{col_name_str}'."
+            # tbl_ref_upper is not an alias/table from the main query.
+            # It could be an alias defined INSIDE a subquery, or a SELECT alias used incorrectly.
+            if tbl_ref_upper in select_aliases: # It's a SELECT alias
+                 msg = f"No se puede usar un alias de SELECT \'{tbl_ref_name}\' para cualificar una columna (\'{tbl_ref_name}.{col_name_str}\')."
                  logger.warning(msg + f" Consulta: {sql_query}")
                  return False, msg
-            else: # Prefix is a SELECT alias, e.g., SELECT_ALIAS.column_name - generally invalid
-                 msg = f"No se puede usar un alias de SELECT '{tbl_ref_name}' para cualificar una columna ('{tbl_ref_name}.{col_name_str}')."
-                 logger.warning(msg + f" Consulta: {sql_query}")
-                 return False, msg
+            else:
+                # Not a SELECT alias and not an alias/table from the main query.
+                # It is likely an alias internal to a subquery (e.g., 'ai' in the user's case).
+                # To avoid false positives, we don't flag this as an error here.
+                # A full validation would require parsing subqueries.
+                logger.info(f"Alias \'{tbl_ref_name}\' en \'{tbl_ref_name}.{col_name_str}\' no es de la consulta principal ni un alias de SELECT. Se asume que es un alias interno de subconsulta y se omite su validación estricta aquí.")
+                continue # Move to the next qualified column
         
-        # actual_table_name_for_qualified_col is a resolved real table name (UPPER)
+        # If actual_table_name_for_qualified_col IS '__SUBQUERY__' (from previous fix for derived tables in FROM/JOIN)
+        if actual_table_name_for_qualified_col == "__SUBQUERY__":
+            logger.info(f"Columna cualificada \'{tbl_ref_name}\' en \'{tbl_ref_name}.{col_name_str}\' pertenece a una subconsulta (tabla derivada en FROM/JOIN). Se omite validación de columna contra esquema principal.")
+            continue
+
+        # If it's a real table from the main query, validate the column against db_structure
         if actual_table_name_for_qualified_col not in db_structure:
-            msg = f"Error interno: tabla resuelta '{actual_table_name_for_qualified_col}' no encontrada en db_structure."
+            # This should not happen if table extraction was correct
+            msg = f"Error interno: tabla resuelta \'{actual_table_name_for_qualified_col}\' no encontrada en db_structure."
             logger.error(msg + f" Consulta: {sql_query}")
             return False, msg
 
         table_cols_info = db_structure[actual_table_name_for_qualified_col].get('columns', [])
         if not any(c_info['name'].upper() == col_name_upper for c_info in table_cols_info):
-            msg = f"Columna desconocida '{col_name_str}' para la tabla/alias '{tbl_ref_name}' (resuelta a '{actual_table_name_for_qualified_col}')."
+            msg = f"Columna desconocida \'{col_name_str}\' para la tabla/alias \'{tbl_ref_name}\' (resuelta a \'{actual_table_name_for_qualified_col}\')."
             logger.warning(msg + f" Consulta: {sql_query}")
             return False, msg
             
@@ -494,7 +523,7 @@ def extract_json_from_text(text: str) -> str:
                                     return potential_json
                                 except:
                                     pass  # Continuar buscando
-                
+                        
                 # Si no hemos podido encontrar un JSON válido, intentar con regex
                 json_pattern = re.search(r'(\{.*\})', text, re.DOTALL)
                 if json_pattern:
