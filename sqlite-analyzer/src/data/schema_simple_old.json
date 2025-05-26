@@ -1,0 +1,2253 @@
+{
+    "ACCI_PATIENT_CONDITIONS": {
+        "columns": [
+            "APCO_ID",
+            "APCO_DELETED",
+            "APCO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ACCI_VEHICLE_TYPES": {
+        "columns": [
+            "VETY_ID",
+            "VETY_DESCRIPTION_ES",
+            "VETY_DELETED",
+            "MTIME"
+        ]
+    },
+    "ACCI_WORKER_TYPES": {
+        "columns": [
+            "WOTY_ID",
+            "WOTY_DELETED",
+            "WOTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ACTI_ACTIVITY_STATES": {
+        "columns": [
+            "ACST_ID",
+            "ACST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ALLE_ALLERGY_END_REASONS": {
+        "columns": [
+            "ALER_ID",
+            "ALER_DELETED",
+            "ALER_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ALLE_ALLERGY_RESULTS": {
+        "columns": [
+            "ALRE_ID",
+            "ALRE_DELETED",
+            "ALRE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ALLE_ALLERGY_SEVERITY_LEVELS": {
+        "columns": [
+            "ALSE_ID",
+            "ALSE_DELETED",
+            "ALSE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ALLE_ALLERGY_TYPES": {
+        "columns": [
+            "ALTY_ID",
+            "ALTY_DELETED",
+            "ALTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ALLE_INTOLERANCES": {
+        "columns": [
+            "ALIN_ID",
+            "ALIN_DELETED",
+            "ALIN_DESCRIPTION_ES",
+            "ALSE_ID",
+            "MTIME"
+        ]
+    },
+    "ALLE_L2_NOT_MED_ALLERGENS": {
+        "columns": [
+            "LNMA_ID",
+            "LNMA_DELETED",
+            "LNMA_DESCRIPTION_ES",
+            "ALSE_ID",
+            "NMAL_ID",
+            "MTIME"
+        ]
+    },
+    "ALLE_NOT_MEDICINAL_ALLERGENS": {
+        "columns": [
+            "NMAL_ID",
+            "NMAL_DELETED",
+            "NMAL_DESCRIPTION_ES",
+            "ALSE_ID",
+            "MTIME"
+        ]
+    },
+    "ALLE_UNKNOWN_REASONS": {
+        "columns": [
+            "ALUR_ID",
+            "ALUR_DELETED",
+            "ALUR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_ABSENT_REASONS": {
+        "columns": [
+            "AARE_ID",
+            "AARE_DELETED",
+            "AARE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_ADMISSION_PREFERENCES": {
+        "columns": [
+            "ADPR_ID",
+            "ADPR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_ADMISSION_TYPES": {
+        "columns": [
+            "ADMT_ID",
+            "ADMT_DELETED",
+            "ADMT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_AMBI_STATES": {
+        "columns": [
+            "APAS_ID",
+            "STAT_ID",
+            "APAS_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_APPOINTMENTS": {
+        "columns": [
+            "APPO_ID",
+            "PATI_ID",
+            "APPO_START_DATE",
+            "APPO_END_DATE",
+            "APPO_CREATION_DATE",
+            "ORIT_ID",
+            "STAT_ID",
+            "PRRE_ID",
+            "APPR_ID",
+            "APPO_OBSERVATIONS",
+            "APPO_JC_START_PATIENT_CARE",
+            "APPO_JC_FINISH_PATIENT_CARE",
+            "EPIS_ID_CREATED",
+            "EPIS_ID_ORIGIN",
+            "APTY_ID",
+            "CARE_ID",
+            "CENT_ID",
+            "SERV_ID",
+            "UNIT_ID",
+            "APPO_OTHER_ABSENT_REASON",
+            "APPO_IS_TELECONSULTATION",
+            "ARER_ID",
+            "AARE_ID",
+            "ANAR_ID",
+            "STAP_ID",
+            "MTIME"
+        ]
+    },
+    "APPO_APPOINTMENT_ATTENDANCES": {
+        "columns": [
+            "APAT_ID",
+            "APAT_DELETED",
+            "APAT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_CANCELLATION_REASONS": {
+        "columns": [
+            "CARE_ID",
+            "CARE_DELETED",
+            "CARE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_FREQUENCY": {
+        "columns": [
+            "FREQ_ID",
+            "FREQ_DELETED",
+            "FREQ_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_INTERCONSULTATION_REASONS": {
+        "columns": [
+            "INRE_ID",
+            "INRE_DELETED",
+            "INRE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_INTERCONSULTATION_SYSTEMS": {
+        "columns": [
+            "INSY_ID",
+            "INSY_DELETED",
+            "INSY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_INTER_REJECT_REASON": {
+        "columns": [
+            "AIRR_ID",
+            "AIRR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_MOBILITIES": {
+        "columns": [
+            "MOBI_ID",
+            "MOBI_DESCRIPTION_ES",
+            "MOBI_DELETED",
+            "MTIME"
+        ]
+    },
+    "APPO_NOT_ATTENDED_REASONS": {
+        "columns": [
+            "ANAR_ID",
+            "ANAR_DELETED",
+            "ANAR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_ORIGIN_TYPES": {
+        "columns": [
+            "ORIT_ID",
+            "ORIT_DELETED",
+            "ORIT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_PENDING_REVIEW_REASONS": {
+        "columns": [
+            "APRR_ID",
+            "APRR_DELETED",
+            "APRR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_PERIODICS": {
+        "columns": [
+            "APPE_ID",
+            "APPE_REPETITIONS",
+            "APPE_FREQUENCY_NUMBER",
+            "FREQ_ID",
+            "REIN_ID",
+            "APPR_ID",
+            "EPIS_ID",
+            "PATI_ID",
+            "APPR_OBSERVATIONS",
+            "APPE_DELETED",
+            "MTIME"
+        ]
+    },
+    "APPO_POSTPONED_REASONS": {
+        "columns": [
+            "PARE_ID",
+            "PARE_DELETED",
+            "PARE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_PROPOSALS": {
+        "columns": [
+            "APPR_ID",
+            "PATI_ID",
+            "PRRE_ID",
+            "APRE_ID",
+            "PRIO_ID",
+            "PRST_ID",
+            "PPTY_ID",
+            "CDTE_ID",
+            "MOBI_ID",
+            "EPIS_ID_CREATED",
+            "EPIS_ID_ORIGIN",
+            "ADMT_ID",
+            "ADPR_ID",
+            "BEDS_ID",
+            "APPR_INTERCONSULTATION",
+            "APPR_INTERC_ANSWER",
+            "APPR_INTERC_ANSWER_DATE",
+            "PARE_ID",
+            "APPR_SUSPENDED",
+            "APPR_OTHER_DIAGNOSTIC",
+            "BBTY_ID",
+            "PTSM_ID",
+            "APPR_POSTPONED_OBSERVATIONS",
+            "APPR_ID_ORIG",
+            "PPRE_ID",
+            "APPR_REQUEST_OBSERVATIONS",
+            "EPIS_ID_ORIGIN_DISCHARGE",
+            "PSET_ID",
+            "APRR_ID",
+            "APTR_ID",
+            "APPR_ID_CLONED",
+            "ATTY_ID",
+            "REIN_ID_TREATMENT",
+            "MTIME"
+        ]
+    },
+    "APPO_PROPOSAL_STATES": {
+        "columns": [
+            "PRST_ID",
+            "PRST_DELETED",
+            "PRST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_PROPOSAL_TYPE_STATES": {
+        "columns": [
+            "PTST_ID",
+            "PPTY_ID",
+            "PRST_ID",
+            "PTST_DELETED",
+            "PTST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_PROP_ATTENTION_TYPES": {
+        "columns": [
+            "PRRE_ID",
+            "PRRE_DELETED",
+            "PRRE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_REPETITION_INTERVAL": {
+        "columns": [
+            "REIN_ID",
+            "REIN_DELETED",
+            "REIN_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_RESCHEDULE_REASONS": {
+        "columns": [
+            "ARER_ID",
+            "ARER_DELETED",
+            "ARER_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_SESSION_TYPES": {
+        "columns": [
+            "STAP_ID",
+            "STAP_DELETED",
+            "STAP_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_STATES": {
+        "columns": [
+            "STAT_ID",
+            "STAT_DELETED",
+            "STAT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPO_TYPES": {
+        "columns": [
+            "APTY_ID",
+            "APTY_DELETED",
+            "APTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_ANESTHESIA_STATES": {
+        "columns": [
+            "AAST_ID",
+            "AAST_DELETED",
+            "AAST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_CANCEL_REASONS": {
+        "columns": [
+            "CHCR_ID",
+            "CHCR_DELETED",
+            "CHCR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_FILE_CATEGORIES": {
+        "columns": [
+            "CHFC_ID",
+            "CHFC_DELETED",
+            "CHFC_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_FILE_PRIORITIES": {
+        "columns": [
+            "CHFP_ID",
+            "CHFP_DELETED",
+            "CHFP_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_FILE_REASONS": {
+        "columns": [
+            "CHRE_ID",
+            "CHRE_DELETED",
+            "CHRE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_FILE_STATES": {
+        "columns": [
+            "CHFS_ID",
+            "CHFS_DELETED",
+            "CHFS_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_FILE_TYPES": {
+        "columns": [
+            "CHFT_ID",
+            "CHFT_DELETED",
+            "CHFT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_CLIN_HIST_FILE_USES": {
+        "columns": [
+            "CHFU_ID",
+            "CHFU_DELETED",
+            "CHFU_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_NOT_EXPLORATION_NEXT_ACTIONS": {
+        "columns": [
+            "NEAC_ID",
+            "NEAC_DELETED",
+            "NEAC_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_TREATMENTS": {
+        "columns": [
+            "APTR_ID",
+            "ATST_ID",
+            "PATI_ID",
+            "CENT_ID_ORIG",
+            "SERV_ID_ORIG",
+            "PROF_ID_ORIG",
+            "PRIO_ID",
+            "CDTE_ID",
+            "APTR_TARGET_DATE",
+            "APTR_CREATED_DATE",
+            "ATDD_ID",
+            "ATDT_ID",
+            "EADR_ID",
+            "APTR_START_DATE",
+            "APTR_END_DATE",
+            "MTIME"
+        ]
+    },
+    "APPR_TREATMENT_ACTIONS": {
+        "columns": [
+            "ATAC_ID",
+            "ATAC_DELETED",
+            "ATAC_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_TREATMENT_DEST_DISCHARGE": {
+        "columns": [
+            "ATDD_ID",
+            "ATDD_DELETED",
+            "ATDD_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_TREATMENT_DISCHARGE_TYPE": {
+        "columns": [
+            "ATDT_ID",
+            "ATDT_DELETED",
+            "ATDT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_TREATMENT_PROGRAMMING_TYPES": {
+        "columns": [
+            "ATTY_ID",
+            "ATTY_DELETED",
+            "ATTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "APPR_TREATMENT_STATES": {
+        "columns": [
+            "ATST_ID",
+            "ATST_DELETED",
+            "ATST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ARTI_ARTICLES": {
+        "columns": [
+            "ARTI_ID",
+            "ARTI_DELETED",
+            "MEDI_ID",
+            "ARTI_DESCRIPTION_ES",
+            "ARTY_ID",
+            "MTIME"
+        ]
+    },
+    "ARTI_ARTICLE_TYPES": {
+        "columns": [
+            "ARTY_ID",
+            "ARTY_DELETED",
+            "ARTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "BEDS_BEDS": {
+        "columns": [
+            "BEDS_ID",
+            "BEDS_DESCRIPTION_ES",
+            "BEDS_DELETED",
+            "BEDS_ROOM",
+            "PATI_ID",
+            "BBTY_ID",
+            "BEDS_SUPPLEMENTARY",
+            "EPIS_ID_RESERVED",
+            "EPIS_ID_OCCUPIED",
+            "BEDS_DISABLED_DATE",
+            "MTIME"
+        ]
+    },
+    "BEDS_BED_TYPES": {
+        "columns": [
+            "BBTY_ID",
+            "BBTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "BEDS_CONSTRAINTS": {
+        "columns": [
+            "BECO_ID",
+            "BECO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CARE_CARES": {
+        "columns": [
+            "CACR_ID",
+            "CACR_DELETED",
+            "CACR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CLIP_CLINICAL_PROCESSES": {
+        "columns": [
+            "CLIP_ID",
+            "CPST_ID",
+            "PATI_ID",
+            "CLIP_START_DATE",
+            "CLIP_CLOSED_DATE",
+            "CLIP_DELETED",
+            "MTIME"
+        ]
+    },
+    "CLIP_STATES": {
+        "columns": [
+            "CPST_ID",
+            "CPST_DELETED",
+            "CPST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CODR_CATALOGS": {
+        "columns": [
+            "COCA_ID",
+            "COCA_DELETED",
+            "COCA_DESCRIPTION_ES",
+            "CCPD_ID",
+            "MTIME"
+        ]
+    },
+    "CODR_CODING_TYPES": {
+        "columns": [
+            "CDPT_ID",
+            "CDPT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CODR_COMPLEXITY_DEGREE": {
+        "columns": [
+            "CCPD_ID",
+            "CCPD_DELETED",
+            "CCPD_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CODR_DIAGNOSTIC_GROUPS": {
+        "columns": [
+            "DGGR_ID",
+            "DGGR_DELETED",
+            "DGGR_CODE",
+            "DGGR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CODR_DIAGNOSTIC_TYPES": {
+        "columns": [
+            "DGTY_ID",
+            "DGTY_DELETED",
+            "DGTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CODR_DIAG_ALERT_TYPES": {
+        "columns": [
+            "CDAT_ID",
+            "CDAT_DELETED",
+            "CDAT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_BED_VALUATIONS": {
+        "columns": [
+            "BEVA_ID",
+            "BEVA_DELETED",
+            "BEVA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_CLEAN_TYPES": {
+        "columns": [
+            "CLTY_ID",
+            "CLTY_DELETED",
+            "CLTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_DEBRIDEMENT_TYPES": {
+        "columns": [
+            "DETY_ID",
+            "DETY_DELETED",
+            "DETY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_DISINFECTION_TYPES": {
+        "columns": [
+            "DITY_ID",
+            "DITY_DELETED",
+            "DITY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_DRAINAGE_TYPES": {
+        "columns": [
+            "DRTY_ID",
+            "DRTY_DELETED",
+            "DRTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_EXUDE_AMOUNTS": {
+        "columns": [
+            "EXAM_ID",
+            "EXAM_DELETED",
+            "EXAM_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_EXUDE_TYPES": {
+        "columns": [
+            "EXUT_ID",
+            "EXUT_DELETED",
+            "EXUT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_OINTMENT_TYPES": {
+        "columns": [
+            "OITY_ID",
+            "OITY_DELETED",
+            "OITY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_PHASES": {
+        "columns": [
+            "CUPH_ID",
+            "CUPH_DELETED",
+            "CUPH_DESCRIPTION_ES",
+            "CUPH_LONG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_PRIMARY_DRESSINGS": {
+        "columns": [
+            "PRDR_ID",
+            "PRDR_DELETED",
+            "PRDR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_SKIN_VALUATIONS": {
+        "columns": [
+            "SKVA_ID",
+            "SKVA_DELETED",
+            "SKVA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_STAPLES_REMOVE_TYPES": {
+        "columns": [
+            "STTY_ID",
+            "STTY_DELETED",
+            "STTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_SURGI_COMPLICA_TYPES": {
+        "columns": [
+            "SCTY_ID",
+            "SCTY_DELETED",
+            "SCTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "CURE_TYPES": {
+        "columns": [
+            "CURT_ID",
+            "CURT_DELETED",
+            "CURT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "DIAG_DIAGNOSTIC_STATES": {
+        "columns": [
+            "DIST_ID",
+            "DIST_DELETED",
+            "DIST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "DIAG_LATERALITIES": {
+        "columns": [
+            "LATE_ID",
+            "LATE_DELETED",
+            "LATE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "DOCS_DOCUMENTS": {
+        "columns": [
+            "DOCS_ID",
+            "DOCS_NAME",
+            "DOCT_ID",
+            "PATI_ID",
+            "EPIS_ID",
+            "DOCS_DOCUMENT_DATE",
+            "APPR_ID",
+            "MTIME"
+        ]
+    },
+    "DOCS_DOCUMENT_TYPES": {
+        "columns": [
+            "DOCT_ID",
+            "DOCT_DELETED",
+            "DOCT_DESCRIPTION_ES",
+            "DOTY_ID",
+            "MTIME"
+        ]
+    },
+    "DOCS_TYPE_CATEGORIES": {
+        "columns": [
+            "DOTY_ID",
+            "DOTY_DELETED",
+            "DOTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EMER_EMERGENCY_ROOM_RESOURCES": {
+        "columns": [
+            "ERRE_ID",
+            "ERRE_DESCRIPTION_ES",
+            "ERRE_DELETED",
+            "MTIME"
+        ]
+    },
+    "EPIS_ADMIN_DISCHARGE_REASONS": {
+        "columns": [
+            "EADR_ID",
+            "EADR_DELETED",
+            "EADR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_AMBI_STATES": {
+        "columns": [
+            "EPAS_ID",
+            "EPST_ID",
+            "EPAS_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_DESTINATIONS": {
+        "columns": [
+            "DEST_ID",
+            "DEST_DELETED",
+            "DEST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_DIAGNOSTICS": {
+        "columns": [
+            "DIAG_ID",
+            "PATI_ID",
+            "CDTE_ID",
+            "DIST_ID",
+            "CLIP_ID",
+            "EPIS_ID",
+            "LATE_ID",
+            "DIAG_MAIN",
+            "DIAG_START_DATE",
+            "DIAG_END_DATE",
+            "DIAG_RELEVANT",
+            "DIAG_OBSERVATION",
+            "DIAG_DELETED",
+            "PROC_ID",
+            "PROF_ID_ASSIGNMENT",
+            "DIAG_OTHER_DIAGNOSTIC",
+            "CDPT_ID",
+            "MTIME"
+        ]
+    },
+    "EPIS_DIET_SHIFTS": {
+        "columns": [
+            "EDSH_ID",
+            "EDSH_DELETED",
+            "EDSH_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_DIET_TYPES": {
+        "columns": [
+            "EDTY_ID",
+            "EDTY_DELETED",
+            "EDTY_DESCRIPTION_ES",
+            "EDTY_IS_ABSOLUTE",
+            "MTIME"
+        ]
+    },
+    "EPIS_DISCHARGE_SHIFTS": {
+        "columns": [
+            "DISH_ID",
+            "DISH_DELETED",
+            "DISH_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_EPISODES": {
+        "columns": [
+            "EPIS_ID",
+            "PATI_ID",
+            "CLIP_ID",
+            "SERV_ID",
+            "CDTE_ID_START",
+            "CDTE_ID_END",
+            "EPIS_CREATION_DATE",
+            "EPIS_START_DATE",
+            "EPIS_CLOSED_DATE",
+            "EPST_ID",
+            "EPIS_REFERAL_CENTER",
+            "EPIS_REFERAL_DOCTOR",
+            "EPIS_REASONS",
+            "DEST_ID",
+            "EPIS_DELETED",
+            "EXIU_ID",
+            "UNIT_ID",
+            "PRRE_ID",
+            "ISTY_ID",
+            "EADR_ID",
+            "EPIS_ADMIN_DISCHARGE_REASON",
+            "DISH_ID",
+            "CURRENT_DISEASE",
+            "MTIME"
+        ]
+    },
+    "EPIS_ISOLATION_TYPES": {
+        "columns": [
+            "ISTY_ID",
+            "ISTY_DELETED",
+            "ISTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_MEDICAL_DISCHARGE_REASONS": {
+        "columns": [
+            "EMDR_ID",
+            "EMDR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_NOTIFIABLE_DISEASE_DIAGNOSTICS_STATES": {
+        "columns": [
+            "ENDS_ID",
+            "ENDS_DELETED",
+            "ENDS_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_NOTIFIABLE_DISEASE_ORIGIN": {
+        "columns": [
+            "CNDO_ID",
+            "CNDO_DELETED",
+            "CNDO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EPIS_PROCEDURES": {
+        "columns": [
+            "EPRO_ID",
+            "PATI_ID",
+            "CPTE_ID",
+            "EPIS_ID",
+            "EPRO_START_DATE",
+            "EPRO_END_DATE",
+            "PROC_ID",
+            "EPRO_OTHER_PROCEDURE",
+            "CDPT_ID",
+            "COCA_ID",
+            "MTIME"
+        ]
+    },
+    "EPIS_STATES": {
+        "columns": [
+            "EPST_ID",
+            "EPST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EXPL_DESCRIPTIONS": {
+        "columns": [
+            "EXDE_ID",
+            "EXDE_CODE",
+            "EXDE_DELETED",
+            "EXDE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "EXPL_IMAGE_TYPES": {
+        "columns": [
+            "EXIT_ID",
+            "EXIT_CODE",
+            "EXIT_DELETED",
+            "EXIT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HACR_CRITERIA_RISKS": {
+        "columns": [
+            "HACR_ID",
+            "HACR_DELETED",
+            "HACR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HADT_DIABETES_TYPES": {
+        "columns": [
+            "HADT_ID",
+            "HADT_DELETED",
+            "HADT_DESCRIPTION_ES",
+            "HADT_CODE",
+            "MTIME"
+        ]
+    },
+    "HAHT_HYPERTENSION_TYPES": {
+        "columns": [
+            "HAHT_ID",
+            "HAHT_DELETED",
+            "HAHT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HAIR_INDICATORS_RESULTS": {
+        "columns": [
+            "HAIR_ID",
+            "HAIR_DELETED",
+            "HAIR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HAIT_INDICATOR_TYPES": {
+        "columns": [
+            "HAIT_ID",
+            "HAIT_DELETED",
+            "HAIT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HEAL_CONTROLS": {
+        "columns": [
+            "CONT_ID",
+            "CONT_CODE",
+            "CONT_DELETED_DATE",
+            "CONT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HEAL_DIABETES_INDICATORS": {
+        "columns": [
+            "HDIA_ID",
+            "PATI_ID",
+            "HAIT_ID",
+            "HAIR_ID",
+            "HADT_ID",
+            "HDIA_SENT",
+            "PROC_ID",
+            "MTIME"
+        ]
+    },
+    "HEAL_HEALTHY_TYPES": {
+        "columns": [
+            "HETY_ID",
+            "HETY_CODE",
+            "HETY_DELETED",
+            "HETY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HEAL_HYPERTENS_INDICATORS": {
+        "columns": [
+            "HHYP_ID",
+            "PATI_ID",
+            "HAIT_ID",
+            "HAIR_ID",
+            "HAHT_ID",
+            "PROC_ID",
+            "MTIME"
+        ]
+    },
+    "HIST_ALCOHOL_TYPES": {
+        "columns": [
+            "HIAL_ID",
+            "HIAL_DESCRIPTION_ES",
+            "HIAL_DELETED",
+            "HIAL_QUANTITY",
+            "MTIME"
+        ]
+    },
+    "HIST_ANDROLOGICALS": {
+        "columns": [
+            "HTAN_ID",
+            "PATI_ID",
+            "HTAN_DELETED",
+            "HTAN_OBSERVATIONS",
+            "MTIME"
+        ]
+    },
+    "HIST_BIRTH_TYPES": {
+        "columns": [
+            "PEBI_ID",
+            "PEBI_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HIST_CONTRACEPTIVE_METHODS": {
+        "columns": [
+            "HICO_ID",
+            "HICO_DESCRIPTION_ES",
+            "HICO_DELETED",
+            "MTIME"
+        ]
+    },
+    "HIST_GYNECOBSTETRICS": {
+        "columns": [
+            "HIGY_ID",
+            "PATI_ID",
+            "HIGY_DELETED",
+            "HIGY_GESTATIONS_OBS",
+            "HIGY_BIRTHS",
+            "HIGY_BIRTHS_OBS",
+            "HIGY_CAESAREAM",
+            "HIGY_DYSPAREUNIA",
+            "HIGY_DYSPAREUNIA_OBS",
+            "HIGY_ETS",
+            "HIGY_ETS_OBS",
+            "HIGY_PATHOLOGICAL_FLOW",
+            "HIGY_PATHOLOGICAL_FLOW_OBS",
+            "HIGY_DYSMENORRHEA",
+            "HIGY_DYSMENORRHEA_OBS",
+            "HIGY_MENOPAUSE_AGE",
+            "HIGY_MENSTRUAT_DAYS",
+            "HIGY_MENSTRUAT_DURATION_DAYS",
+            "MTIME"
+        ]
+    },
+    "HIST_HISTORY_DIAG_PROC": {
+        "columns": [
+            "HIDI_ID",
+            "PATI_ID",
+            "CDTE_ID",
+            "CPTE_ID",
+            "RETY_ID",
+            "HSTY_ID",
+            "HIDI_START_DATE",
+            "HIDI_END_DATE",
+            "HIDI_OBSERVATION",
+            "HIDI_EXITUS_AGE",
+            "HIDI_DELETED",
+            "HIDI_OTHER_DIAGNOSTIC",
+            "HIDI_OTHER_PROCEDURE",
+            "HIDI_EXTCODE_DIAGNOSTIC",
+            "HIDI_EXTCODE_PROCEDURE",
+            "COCA_ID",
+            "MTIME"
+        ]
+    },
+    "HIST_HISTORY_TYPES": {
+        "columns": [
+            "HSTY_ID",
+            "HSTY_CODE",
+            "HSTY_DESCRIPTION_ES",
+            "HSTY_DELETED",
+            "MTIME"
+        ]
+    },
+    "HIST_MORPHOLOGICAL_TYPES": {
+        "columns": [
+            "PEMO_ID",
+            "PEMO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "HIST_OTOACOUSTIC_TYPES": {
+        "columns": [
+            "PEOT_ID",
+            "PEOT_DESCRIPTION_ES",
+            "PEOT_DELETED",
+            "MTIME"
+        ]
+    },
+    "HIST_PEDIATRICS": {
+        "columns": [
+            "HIPE_ID",
+            "PATI_ID",
+            "PEBI_ID",
+            "PEPR_ID",
+            "PEOT_ID",
+            "PEMO_ID",
+            "HIPE_NEONATAL",
+            "HIPE_VACCINATION",
+            "HIPE_PAST_ILLNESSES",
+            "HIPE_MOTHER",
+            "HIPE_MOTHER_GRANDMA",
+            "HIPE_MOTHER_GRANDPA",
+            "HIPE_FATHER",
+            "HIPE_FATHER_GRANDMA",
+            "HIPE_FATHER_GRANDPA",
+            "HIPE_SIBLINGS",
+            "HIPE_OBSERVATIONS",
+            "HIPE_GESTATIONAL_AGE",
+            "BLGR_ID",
+            "MTIME"
+        ]
+    },
+    "HIST_SOCIOECONOMICS": {
+        "columns": [
+            "HISO_ID",
+            "HISO_DISABILITY_OBS",
+            "STUD_ID",
+            "PATI_ID",
+            "MTIME"
+        ]
+    },
+    "HIST_SPORT_LEVELS": {
+        "columns": [
+            "HSLE_ID",
+            "HSLE_DESCRIPTION_ES",
+            "HSLE_DELETED",
+            "MTIME"
+        ]
+    },
+    "HIST_SPORT_TYPES": {
+        "columns": [
+            "HSPT_ID",
+            "HSPT_DESCRIPTION_ES",
+            "HSPT_DELETED",
+            "MTIME"
+        ]
+    },
+    "HIST_TOXIC_HABITS": {
+        "columns": [
+            "HIHA_ID",
+            "PATI_ID",
+            "TOCO_ID",
+            "HIHA_NAME",
+            "HIHA_START_DATE",
+            "HIHA_END_DATE",
+            "HIHA_QUANTITY_DAY",
+            "HSTY_ID",
+            "HIHA_OBSERVATIONS",
+            "MTIME"
+        ]
+    },
+    "I18N_LANGUAGES": {
+        "columns": [
+            "LANG_ID",
+            "LANG_DELETED",
+            "LANG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INJU_BURN_STAGES": {
+        "columns": [
+            "BUST_ID",
+            "BUST_DELETED",
+            "BUST_DESCRIPTION_ES",
+            "BUST_LONG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INJU_LOCATIONS": {
+        "columns": [
+            "INLO_ID",
+            "INLO_DELETED",
+            "INLO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INJU_NEOPLA_STAGES": {
+        "columns": [
+            "NEST_ID",
+            "NEST_DELETED",
+            "NEST_DESCRIPTION_ES",
+            "NEST_LONG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INJU_PRESSURE_STAGES": {
+        "columns": [
+            "INPR_ID",
+            "INPR_DELETED",
+            "INPR_DESCRIPTION_ES",
+            "INPR_LONG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INJU_SURGICAL_STAGES": {
+        "columns": [
+            "SUST_ID",
+            "SUST_DELETED",
+            "SUST_DESCRIPTION_ES",
+            "SUST_LONG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INJU_TYPES": {
+        "columns": [
+            "INJT_ID",
+            "INJT_DELETED",
+            "INJT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "INTE_EXTERNAL_ACTIVITY": {
+        "columns": [
+            "INER_ID",
+            "INER_EXTERNAL_ID",
+            "PATI_ID",
+            "INER_FIRST_TEXT_ES",
+            "INER_SECOND_TEXT_ES",
+            "INER_DATE",
+            "MTIME"
+        ]
+    },
+    "INVASIVE_DEVICES": {
+        "columns": [
+            "INDE_ID",
+            "INDE_DELETED",
+            "INDE_DESCRIPTION_ES",
+            "IDSB_ID",
+            "ARTI_ID",
+            "MTIME"
+        ]
+    },
+    "INVASIVE_DEVICES_SUBTYPES": {
+        "columns": [
+            "IDSB_ID",
+            "IDSB_DELETED",
+            "IDSB_DESCRIPTION_ES",
+            "IDTP_ID",
+            "MTIME"
+        ]
+    },
+    "INVASIVE_DEVICES_TYPES": {
+        "columns": [
+            "IDTP_ID",
+            "IDTP_DELETED",
+            "IDTP_CODE",
+            "IDTP_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "MEDI_ACTIVE_INGREDIENTS": {
+        "columns": [
+            "ACIN_ID",
+            "ACIN_DELETED",
+            "ACIN_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "MEDI_GROUPS": {
+        "columns": [
+            "MEGR_ID",
+            "MEGR_DESCRIPTION_ES",
+            "MEGR_DELETED",
+            "MTIME"
+        ]
+    },
+    "MEDI_LABORATORIES": {
+        "columns": [
+            "MELA_ID",
+            "MELA_CODE",
+            "MELA_DESCRIPTION_ES",
+            "MELA_DELETED",
+            "MTIME"
+        ]
+    },
+    "MEDI_MEDICATIONS": {
+        "columns": [
+            "MEDI_ID",
+            "PHTH_ID",
+            "MEDI_CODE",
+            "MEDI_FLUID",
+            "MEDI_ORDER",
+            "MEDI_DELETED",
+            "MEDI_DESCRIPTION_ES",
+            "PFOR_ID",
+            "MELA_ID",
+            "MEDI_DOSE",
+            "MEUN_ID_DOSE",
+            "MEUN_ID_VOLUME",
+            "MEDI_MULTIDOSE",
+            "MEDI_CREATED_DATE",
+            "MTIME"
+        ]
+    },
+    "MEDI_PHARMACEUTICAL_FORMS": {
+        "columns": [
+            "PFOR_ID",
+            "PFOR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "MEDI_PHARMA_THERAPEUTIC_GROUPS": {
+        "columns": [
+            "PHTH_ID",
+            "PHTH_CODE",
+            "PHTH_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "MEDI_ROUTES": {
+        "columns": [
+            "ROUT_ID",
+            "ROUT_DELETED",
+            "ROUT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "NURSING_INTERVENTIONS_TYPES": {
+        "columns": [
+            "NITY_ID",
+            "NITY_DELETED",
+            "NITY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_BIOPSY_TYPES": {
+        "columns": [
+            "BITY_ID",
+            "BITY_DELETED",
+            "BITY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_CANCERS": {
+        "columns": [
+            "CANC_ID",
+            "CANC_DIAGNOSTIC_DATE",
+            "CANC_SYMPTOMS_DATE",
+            "CANC_INITIAL_STATE",
+            "CDTE_ID",
+            "TUFO_ID",
+            "HTTY_ID",
+            "TULO_ID",
+            "TUPH_ID",
+            "PATI_ID",
+            "TULT_ID",
+            "DISA_ID",
+            "PASA_ID",
+            "CLIP_ID",
+            "CANC_OBSERVATIONS",
+            "CANC_SENT_BIOPSY",
+            "CANC_SENT_EXAMINED",
+            "CANC_TUMORAL_CHARGE",
+            "CANC_MELANOMA_TYPE_PRIMARY",
+            "CANC_MELANOMA_TYPE_RECURRENCE",
+            "CANC_MELANOMA_TYPE_METASTATIC",
+            "LUTY_ID",
+            "CANC_LYMPHOM_SYMP_B",
+            "LYTY_ID",
+            "CANC_LYMPHOM_OTHERS",
+            "CANC_LYMPHOM_OTHERS_TEXT",
+            "SATY_ID",
+            "CANC_SARCOMA_LOCATION",
+            "CANC_SARCOMA_OTHERS",
+            "CANC_KIDNEY_OTHERS",
+            "OHTY_ID",
+            "KITY_ID",
+            "CANC_UROTHELIAL_LOC_BLADDER",
+            "OPRO_ID",
+            "CANC_UROTHELIAL_LOC_VIA",
+            "CANC_PROSTATE_GLEASON_1",
+            "GYHI_ID",
+            "GYTY_ID",
+            "CANC_GYN_OVARY_DATE",
+            "CANC_GYN_ENDOME_DATE",
+            "OGHS_ID",
+            "STTS_ID",
+            "CANC_CERVIX_METASTASIS",
+            "CANC_CERVIX_MARGE",
+            "CANC_CERVIX_PARAMETRIUM",
+            "CANC_DELETED",
+            "MTIME"
+        ]
+    },
+    "ONCO_CLINICAL_STATUS": {
+        "columns": [
+            "OCSA_ID",
+            "OCSA_DELETED",
+            "OCSA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_DIFFERENTIATION_STAGES": {
+        "columns": [
+            "DFST_ID",
+            "DFST_DELETED",
+            "DFST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_DISEASE_STATES": {
+        "columns": [
+            "DISA_ID",
+            "DISA_DELETED",
+            "DISA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_EPITHELIAL": {
+        "columns": [
+            "OEPI_ID",
+            "OEPI_DELETED",
+            "OEPI_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_EVENT_INDICATIONS": {
+        "columns": [
+            "EVIN_ID",
+            "EVIN_DELETED",
+            "EVIN_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_FAMILIAR_HISTORY": {
+        "columns": [
+            "ONFH_ID",
+            "PATI_ID",
+            "CDTE_ID",
+            "RETY_ID",
+            "ONFH_DIAGNOSTIC_AGE",
+            "ONFH_OBSERVATIONS",
+            "MTIME"
+        ]
+    },
+    "ONCO_GYN_HISTOLOGIES": {
+        "columns": [
+            "GYHI_ID",
+            "GYHI_DELETED",
+            "GYHI_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_GYN_HRD_STATUS": {
+        "columns": [
+            "OGHS_ID",
+            "OGHS_DELETED",
+            "OGHS_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_GYN_TYPES": {
+        "columns": [
+            "GYTY_ID",
+            "GYTY_DELETED",
+            "GYTY_DESCRIPTION_ES",
+            "GYHI_ID",
+            "MTIME"
+        ]
+    },
+    "ONCO_HISTOLOGICAL_TYPES": {
+        "columns": [
+            "HTTY_ID",
+            "HTTY_ORDER",
+            "HTTY_DELETED",
+            "HTTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_HISTOLOGICS_TYPES": {
+        "columns": [
+            "OHTY_ID",
+            "OHTY_DELETED",
+            "OHTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_HISTOLOGIES": {
+        "columns": [
+            "ONHI_ID",
+            "ONHI_DELETED",
+            "ONHI_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_HORMONOTHERAPY_GUIDELINES": {
+        "columns": [
+            "OHGU_ID",
+            "OHGU_DELETED",
+            "OHGU_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_INTERVENTION_EVENTS": {
+        "columns": [
+            "INVE_ID",
+            "INVE_ORDER",
+            "INVE_DELETED",
+            "INVE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_IRRADIATION_METHODS": {
+        "columns": [
+            "OIME_ID",
+            "OIME_DELETED",
+            "OIME_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_KIDNEY_TYPES": {
+        "columns": [
+            "KITY_ID",
+            "KITY_DELETED",
+            "KITY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_LUNG_DISEASE_EXTS": {
+        "columns": [
+            "OLDE_ID",
+            "OLDE_DELETED",
+            "OLDE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_LUNG_TYPES": {
+        "columns": [
+            "LUTY_ID",
+            "LUTY_DELETED",
+            "LUTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_LYMPHOM_TYPES": {
+        "columns": [
+            "LYTY_ID",
+            "LYTY_DELETED",
+            "LYTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_MARKERS_RESULTS": {
+        "columns": [
+            "MARE_ID",
+            "MARE_DELETED",
+            "MARE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_PATIENT_STATES": {
+        "columns": [
+            "PASA_ID",
+            "PASA_DELETED",
+            "PASA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_PROGNOSIS": {
+        "columns": [
+            "OPRO_ID",
+            "OPRO_CODE",
+            "OPRO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_RADIOTHERAPY_TYPES": {
+        "columns": [
+            "ORTY_ID",
+            "ORTY_DELETED",
+            "ORTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_RECIST_CRITERION": {
+        "columns": [
+            "ORCI_ID",
+            "ORCI_DELETED",
+            "ORCI_CODE",
+            "ORCI_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_SARCOMA_TYPES": {
+        "columns": [
+            "SATY_ID",
+            "SATY_DELETED",
+            "SATY_CODE",
+            "SATY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_STATES": {
+        "columns": [
+            "STTS_ID",
+            "STTS_DELETED",
+            "STTS_CODE",
+            "STTS_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_SURGERY_GUIDELINES": {
+        "columns": [
+            "OSGU_ID",
+            "OSGU_DELETED",
+            "OSGU_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_TRANSPLANT_TYPES": {
+        "columns": [
+            "OTRY_ID",
+            "OTRY_DELETED",
+            "OTRY_CODE",
+            "OTRY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_TUMOR_FOCALITIES": {
+        "columns": [
+            "TUFO_ID",
+            "TUFO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_TUMOR_LATERALITY_TYPES": {
+        "columns": [
+            "TULT_ID",
+            "TULT_DELETED",
+            "TULT_CODE",
+            "TULT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_TUMOR_LOCALIZATIONS": {
+        "columns": [
+            "TULO_ID",
+            "TULO_DELETED",
+            "TULO_CODE",
+            "TULO_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_TUMOR_MARKERS": {
+        "columns": [
+            "TUMA_ID",
+            "TUMA_DELETED",
+            "TUMA_CODE",
+            "TUMA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ONCO_TUMOR_PHASES": {
+        "columns": [
+            "TUPH_ID",
+            "TUPH_DELETED",
+            "TUPH_CODE",
+            "TUPH_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ORMA_APPLICATIONS": {
+        "columns": [
+            "APLI_ID",
+            "APLI_CODE",
+            "APLI_DESCRIPTION_ES",
+            "APLI_DELETED",
+            "MTIME"
+        ]
+    },
+    "ORMA_BENEFIT_TYPES": {
+        "columns": [
+            "BETY_ID",
+            "BETY_DELETED",
+            "BETY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ORMA_LABORATORIES": {
+        "columns": [
+            "ORLA_ID",
+            "ORLA_CODE",
+            "ORLA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ORMA_RESOURCE_TYPES": {
+        "columns": [
+            "RSTY_ID",
+            "RSTY_ORDER",
+            "RSTY_DELETED",
+            "RSTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "ORMA_UNITS": {
+        "columns": [
+            "UNIT_ID",
+            "UNIT_CODE",
+            "UNIT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PARA_BLOOD_GROUPS": {
+        "columns": [
+            "BLGR_ID",
+            "BLGR_DELETED",
+            "BLGR_DESCRIPTION_ES",
+            "BLGR_RH",
+            "BLGR_CODE",
+            "MTIME"
+        ]
+    },
+    "PARA_GENDERS": {
+        "columns": [
+            "GEND_ID",
+            "GEND_DELETED",
+            "GEND_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PARA_HEALTH_ID_TYPES": {
+        "columns": [
+            "HITY_ID",
+            "HITY_DELETED",
+            "HITY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PARA_IDENTIFICATION_TYPES": {
+        "columns": [
+            "IDTY_ID",
+            "IDTY_DELETED",
+            "IDTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PARA_MEASUREMENT_UNITS": {
+        "columns": [
+            "MEUN_ID",
+            "MEUT_ID",
+            "MEUN_SHORT_DESCRIPTION",
+            "MEUN_DELETED",
+            "MEUN_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PARA_MEASURE_UNIT_TYPES": {
+        "columns": [
+            "MEUT_ID",
+            "MEUT_DESCRIPTION_ES",
+            "MEUT_DELETED",
+            "MTIME"
+        ]
+    },
+    "PARA_PRIORITY_TYPES": {
+        "columns": [
+            "PRIO_ID",
+            "PRIO_DELETED",
+            "PRIO_DESCRIPTION_ES",
+            "PRIO_CODE",
+            "MTIME"
+        ]
+    },
+    "PATI_MERGE_PATIENTS": {
+        "columns": [
+            "PAME_ID",
+            "PAME_DATA",
+            "PAME_MERGED_DATE",
+            "PAME_CANCEL_DATE",
+            "PATI_ID_ORIGIN",
+            "PATI_ID_DESTINATION",
+            "MTIME"
+        ]
+    },
+    "PATI_ORIGIN_PROFESSIONALS": {
+        "columns": [
+            "ORPR_ID",
+            "PATI_ID",
+            "ORPR_PROF_NAME",
+            "ORPR_ADDRESS",
+            "ORPR_CENTER_NAME",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENTS": {
+        "columns": [
+            "PATI_ID",
+            "PATI_CLINICAL_HISTORY_ID",
+            "PATI_NAME",
+            "PATI_SURNAME_1",
+            "PATI_SURNAME_2",
+            "PATI_ALIAS",
+            "PATI_BIRTH_DATE",
+            "PATI_START_DATE",
+            "PATI_END_DATE",
+            "PATI_UPDATE_DATE",
+            "PATI_ACTIVE",
+            "PATI_BIRTH_PLACE",
+            "GEND_ID",
+            "BLGR_ID",
+            "LANG_ID",
+            "PATI_COMPANY_NAME",
+            "EXIU_ID",
+            "PATI_SPEAK_ENGLISH",
+            "PATY_ID",
+            "PATI_USUAL_MEDICATION",
+            "PATI_HOSPITALIZED",
+            "PATI_ANTICOAGULANTS",
+            "PATI_OTHER_ANTICOAGULANTS",
+            "PATI_FULL_NAME",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_ADDRESSES": {
+        "columns": [
+            "ADPA_ID",
+            "PATI_ID",
+            "ADPA_STREET",
+            "ADPA_NUMBER",
+            "ADPA_BLOCK",
+            "ADPA_DOOR",
+            "ADPA_STAIRWAY",
+            "ADPA_FLOOR",
+            "ADPA_WORD",
+            "ADPA_POSTAL_CODE",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_ALLERGIES": {
+        "columns": [
+            "PALL_ID",
+            "PALL_START_DATE",
+            "PALL_END_DATE",
+            "PALL_OBSERVATIONS",
+            "PATI_ID",
+            "ALTY_ID",
+            "ALRE_ID",
+            "ALCA_ID",
+            "ALSE_ID",
+            "ALER_ID",
+            "NMAL_ID",
+            "ALIN_ID",
+            "PHTH_ID",
+            "MEDI_ID",
+            "ACIN_ID",
+            "ALUR_ID",
+            "MEGR_ID",
+            "PALL_ALLERGY_OBSERVATION",
+            "LNMA_ID",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_CONTACTS": {
+        "columns": [
+            "PACO_ID",
+            "PATI_ID",
+            "PACO_VALUE",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_CONTACT_PERSONS": {
+        "columns": [
+            "PACP_ID",
+            "PATI_ID",
+            "COPE_ID",
+            "PACP_LEGAL_REPRESENTATIVE",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_HEALTH_IDS": {
+        "columns": [
+            "PHDT_ID",
+            "PATI_ID",
+            "HITY_ID",
+            "PHDT_VALUE",
+            "PHDT_DEFAULT",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_IDENTIFICATIONS": {
+        "columns": [
+            "PITY_ID",
+            "PATI_ID",
+            "IDTY_ID",
+            "PITY_VALUE",
+            "PITY_DEFAULT",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_PHONES": {
+        "columns": [
+            "PAPH_ID",
+            "PATI_ID",
+            "PAPH_VALUE",
+            "PAPH_DEFAULT",
+            "MTIME"
+        ]
+    },
+    "PATI_PATIENT_TYPES": {
+        "columns": [
+            "PATY_ID",
+            "PATY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PATI_USUAL_MEDICATION": {
+        "columns": [
+            "PAUM_ID",
+            "PATI_ID",
+            "ACIN_ID",
+            "PAUM_OBSERVATIONS",
+            "MTIME"
+        ]
+    },
+    "PROC_PROCEDURES": {
+        "columns": [
+            "PROC_ID",
+            "PATI_ID",
+            "PRTY_ID",
+            "PROC_CODE",
+            "PROC_DELETED",
+            "PROC_DESCRIPTION",
+            "PROC_RESULT_DATE",
+            "PROC_EVALUATION_DATE",
+            "PROC_EVALUATION_OBSERVATION",
+            "PROC_CREATED_DATE",
+            "PROC_AUTHORIZATION_LEVEL",
+            "PROC_AUTHORIZATED",
+            "SERV_ID",
+            "PROC_ID_ORIGIN",
+            "EPCA_ID",
+            "APPR_ID",
+            "MTIME"
+        ]
+    },
+    "PROC_PROCEDURE_TYPES": {
+        "columns": [
+            "PRTY_ID",
+            "PRVT_ID",
+            "PRTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROC_PROCEDURE_VIEW_TYPES": {
+        "columns": [
+            "PRVT_ID",
+            "PRVT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROC_RAYS_STUDIO_TYPE": {
+        "columns": [
+            "PYST_ID",
+            "PYST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROC_SURGICAL_DESTINATIONS": {
+        "columns": [
+            "PSDE_ID",
+            "PSDE_DELETED",
+            "PSDE_DESCRIPTION_ES",
+            "PSDE_CODE",
+            "MTIME"
+        ]
+    },
+    "PROC_SURGICAL_TIMES": {
+        "columns": [
+            "SUTI_ID",
+            "SUTI_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROP_PROPOSAL_REASONS": {
+        "columns": [
+            "PPRE_ID",
+            "PPRE_CODE",
+            "PPRE_DELETED",
+            "PPRE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROP_PROPOSAL_TYPES": {
+        "columns": [
+            "PPTY_ID",
+            "PPTY_DELETED",
+            "PPTY_DESCRIPTION_ES",
+            "TLVT_ID",
+            "MTIME"
+        ]
+    },
+    "PROP_RADIO_PRESENCE_TYPES": {
+        "columns": [
+            "PRPT_ID",
+            "PRPT_DELETED",
+            "PRPT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROP_SEDATION_TYPES": {
+        "columns": [
+            "PSET_ID",
+            "PSET_DELETED",
+            "PSET_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "PROP_TYPE_SAMPLE_TYPES": {
+        "columns": [
+            "PTSM_ID",
+            "PTSM_CODE",
+            "PTSM_DELETED",
+            "PTSM_DESCRIPTION_ES",
+            "PPTY_ID",
+            "MTIME"
+        ]
+    },
+    "SCRE_PSA_RESULTS": {
+        "columns": [
+            "PSAR_ID",
+            "PSAR_DELETED",
+            "PSAR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SCRE_RECTAL_EXAMINATION_ASYMMETRIES": {
+        "columns": [
+            "RCEA_ID",
+            "RCEA_DELETED",
+            "RCEA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SCRE_RECTAL_EXAMINATION_RESULTS": {
+        "columns": [
+            "RCER_ID",
+            "RCER_DELETED",
+            "RCER_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SCRE_SCREENING_EXCLUSION_REASONS": {
+        "columns": [
+            "SCER_ID",
+            "SCER_CODE",
+            "SCER_DELETED",
+            "SCER_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SCRE_SCREENING_INCLUSION_REASONS": {
+        "columns": [
+            "SCIR_ID",
+            "SCIR_CODE",
+            "SCIR_DELETED",
+            "SCIR_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SURG_ANESTHESIA_RISKS": {
+        "columns": [
+            "PRAR_ID",
+            "PRAR_DELETED",
+            "PRAR_DESCRIPTION_ES",
+            "PRAV_ID",
+            "MTIME"
+        ]
+    },
+    "SURG_ANESTHESIA_TYPES": {
+        "columns": [
+            "ANTY_ID",
+            "ANTY_DELETED",
+            "ANTY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SURG_ANESTHESIA_VALORATIONS": {
+        "columns": [
+            "PRAV_ID",
+            "PRAV_DELETED",
+            "PRAV_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "SURG_INTERVENTION_TYPES": {
+        "columns": [
+            "INTY_ID",
+            "INTY_DELETED",
+            "INTY_DESCRIPTION_ES",
+            "INTY_CODE",
+            "MTIME"
+        ]
+    },
+    "TEST_PROFILES": {
+        "columns": [
+            "TEPR_ID",
+            "TEPR_DESCRIPTION_ES",
+            "TEPR_DELETED",
+            "MTIME"
+        ]
+    },
+    "TEST_STATES": {
+        "columns": [
+            "TTST_ID",
+            "TTST_DELETED",
+            "TTST_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "TEST_TESTS": {
+        "columns": [
+            "TEST_ID",
+            "TETY_ID",
+            "TESU_ID",
+            "TEST_DELETED",
+            "TEST_DESCRIPTION_ES",
+            "TEST_LONG_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "TEST_TEST_SUBTYPES": {
+        "columns": [
+            "TESU_ID",
+            "TETY_ID",
+            "TESU_DELETED",
+            "TESU_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "TEST_TEST_TYPES": {
+        "columns": [
+            "TETY_ID",
+            "PPTY_ID",
+            "TETY_DELETED",
+            "TETY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "TIME_LINE_VIEW_TYPES": {
+        "columns": [
+            "TLVT_ID",
+            "TLVT_DELETED",
+            "TLVT_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "TRIA_REASONS": {
+        "columns": [
+            "TRRE_ID",
+            "TRRE_DELETED",
+            "TRRE_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "TRIA_SYMPTOMS": {
+        "columns": [
+            "TRSY_ID",
+            "TRSY_ID_PARENT",
+            "TRSY_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    },
+    "VACC_VACCINES": {
+        "columns": [
+            "VAVA_ID",
+            "PATI_ID",
+            "VAVA_VACCINE",
+            "VAVA_DATE",
+            "VAVA_OBSERVATIONS",
+            "VAVA_DOSE",
+            "VAVA_CENT_OTHER_DESC",
+            "MTIME"
+        ]
+    },
+    "_METACOLS": {
+        "columns": [
+            "table_name",
+            "column_name",
+            "data_type",
+            "edit",
+            "samples"
+        ]
+    },
+    "_DICTIONARIES": {
+        "columns": [
+            "COLUMN",
+            "KEY",
+            "VAL"
+        ]
+    },
+    "ALLE_ALLERGY_CATEGORIES": {
+        "columns": [
+            "ALCA_ID",
+            "ALCA_DELETED",
+            "ALCA_DESCRIPTION_ES",
+            "MTIME"
+        ]
+    }
+}

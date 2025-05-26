@@ -30,18 +30,31 @@ def create_simple_schema():
 
     simple_schema = {}
     
-    tables_data = None
-    if isinstance(enhanced_schema, dict):
+    tables_data_iterable = None # Usaremos esto para iterar, ya sea una lista de tablas o los valores de un dict de tablas
+
+    if isinstance(enhanced_schema, list):
+        # Caso 1: enhanced_schema es directamente una lista de diccionarios de tabla
+        tables_data_iterable = enhanced_schema
+        print("Información: enhanced_schema es una lista. Se procesarán sus elementos como tablas.")
+    elif isinstance(enhanced_schema, dict):
+        # Caso 2: enhanced_schema es un diccionario, buscar la clave 'tables' o similar
         if "tables" in enhanced_schema and isinstance(enhanced_schema["tables"], dict):
-            tables_data = enhanced_schema["tables"]
+            tables_data_iterable = enhanced_schema["tables"].items() # Iterar sobre (table_name, table_details)
+            print("Información: Se procesarán las tablas desde enhanced_schema['tables'] (diccionario).")
+        elif "tables" in enhanced_schema and isinstance(enhanced_schema["tables"], list):
+            # Nuevo subcaso: enhanced_schema tiene una clave "tables" que es una lista
+            tables_data_iterable = enhanced_schema["tables"]
+            print("Información: Se procesarán las tablas desde enhanced_schema['tables'] (lista).")
         elif "schema_knowledge" in enhanced_schema and \
              isinstance(enhanced_schema.get("schema_knowledge"), dict) and \
              "tables" in enhanced_schema["schema_knowledge"] and \
              isinstance(enhanced_schema["schema_knowledge"]["tables"], dict):
-            tables_data = enhanced_schema["schema_knowledge"]["tables"]
+            tables_data_iterable = enhanced_schema["schema_knowledge"]["tables"].items() # Iterar sobre (table_name, table_details)
+            print("Información: Se procesarán las tablas desde enhanced_schema['schema_knowledge']['tables'] (diccionario).")
         elif enhanced_schema.values() and isinstance(list(enhanced_schema.values())[0], dict) and "columns" in list(enhanced_schema.values())[0]:
             # Si es un diccionario de tablas directamente y el primer valor parece una tabla
-            tables_data = enhanced_schema
+            tables_data_iterable = enhanced_schema.items() # Iterar sobre (table_name, table_details)
+            print("Información: Se procesarán las tablas desde enhanced_schema (diccionario de tablas).")
         else: # Intenta asumir que enhanced_schema es el diccionario de tablas directamente si no coincide con los anteriores
             is_likely_tables_dict = True
             if not enhanced_schema: # si está vacío, no es un diccionario de tablas
@@ -52,14 +65,32 @@ def create_simple_schema():
                         is_likely_tables_dict = False
                         break
             if is_likely_tables_dict:
-                tables_data = enhanced_schema
+                tables_data_iterable = enhanced_schema.items() # Iterar sobre (table_name, table_details)
+                print("Información: Se procesarán las tablas desde enhanced_schema (diccionario de tablas, por heurística).")
 
-    if not tables_data:
+    if not tables_data_iterable:
         print("Error: No se pudo encontrar la sección de 'tables' en el esquema mejorado con un formato reconocible o el formato es inesperado.")
         print("Estructura recibida (primeras 500 caracteres):", str(enhanced_schema)[:500])
         return
 
-    for table_name, table_details in tables_data.items():
+    for item in tables_data_iterable:
+        table_name = None
+        table_details = None
+
+        if isinstance(enhanced_schema, list): # Si el origen era una lista de tablas
+            if isinstance(item, dict) and "table_name" in item:
+                table_name = item.get("table_name")
+                table_details = item
+            else:
+                print(f"Advertencia: Elemento en la lista de esquemas no tiene 'table_name' o no es un diccionario: {str(item)[:100]}. Se omite.")
+                continue
+        elif isinstance(enhanced_schema, dict): # Si el origen era un diccionario de tablas
+            table_name, table_details = item # item es una tupla (key, value)
+
+        if not table_name or not table_details:
+            print(f"Advertencia: No se pudo extraer table_name o table_details del item: {str(item)[:100]}. Se omite.")
+            continue
+            
         column_names = []
         columns_data = None
         source_of_columns_data_info = "ninguna"  # Para depuración

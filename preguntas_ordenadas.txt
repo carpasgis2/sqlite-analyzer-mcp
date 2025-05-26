@@ -47,6 +47,10 @@ Estos fármacos pertenecen al grupo de antihipertensivos y se utilizan comúnmen
 
 
 
+Qué médicos han tratado a pacientes con 'diabetes tipo 2' que también están tomando 'metformina'?
+
+
+¿Cuál es la prevalencia de alergias alimentarias frente a no alimentarias en hombres y mujeres, por rangos de edad?
 
 4.  **"¿Qué medicamentos para la 'alergia' no contienen 'pseudoefedrina' y son aptos para niños menores de 12 años?"**
     *   Salto estimado: 1-2. Complejidad: Media (joins, negación, filtros).

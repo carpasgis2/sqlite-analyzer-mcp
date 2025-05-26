@@ -112,35 +112,39 @@ class DBConnector:
         
         return True, ""
 
-    def execute_query(self, query: str, params: List[Any] = None) -> Union[List[Dict[str, Any]], int]:
+    def execute_query(self, query: str, params: List[Any] = None) -> Tuple[Optional[Union[List[Dict[str, Any]], int]], Optional[str]]:
         """
         Ejecuta una consulta con control robusto de errores y garantiza nunca bloquearse.
-        Siempre retorna una respuesta (lista vacía, int o error), nunca se queda colgado.
+        Devuelve una tupla: (resultados, mensaje_de_error).
+        Si la consulta es exitosa, mensaje_de_error es None.
+        Si hay un error, resultados es None.
         """
         if not query:
             self.logger.error("Se intentó ejecutar una consulta vacía")
-            return []
+            return None, "Consulta vacía"
 
         current_thread_id = threading.get_ident()
-        self.logger.info(f"Ejecutando consulta en thread {current_thread_id}: \"{query}\" con parámetros: {params}")
+        # Corregido: Paréntesis cerrado en la f-string
+        self.logger.info(f'Ejecutando consulta en thread {current_thread_id}: "{query}" con parámetros: {params}')
 
         connection = self.get_connection()
+        if not connection:
+            self.logger.error("No se pudo obtener una conexión a la base de datos.")
+            return None, "Error de conexión a la base de datos"
+            
         connection.execute("PRAGMA busy_timeout = 10000")  # 10 segundos en milisegundos
 
         cursor = None
         try:
             cursor = connection.cursor()
-            # Ejecutar la consulta
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
 
-            # SELECT/PRAGMA: obtener resultados y convertir a dicts
             if query.strip().upper().startswith(("SELECT", "PRAGMA")):
                 try:
                     rows = cursor.fetchall()
-                    # Limitar resultados para evitar bloqueos por grandes volúmenes
                     MAX_ROWS = 10000
                     if len(rows) > MAX_ROWS:
                         self.logger.warning(f"Demasiadas filas devueltas ({len(rows)}), truncando a {MAX_ROWS}")
@@ -154,41 +158,55 @@ class DBConnector:
                             self.logger.error(f"Error convirtiendo fila a dict: {conv_err}")
                             row_dict = {str(i): value for i, value in enumerate(row)}
                         results.append(row_dict)
-                    self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}") # EXISTING LOG
-                    self.logger.info(f"DBConnector.execute_query: Attempting to return results. Result is list: {isinstance(results, list)}. Length if list: {len(results) if isinstance(results, list) else 'N/A'}.") # NEW LOG DB_A
-                    return results
+                    self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}")
+                    return results, None
                 except Exception as fetch_err:
                     self.logger.error(f"Error al obtener o procesar resultados: {fetch_err}", exc_info=True)
-                    return []
+                    return None, f"Error al procesar resultados: {str(fetch_err)}"
             else:
-                # INSERT/UPDATE/DELETE: solo rowcount
                 rowcount = cursor.rowcount
                 self.logger.info(f"Consulta de modificación ejecutada. Filas afectadas: {rowcount}")
-                return rowcount
+                return rowcount, None
         except sqlite3.Error as e:
             self.logger.error(f"Error de SQLite al ejecutar la consulta: {e}", exc_info=True)
+            error_message = f"Error de SQLite: {str(e)}"
             try:
                 if connection.in_transaction:
                     connection.rollback()
             except Exception as rollback_error:
                 self.logger.error(f"Error adicional durante rollback: {rollback_error}")
-            return []
+            return None, error_message
         except Exception as e:
             self.logger.error(f"Error no esperado al ejecutar la consulta: {e}", exc_info=True)
-            return []
+            return None, f"Error inesperado: {str(e)}"
         finally:
-            self.logger.info("DBConnector.execute_query: Entering finally block.") # NEW LOG DB_B
+            self.logger.info("DBConnector.execute_query: Entering finally block.")
             if cursor is not None:
                 try:
                     cursor.close()
-                    self.logger.info("DBConnector.execute_query: Cursor closed successfully.") # NEW LOG DB_C
+                    self.logger.info("DBConnector.execute_query: Cursor closed successfully.")
                 except Exception as close_err:
                     self.logger.error(f"DBConnector.execute_query: Error closing cursor: {close_err}")
-            self.logger.info("DBConnector.execute_query: Exiting finally block.") # NEW LOG DB_D
+            self.logger.info("DBConnector.execute_query: Exiting finally block.")
 
-    def execute_sql(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
-        """Alias para execute_query para compatibilidad con el pipeline"""
-        return self.execute_query(query, params)
+    def execute_sql(self, query: str, params: Optional[List[Any]] = None) -> Tuple[Optional[Union[List[Dict[str, Any]], int]], Optional[str]]:
+        """Alias para execute_query para compatibilidad con el pipeline. Devuelve (datos, error_msg)."""
+        # Esta función ahora debe coincidir con la nueva firma de execute_query
+        result_data, error_msg = self.execute_query(query, params)
+        
+        # Si execute_query devuelve (int, None) para rowcount, lo convertimos a ([], None) o similar
+        # si el pipeline espera una lista para operaciones no SELECT.
+        # O, mejor aún, el pipeline debería manejar un int como resultado de operaciones no SELECT.
+        # Por ahora, si es un int (rowcount), lo devolvemos tal cual, y el pipeline debe adaptarse.
+        if isinstance(result_data, int) and error_msg is None:
+             # Para mantener la expectativa de una lista de dicts para SELECTs,
+             # y un int para DML, esto está bien.
+             # Si el pipeline *siempre* espera una lista, incluso para DML, necesitaríamos:
+             # return [{"filas_afectadas": result_data}], None
+             pass # Devolver (int, None) como está.
+
+        # Si es una lista (para SELECT) o None (en caso de error), se devuelve tal cual.
+        return result_data, error_msg
 
     def get_database_structure(self) -> Dict[str, Any]:
         """Obtiene la estructura de la base de datos (tablas, columnas, índices, etc.)"""

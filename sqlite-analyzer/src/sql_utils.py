@@ -286,30 +286,174 @@ def format_results(rows: List[tuple], columns: List[str], action: str = "SELECT"
         return f"He encontrado {len(rows)} resultados. Mostrando los primeros 5:\n{result}\n...y {len(rows)-5} más."
     
 
-def validate_sql_entities(sql_query: str, db_structure: Dict[str, Any]) -> bool:
+def validate_sql_entities(sql_query: str, db_structure: Dict[str, Any]) -> Tuple[bool, str]:
     """
-    Verifica que todas las tablas y columnas de la consulta existan.
+    Verifica que todas las tablas y columnas de la consulta existan y que los alias de SELECT
+    no se usen incorrectamente en WHERE, GROUP BY, HAVING, ORDER BY.
+    Devuelve (True, "") si es válida, o (False, "mensaje de error") si no.
     """
-    import re, difflib
-    # extraer tablas
-    tables = set(t for m in re.findall(r'\bFROM\s+([A-Za-z0-9_]+)|\bJOIN\s+([A-Za-z0-9_]+)', sql_query)
-                 for t in m if t)
-    real_tables = {}
-    for tbl in tables:
-        if tbl not in db_structure:
-            matchs = difflib.get_close_matches(tbl, db_structure.keys(), n=1, cutoff=0.6)
-            if not matchs:
-                return False
-            real_tables[tbl] = matchs[0]
-        else:
-            real_tables[tbl] = tbl
-    # extraer columnas alias.tabla o tabla.col
-    cols = re.findall(r'([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)', sql_query)
-    for tbl, col in cols:
-        rt = real_tables.get(tbl)
-        if not rt or col not in {c['name'] for c in db_structure[rt]['columns']}:
-            return False
-    return True
+    logger = logging.getLogger(__name__)
+    sql_query_upper_for_keywords = sql_query.upper()
+
+    # 1. Extraer tablas y sus alias
+    table_references = {}  # alias.upper() -> real_table_name.upper()
+    actual_tables_in_query = set()  # Store real table names (UPPER) found
+
+    # Regex para FROM y JOIN clauses. Simplificado.
+    from_join_clauses_match = re.search(r'\bFROM\s+(.+?)(?=(\bWHERE\b|\bGROUP BY\b|\bORDER BY\b|\bLIMIT\b|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|;|\Z))', sql_query, re.IGNORECASE | re.DOTALL)
+    
+    if from_join_clauses_match:
+        full_from_join_segment = from_join_clauses_match.group(1)
+        
+        # Split by JOIN first, then by comma for tables in FROM
+        # This handles "FROM table1 t1 JOIN table2 t2 ON ..., table3 t3" - though table3 t3 is unusual here, it focuses on typical JOINs
+        join_segments = re.split(r'\bJOIN\b', full_from_join_segment, flags=re.IGNORECASE)
+        
+        processed_segments = []
+        for i, segment in enumerate(join_segments):
+            if i == 0: # First segment (FROM part)
+                processed_segments.extend(segment.split(','))
+            else: # Subsequent segments (JOIN parts)
+                # Remove ON clause for simplicity before matching table name and alias
+                segment_no_on = re.sub(r'\sON\s+.+', '', segment, flags=re.IGNORECASE | re.DOTALL)
+                processed_segments.append(segment_no_on)
+
+        for part in processed_segments:
+            part = part.strip()
+            if not part: continue
+            # Match 'table_name alias' or 'table_name AS alias' or just 'table_name'
+            match = re.match(r'([a-zA-Z_][a-zA-Z0-9_]+)(?:\s+AS)?(?:\s+([a-zA-Z_][a-zA-Z0-9_]+))?', part, re.IGNORECASE)
+            if match:
+                raw_table_name, raw_alias_name = match.group(1), match.group(2)
+                raw_table_name_upper = raw_table_name.upper()
+                
+                resolved_real_name_upper = None
+                if raw_table_name_upper in db_structure: # db_structure keys should be upper
+                    resolved_real_name_upper = raw_table_name_upper
+                else:
+                    # Attempt to find with get_close_matches if db_structure keys are not guaranteed upper
+                    # Or if the input raw_table_name_upper needs matching against mixed-case keys
+                    # For simplicity, assume db_structure keys are UPPERCASE
+                    matches = get_close_matches(raw_table_name_upper, db_structure.keys(), n=1, cutoff=0.85)
+                    if matches:
+                        resolved_real_name_upper = matches[0].upper() # Ensure it's upper
+                        logger.info(f"Tabla '{raw_table_name}' resuelta a '{resolved_real_name_upper}' por similitud.")
+                    else:
+                        logger.warning(f"Tabla desconocida: '{raw_table_name}' en la consulta.")
+                        return False, f"Tabla desconocida: '{raw_table_name}'."
+                
+                actual_tables_in_query.add(resolved_real_name_upper)
+                
+                if raw_alias_name:
+                    table_references[raw_alias_name.upper()] = resolved_real_name_upper
+                else: # No explicit alias, table name is its own alias
+                    table_references[raw_table_name_upper] = resolved_real_name_upper
+
+    if not actual_tables_in_query and "DUAL" not in sql_query_upper_for_keywords and not sql_query_upper_for_keywords.startswith("VALUES"):
+        if re.search(r'\bFROM\b|\bJOIN\b', sql_query, re.IGNORECASE):
+            logger.warning(f"No se pudieron identificar tablas válidas en la consulta: '{sql_query}'")
+            return False, "No se pudieron identificar tablas válidas en la consulta."
+
+    # 2. Extraer alias de la cláusula SELECT
+    select_aliases = set()
+    select_clause_match = re.search(r'SELECT\s+(.+?)\s+FROM', sql_query, re.IGNORECASE | re.DOTALL)
+    if select_clause_match:
+        select_content = select_clause_match.group(1)
+        aliases_found = re.findall(r'\sAS\s+([a-zA-Z_][a-zA-Z0-9_]+)\b', select_content, re.IGNORECASE)
+        for alias in aliases_found:
+            select_aliases.add(alias.upper())
+    logger.debug(f"Alias de SELECT encontrados: {select_aliases}")
+
+    # 3. Validar columnas en cláusulas problemáticas (WHERE, GROUP BY, HAVING)
+    problematic_clauses_regex = r'(?:\bWHERE\s+(?P<where_clause>.+?)(?=(\bGROUP BY\b|\bORDER BY\b|\bLIMIT\b|\bHAVING\b|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|;|\Z)))|' \
+                                r'(?:\bGROUP BY\s+(?P<groupby_clause>.+?)(?=(\bORDER BY\b|\bLIMIT\b|\bHAVING\b|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|;|\Z)))|' \
+                                r'(?:\bHAVING\s+(?P<having_clause>.+?)(?=(\bORDER BY\b|\bLIMIT\b|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|;|\Z)))'
+    
+    sql_keywords_for_ident_check = { # Common keywords/functions to ignore when checking identifiers
+        "COUNT", "SUM", "AVG", "MIN", "MAX", "DISTINCT", "CASE", "WHEN", "THEN", "ELSE", "END",
+        "AND", "OR", "NOT", "NULL", "IS", "IN", "LIKE", "BETWEEN", "EXISTS", "ALL", "ANY",
+        "TRUE", "FALSE", "CAST", "CONVERT", "SUBSTRING", "TRIM", "DATE", "YEAR", "MONTH", "DAY",
+        "STRFTIME", "JULIANDAY", "NOW", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP"
+    }.union(db_structure.keys()) # Add all known table names (UPPER)
+
+    for clause_match in re.finditer(problematic_clauses_regex, sql_query, re.IGNORECASE | re.DOTALL):
+        clause_content = ""
+        clause_type_name = ""
+        if clause_match.group("where_clause"):
+            clause_content = clause_match.group("where_clause")
+            clause_type_name = "WHERE"
+        elif clause_match.group("groupby_clause"):
+            clause_content = clause_match.group("groupby_clause")
+            clause_type_name = "GROUP BY"
+        elif clause_match.group("having_clause"):
+            clause_content = clause_match.group("having_clause")
+            clause_type_name = "HAVING"
+        
+        if clause_content and clause_type_name:
+            logger.debug(f"Analizando cláusula {clause_type_name}: {clause_content}")
+            # Extract potential identifiers (words not part of literals, trying to avoid function names)
+            # This regex is simplified: it extracts words.
+            clause_identifiers = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', clause_content)
+            for ident_str in clause_identifiers:
+                ident_upper = ident_str.upper()
+
+                if ident_upper in sql_keywords_for_ident_check or ident_upper in table_references: # Skip keywords, table names/aliases
+                    continue
+                
+                # Check if it's a column of any table in the query
+                is_valid_column_of_table = False
+                for real_tbl_name_upper in actual_tables_in_query:
+                    if real_tbl_name_upper in db_structure and any(col_def['name'].upper() == ident_upper for col_def in db_structure[real_tbl_name_upper].get('columns',[])):
+                        is_valid_column_of_table = True
+                        break
+                
+                if not is_valid_column_of_table:
+                    if ident_upper in select_aliases:
+                        msg = f"El alias de SELECT '{ident_str}' no puede ser usado directamente en la cláusula {clause_type_name}."
+                        logger.warning(msg + f" Consulta: {sql_query}")
+                        return False, msg
+                    else:
+                        # Not a direct column, not a SELECT alias, not a keyword/table.
+                        # Could be an error, or a function/literal not caught.
+                        # For now, we don't flag this as a hard error to avoid false positives with simple regex.
+                        # A more sophisticated check would be needed here.
+                        logger.debug(f"Identificador '{ident_str}' en {clause_type_name} no es una columna directa ni un alias de SELECT conocido. Se omite la validación estricta para este identificador.")
+                        pass
+
+    # 4. Validate qualified columns (table_alias.column or table_name.column)
+    qualified_column_matches = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]+)\.([a-zA-Z_][a-zA-Z0-9_]+)\b', sql_query)
+    for tbl_ref_name, col_name_str in qualified_column_matches:
+        tbl_ref_upper = tbl_ref_name.upper()
+        col_name_upper = col_name_str.upper()
+
+        actual_table_name_for_qualified_col = table_references.get(tbl_ref_upper)
+
+        if not actual_table_name_for_qualified_col:
+            # If the prefix is not a known table alias or table name from FROM/JOIN
+            if tbl_ref_upper not in select_aliases: # And it's not a SELECT alias either
+                 msg = f"Referencia de tabla/alias desconocida '{tbl_ref_name}' en columna cualificada '{tbl_ref_name}.{col_name_str}'."
+                 logger.warning(msg + f" Consulta: {sql_query}")
+                 return False, msg
+            else: # Prefix is a SELECT alias, e.g., SELECT_ALIAS.column_name - generally invalid
+                 msg = f"No se puede usar un alias de SELECT '{tbl_ref_name}' para cualificar una columna ('{tbl_ref_name}.{col_name_str}')."
+                 logger.warning(msg + f" Consulta: {sql_query}")
+                 return False, msg
+        
+        # actual_table_name_for_qualified_col is a resolved real table name (UPPER)
+        if actual_table_name_for_qualified_col not in db_structure:
+            msg = f"Error interno: tabla resuelta '{actual_table_name_for_qualified_col}' no encontrada en db_structure."
+            logger.error(msg + f" Consulta: {sql_query}")
+            return False, msg
+
+        table_cols_info = db_structure[actual_table_name_for_qualified_col].get('columns', [])
+        if not any(c_info['name'].upper() == col_name_upper for c_info in table_cols_info):
+            msg = f"Columna desconocida '{col_name_str}' para la tabla/alias '{tbl_ref_name}' (resuelta a '{actual_table_name_for_qualified_col}')."
+            logger.warning(msg + f" Consulta: {sql_query}")
+            return False, msg
+            
+    logger.info(f"Validación de entidades SQL para consulta directa прошла успешно.") # Consider changing "прошла успешно" (passed successfully in Russian)
+    return True, ""
+
 
 def extract_json_from_text(text: str) -> str:
     """
@@ -635,4 +779,124 @@ def whitelist_validate_query(query: str, allowed_tables: Set[str], allowed_colum
     # y verificar que estén en allowed_columns para sus respectivas tablas
     
     return True
+
+def _get_schema_tables(schema):
+    # Si es lista, es formato clásico de schema_enhanced.json
+    if isinstance(schema, list):
+        return schema
+    # Si es dict, buscar clave 'tables' (como en dictionary.json enriquecido)
+    if isinstance(schema, dict):
+        # Puede ser dict con 'tables' como dict de tablas
+        if "tables" in schema and isinstance(schema["tables"], dict):
+            # Convertir a lista de dicts con nombre y columnas
+            return [
+                {"table_name": k, **v}
+                for k, v in schema["tables"].items()
+            ]
+        # O dict con 'tables' como lista
+        if "tables" in schema and isinstance(schema["tables"], list):
+            return schema["tables"]
+    raise ValueError("Formato de esquema no soportado para extracción de tablas.")
+
+def list_tables(schema_path:str) -> list[str]:
+    """
+    Devuelve la lista de nombres de tablas reales a partir de un archivo de esquema JSON.
+    """
+    with open(schema_path, encoding="utf-8") as f:
+        schema = json.load(f)
+    tables = _get_schema_tables(schema)
+    return [t["table_name"] for t in tables]
+
+def list_columns(schema_path:str, table_name:str) -> list[str]:
+    """
+    Devuelve la lista de columnas reales de una tabla a partir de un archivo de esquema JSON.
+    Soporta tanto formato clásico (lista/anidado) como formato dictionary.json (dict plano de columnas).
+    Añade logs detallados para depuración robusta.
+    """
+    import logging
+    logger = logging.getLogger()
+    
+    # Limpiar el nombre de la tabla de entrada
+    original_table_name_for_log = table_name
+    table_name = table_name.strip().strip('"\'') # Eliminar espacios y comillas comunes
+    if original_table_name_for_log != table_name:
+        logger.debug(f"[list_columns] Nombre de tabla limpiado de '{original_table_name_for_log}' a '{table_name}'")
+    else:
+        logger.debug(f"[list_columns] Buscando columnas para tabla: '{table_name}' en schema: {schema_path}")
+
+    try:
+        with open(schema_path, encoding="utf-8") as f:
+            schema = json.load(f)
+    except Exception as e:
+        logger.error(f"[list_columns] Error al cargar el esquema: {e}")
+        return []
+
+    # 1. Intentar formato clásico (schema_enhanced.json)
+    try:
+        tables = _get_schema_tables(schema)
+        logger.debug(f"[list_columns] _get_schema_tables encontró {len(tables)} tablas")
+        for t in tables:
+            if t.get("table_name", "").lower() == table_name.lower():
+                cols = t.get("columns", [])
+                logger.debug(f"[list_columns] Tabla encontrada en formato clásico: {t['table_name']}, columnas: {cols}")
+                if isinstance(cols, dict):
+                    logger.info(f"[list_columns] Formato clásico: columnas como dict para {table_name}")
+                    return list(cols.keys())
+                if isinstance(cols, list) and cols and isinstance(cols[0], dict) and "name" in cols[0]:
+                    logger.info(f"[list_columns] Formato clásico: columnas como lista de dicts para {table_name}")
+                    return [c["name"] for c in cols]
+                if isinstance(cols, list) and cols and isinstance(cols[0], str):
+                    logger.info(f"[list_columns] Formato clásico: columnas como lista de strings para {table_name}")
+                    return cols
+                logger.warning(f"[list_columns] Formato clásico: columnas no reconocidas para {table_name}: {cols}")
+    except Exception as e:
+        logger.warning(f"[list_columns] Excepción en formato clásico: {e}")
+
+    # 2. Intentar formato dictionary.json (dict plano de columnas)
+    if isinstance(schema, dict) and "columns" in schema and isinstance(schema["columns"], dict):
+        prefix_upper = table_name.upper() + "."
+        prefix_lower = table_name.lower() + "."
+        found_keys = list(schema["columns"].keys())
+        logger.debug(f"[list_columns] Revisando {len(found_keys)} claves en schema['columns']")
+        colnames = [k.split(".",1)[1] for k in found_keys if k.upper().startswith(prefix_upper)]
+        if not colnames:
+            colnames = [k.split(".",1)[1] for k in found_keys if k.lower().startswith(prefix_lower)]
+        logger.info(f"[list_columns] Formato plano: columnas encontradas para {table_name}: {colnames}")
+        return colnames
+    else:
+        logger.warning(f"[list_columns] El esquema no tiene clave 'columns' o no es un dict plano")
+
+    # 3. Fallback: buscar columnas por coincidencia parcial (muy robusto, solo para depuración)
+    if isinstance(schema, dict) and "columns" in schema and isinstance(schema["columns"], dict):
+        found_keys = list(schema["columns"].keys())
+        colnames = [k for k in found_keys if table_name.lower() in k.lower()]
+        logger.info(f"[list_columns] Fallback parcial: columnas que contienen '{table_name}': {colnames}")
+        return [k.split(".",1)[1] for k in colnames if "." in k]
+
+    logger.error(f"[list_columns] No se encontraron columnas para la tabla '{table_name}' en ningún formato")
+    return []
+
+def search_schema(schema_path:str, keyword:str) -> dict:
+    """
+    Busca tablas y columnas que contengan el keyword (en nombre o descripción).
+    Devuelve un dict con coincidencias.
+    """
+    with open(schema_path, encoding="utf-8") as f:
+        schema = json.load(f)
+    tables = _get_schema_tables(schema)
+    result = {"tables":[], "columns":[]}
+    keyword = keyword.lower()
+    for t in tables:
+        if keyword in t["table_name"].lower() or keyword in (t.get("description") or "").lower():
+            result["tables"].append(t["table_name"])
+        cols = t.get("columns", [])
+        if isinstance(cols, dict):
+            for cname, cinfo in cols.items():
+                if keyword in cname.lower() or keyword in (cinfo.get("description") or "").lower():
+                    result["columns"].append({"table": t["table_name"], "column": cname, "description": cinfo.get("description","")})
+        else:
+            for c in cols:
+                if keyword in c["name"].lower() or keyword in (c.get("description") or "").lower():
+                    result["columns"].append({"table": t["table_name"], "column": c["name"], "description": c.get("description","")})
+    return result
 

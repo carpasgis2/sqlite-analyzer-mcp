@@ -37,17 +37,83 @@ from sql_validator import whitelist_validate_query
 class SQLGenerator:
     """Clase para generar consultas SQL a partir de información estructurada"""
     
-    def __init__(self, allowed_tables: List[str], allowed_columns: Dict[str, List[str]]):
+    def __init__(self, allowed_tables: List[str], allowed_columns: Dict[str, List[str]], enhanced_schema_path: Optional[str] = None):
         """
-        Inicializa el generador SQL con las tablas y columnas permitidas
+        Inicializa el generador SQL con las tablas y columnas permitidas y opcionalmente un esquema mejorado.
         
         Args:
             allowed_tables: Lista de nombres de tablas permitidas
             allowed_columns: Diccionario que mapea tablas a sus columnas permitidas
+            enhanced_schema_path: Ruta opcional al archivo schema_enhanced.json
         """
         self.allowed_tables = allowed_tables
         self.allowed_columns = allowed_columns
+        self.enhanced_schema = None
+        if enhanced_schema_path:
+            self._load_enhanced_schema(enhanced_schema_path)
         
+    def _load_enhanced_schema(self, schema_path: str):
+        """Carga el esquema mejorado desde un archivo JSON."""
+        try:
+            with open(schema_path, 'r', encoding='utf-8') as f:
+                self.enhanced_schema = json.load(f)
+            logging.info(f"[SQLGenerator] Esquema mejorado cargado exitosamente desde {schema_path}")
+        except FileNotFoundError:
+            logging.error(f"[SQLGenerator] Archivo de esquema mejorado no encontrado en {schema_path}. La normalización de columnas no estará disponible.")
+            self.enhanced_schema = None
+        except json.JSONDecodeError:
+            logging.error(f"[SQLGenerator] Error al decodificar el archivo JSON del esquema mejorado en {schema_path}. La normalización de columnas no estará disponible.")
+            self.enhanced_schema = None
+        except Exception as e:
+            logging.error(f"[SQLGenerator] Ocurrió un error inesperado al cargar el esquema mejorado desde {schema_path}: {e}")
+            self.enhanced_schema = None
+
+    def _find_actual_column_name(self, table_name: str, column_name_variant: str) -> str:
+        """
+        Intenta encontrar el nombre real de una columna en el esquema mejorado,
+        probando variaciones como añadir/quitar el sufijo '_ES'.
+        Devuelve None si no se encuentra o no hay esquema.
+        """
+        if not self.enhanced_schema or not table_name or not column_name_variant:
+            return None
+
+        table_name_upper = table_name.upper()
+        column_name_variant_upper = column_name_variant.upper()
+
+        schema_table_name_key = None
+        for t_name_key in self.enhanced_schema.get("tables", {{}}).keys():
+            if t_name_key.upper() == table_name_upper:
+                schema_table_name_key = t_name_key
+                break
+        if not schema_table_name_key:
+            logging.debug(f"[SQLGenerator] Tabla '{table_name}' no encontrada en el esquema mejorado para normalizar columna '{column_name_variant}'.")
+            return None
+
+        table_schema = self.enhanced_schema["tables"].get(schema_table_name_key, {{}})
+        actual_columns_in_schema = {{col_info.get("name", "").upper(): col_info.get("name", "") 
+                                    for col_info in table_schema.get("columns", []) if col_info.get("name")}}
+
+        if column_name_variant_upper in actual_columns_in_schema:
+            return actual_columns_in_schema[column_name_variant_upper]
+
+        variations_to_try = []
+        if column_name_variant_upper.endswith("_ES"):
+            variations_to_try.append(column_name_variant_upper[:-3])
+        else:
+            variations_to_try.append(column_name_variant_upper + "_ES")
+        if column_name_variant_upper.endswith("_DESCRIPTION_ES"):
+            variations_to_try.append(column_name_variant_upper.replace("_DESCRIPTION_ES", "_DESCRIPTION"))
+        elif column_name_variant_upper.endswith("_DESCRIPTION"):
+            variations_to_try.append(column_name_variant_upper.replace("_DESCRIPTION", "_DESCRIPTION_ES"))
+
+        for variation_upper in variations_to_try:
+            if variation_upper in actual_columns_in_schema:
+                logging.info(f"[SQLGenerator] Columna '{column_name_variant}' normalizada a '{actual_columns_in_schema[variation_upper]}' para la tabla '{table_name}'.")
+                return actual_columns_in_schema[variation_upper]
+
+        logging.warning(f"[SQLGenerator] No se pudo encontrar una coincidencia para la columna '{column_name_variant}' en la tabla '{table_name}' usando el esquema mejorado. Se omitirá la condición.")
+        return None
+
     def _ensure_string(self, value: Any) -> str:
         """
         Convierte cualquier valor a string de manera segura
@@ -96,6 +162,31 @@ class SQLGenerator:
         
         return valid_operators.get(operator, "=")
     
+    def _normalize_on_condition_string(self, on_condition_str: str) -> str:
+        """
+        Normaliza los nombres de columna dentro de una cadena de condición ON.
+        Ejemplo: "TABLE1.COL_VAR = TABLE2.OTHER_COL_VAR" -> "TABLE1.COL_ACTUAL = TABLE2.OTHER_COL_ACTUAL"
+        Actualmente maneja condiciones simples T1.C1 = T2.C2.
+        """
+        if not self.enhanced_schema or '=' not in on_condition_str:
+            return on_condition_str
+
+        # Usar regex para capturar T1.C1 = T2.C2 de forma más robusta
+        match = re.fullmatch(r"\s*([\w_]+)\.([\w_]+)\s*=\s*([\w_]+)\.([\w_]+)\s*", on_condition_str)
+        if not match:
+            logging.debug(f"[SQLGenerator] Condición ON '{on_condition_str}' no coincide con el patrón T1.C1 = T2.C2 para normalización.")
+            return on_condition_str
+
+        t1, c1_variant, t2, c2_variant = match.groups()
+
+        actual_c1 = self._find_actual_column_name(t1, c1_variant)
+        actual_c2 = self._find_actual_column_name(t2, c2_variant)
+
+        normalized_condition = f"{t1}.{actual_c1} = {t2}.{actual_c2}"
+        if normalized_condition != on_condition_str:
+            logging.info(f"[SQLGenerator] Condición ON normalizada: '{on_condition_str}' -> '{normalized_condition}'")
+        return normalized_condition
+
     def generate_sql(self, structured_info: Dict[str, Any], db_structure: Optional[Dict[str, Any]] = None, relations_map: Optional[Dict[str, Any]] = None) -> Tuple[str, List[Any]]:
         """
         Genera una consulta SQL a partir de información estructurada.
@@ -116,6 +207,13 @@ class SQLGenerator:
         if not raw_tables_list or not isinstance(raw_tables_list, list) or not raw_tables_list[0]:
             logging.error("[SQLGenerator] No se especificó ninguna tabla válida en structured_info['tables'].")
             return "SELECT 'Error: No se especificó ninguna tabla válida' AS mensaje", []
+
+        # Validación robusta: abortar si alguna tabla no existe en el esquema permitido
+        if db_structure is not None:
+            tablas_invalidas = [t for t in raw_tables_list if t not in db_structure]
+            if tablas_invalidas:
+                logging.error(f"No existen en el esquema las siguientes tablas requeridas: {tablas_invalidas}")
+                return f"SELECT 'Error: No se puede responder porque faltan tablas en la base de datos: {', '.join(tablas_invalidas)}' AS mensaje", []
 
         # Estrategia para elegir la tabla principal:
         candidate_main_tables_ordered = [] # Lista ordenada de candidatos por prioridad
@@ -184,19 +282,48 @@ class SQLGenerator:
 
 
         logging.info(f"[SQLGenerator] Tabla principal FINAL: {main_table}")
-        # ... (resto del código existente para validación de main_table si se reactiva) ...
 
-        select_cols = structured_info.get("columns", ["*"])
-        if not select_cols: # pragma: no cover
-            select_cols = ["*"]
-        logging.info(f"[SQLGenerator] Columnas a seleccionar: {select_cols}")
+        select_cols_input = structured_info.get("columns", ["*"])
+        if not select_cols_input:
+            select_cols_input = ["*"]
+        
+        normalized_select_cols = []
+        if isinstance(select_cols_input, list):
+            for col_ref in select_cols_input: # CORREGIDO: Usar select_cols_input
+                if isinstance(col_ref, str):
+                    if col_ref == "*":
+                        normalized_select_cols.append("*")
+                        continue
+                    
+                    table_prefix = main_table 
+                    col_name_part = col_ref
+                    if '.' in col_ref:
+                        parts = col_ref.split('.', 1)
+                        table_prefix = parts[0]
+                        col_name_part = parts[1]
+                    
+                    actual_col_name = self._find_actual_column_name(table_prefix, col_name_part)
+                    
+                    if '.' in col_ref:
+                        normalized_select_cols.append(f"{table_prefix}.{actual_col_name}")
+                    elif actual_col_name != col_name_part: 
+                        normalized_select_cols.append(f"{main_table}.{actual_col_name}")
+                    else: 
+                        normalized_select_cols.append(actual_col_name)
+                else:
+                    normalized_select_cols.append(str(col_ref)) 
+        else:
+            normalized_select_cols = ["*"] 
 
-        sql = f"SELECT {', '.join(select_cols)} FROM {main_table}"
+        logging.info(f"[SQLGenerator] Columnas a seleccionar (normalizadas): {normalized_select_cols}")
+
+        sql = f"SELECT {', '.join(normalized_select_cols)} FROM {main_table}"
         logging.debug(f"[SQLGenerator] SQL inicial: {sql}")
 
         already_joined_tables = {main_table.upper()}
         join_clauses_sql = []
-
+        
+        llm_joins_input = structured_info.get("joins", []) # Asegurar que llm_joins_input está definido aquí
         # Procesar JOINs explícitos del LLM de forma iterativa
         if isinstance(llm_joins_input, list) and llm_joins_input:
             current_llm_joins_to_process = list(llm_joins_input)
@@ -226,21 +353,25 @@ class SQLGenerator:
                               llm_table2 and isinstance(llm_table2, str) and \
                               on_condition and isinstance(on_condition, str)):
                         
-                        # Intentar construir on_condition si falta pero hay columnas
                         if not on_condition and llm_table1 and llm_table2:
-                            col1 = join_item.get('column')
-                            col2 = join_item.get('foreign_column')
-                            if col1 and col2 and isinstance(col1, str) and isinstance(col2, str):
-                                on_condition = f"{llm_table1}.{col1} = {llm_table2}.{col2}"
-                                logging.debug(f"[SQLGenerator] ON condition construida para JOIN LLM: {on_condition}")
+                            col1_variant = join_item.get('column')
+                            col2_variant = join_item.get('foreign_column')
+                            if col1_variant and col2_variant and isinstance(col1_variant, str) and isinstance(col2_variant, str):
+                                # Normalizar columnas antes de construir la condición ON
+                                actual_col1 = self._find_actual_column_name(llm_table1, col1_variant)
+                                actual_col2 = self._find_actual_column_name(llm_table2, col2_variant)
+                                on_condition = f"{llm_table1}.{actual_col1} = {llm_table2}.{actual_col2}"
+                                logging.debug(f"[SQLGenerator] ON condition construida y normalizada para JOIN LLM: {on_condition}")
                             else:
                                 logging.warning(f"[SQLGenerator] JOIN LLM #{i+1} omitido: faltan tablas, on_condition o columnas para construirla. Item: {join_item}")
-                                next_round_pending_joins.append(join_item) # Reintentar si otra info lo aclara? O descartar? Por ahora, reintentar.
+                                next_round_pending_joins.append(join_item) 
                                 continue
                         else:
                             logging.warning(f"[SQLGenerator] JOIN LLM #{i+1} omitido: información de tabla o condición ON inválida/faltante. Item: {join_item}")
-                            # No añadir a next_round_pending_joins, descartar este JOIN malformado.
                             continue
+                    else:
+                        # Normalizar la condición ON existente si fue provista directamente
+                        on_condition = self._normalize_on_condition_string(on_condition)
                     
                     llm_table1_upper = llm_table1.upper()
                     llm_table2_upper = llm_table2.upper()
@@ -267,7 +398,9 @@ class SQLGenerator:
                         # TODO: Validación de columnas en on_condition usando db_structure si está disponible
                         # Por ahora, se asume que el LLM proporciona on_conditions válidas.
                         
-                        join_sql_segment = f" {join_type} JOIN {table_to_add_to_sql_clause_str} ON {on_condition}"
+                        on_condition_normalized = self._normalize_on_condition_string(on_condition)
+
+                        join_sql_segment = f" {join_type} JOIN {table_to_add_to_sql_clause_str} ON {on_condition_normalized}"
                         join_clauses_sql.append(join_sql_segment)
                         already_joined_tables.add(table_to_add_to_already_joined_set_upper)
                         logging.info(f"[SQLGenerator] JOIN LLM procesado y añadido: {join_sql_segment}. Tablas unidas ahora: {already_joined_tables}")
@@ -290,15 +423,25 @@ class SQLGenerator:
                  logging.error(f"[SQLGenerator] {len(current_llm_joins_to_process)} JOINs del LLM no pudieron ser integrados al grafo final después de {max_passes} pasadas: {current_llm_joins_to_process}")
 
         # Consolidar todas las tablas que necesitan estar en la consulta para la inferencia de JOINs
+
+        # Consolidar todas las tablas que necesitan estar en la consulta para la inferencia de JOINs
         all_tables_from_structured_info = {tbl.upper() for tbl in raw_tables_list if isinstance(tbl, str)} # Usar la lista original de tablas
         
         tables_from_select_upper = set()
-        if isinstance(select_cols, list):
-            for col_ref in select_cols:
+        # Usar las columnas originales de structured_info para determinar las tablas mencionadas en SELECT
+        original_select_columns = structured_info.get("columns", [])
+        if isinstance(original_select_columns, list):
+            for col_ref in original_select_columns:
                 if isinstance(col_ref, str) and '.' in col_ref:
-                    tables_from_select_upper.add(col_ref.split('.')[0].upper())
+                    # Extraer solo el nombre de la tabla antes del primer punto
+                    table_name_candidate = col_ref.split('.')[0].upper()
+                    # Validar que no sea parte de una función, ej. "COUNT(TABLE.COL)"
+                    # Esta es una heurística simple; un parseo SQL completo sería más robusto.
+                    if '(' not in table_name_candidate:
+                        tables_from_select_upper.add(table_name_candidate)
         
         tables_from_where_upper = set()
+
         if isinstance(conditions_info, list): # Reusar conditions_info
             for cond in conditions_info:
                 if isinstance(cond, dict) and "column" in cond and isinstance(cond["column"], str) and '.' in cond["column"]:
@@ -344,30 +487,43 @@ class SQLGenerator:
 
                             rel_table1_upper = rel.get("table", "").upper()
                             rel_table2_upper = rel.get("foreign_table", "").upper()
-                            on_condition_inferred = None
+                            on_condition_inferred_raw = None # Condición ON sin normalizar
                             table_to_add_via_inferred_join_upper = None
                             original_table_name_to_join_inferred = None
 
+                            # Nombres de columna originales de la relación
+                            rel_col1 = rel.get('column')
+                            rel_col2 = rel.get('foreign_column')
+
+                            if not rel_col1 or not rel_col2:
+                                logging.warning(f"[SQLGenerator] Relación inválida, faltan nombres de columna: {rel}")
+                                continue
+
                             if rel_table1_upper == joined_table_upper and rel_table2_upper == table_to_reach_upper:
-                                on_condition_inferred = f"{rel.get('table')}.{rel.get('column')} = {rel.get('foreign_table')}.{rel.get('foreign_column')}"
+                                # No normalizar aquí todavía, _normalize_on_condition_string lo hará
+                                on_condition_inferred_raw = f"{rel.get('table')}.{rel_col1} = {rel.get('foreign_table')}.{rel_col2}"
                                 table_to_add_via_inferred_join_upper = table_to_reach_upper
-                                original_table_name_to_join_inferred = rel.get('foreign_table') # Usar nombre original de la relación
+                                original_table_name_to_join_inferred = rel.get('foreign_table')
                             elif rel_table2_upper == joined_table_upper and rel_table1_upper == table_to_reach_upper:
-                                on_condition_inferred = f"{rel.get('foreign_table')}.{rel.get('foreign_column')} = {rel.get('table')}.{rel.get('column')}"
+                                # No normalizar aquí todavía, _normalize_on_condition_string lo hará
+                                on_condition_inferred_raw = f"{rel.get('foreign_table')}.{rel_col2} = {rel.get('table')}.{rel_col1}"
                                 table_to_add_via_inferred_join_upper = table_to_reach_upper
-                                original_table_name_to_join_inferred = rel.get('table') # Usar nombre original de la relación
+                                original_table_name_to_join_inferred = rel.get('table')
                             
-                            if on_condition_inferred and table_to_add_via_inferred_join_upper and \
+                            if on_condition_inferred_raw and table_to_add_via_inferred_join_upper and \
                                table_to_add_via_inferred_join_upper not in already_joined_tables and \
                                original_table_name_to_join_inferred:
                                 
-                                join_type_inferred = rel.get("join_type", "INNER").upper() # Usar join_type de la relación si existe
-                                join_sql_segment = f" {join_type_inferred} JOIN {original_table_name_to_join_inferred} ON {on_condition_inferred}"
+                                # Normalizar la condición ON inferida
+                                on_condition_inferred_normalized = self._normalize_on_condition_string(on_condition_inferred_raw)
+                                
+                                join_type_inferred = rel.get("join_type", "INNER").upper()
+                                join_sql_segment = f" {join_type_inferred} JOIN {original_table_name_to_join_inferred} ON {on_condition_inferred_normalized}"
                                 join_clauses_sql.append(join_sql_segment)
                                 already_joined_tables.add(table_to_add_via_inferred_join_upper)
                                 new_join_made_in_inference_pass = True
                                 found_path_for_current_target = True
-                                logging.info(f"[SQLGenerator] JOIN INFERIDO añadido: {join_sql_segment}")
+                                logging.info(f"[SQLGenerator] JOIN INFERIDO añadido: {join_sql_segment} (Original: {on_condition_inferred_raw})")
                                 break 
                         
                         if found_path_for_current_target:
@@ -448,61 +604,89 @@ class SQLGenerator:
         for i, condition_item in enumerate(conditions): 
             logging.debug(f"[SQLGenerator] Procesando condición WHERE #{i+1}: {condition_item}")
             if isinstance(condition_item, dict):
-                column = condition_item.get("column", "")
+                column_variant = condition_item.get("column", "")
                 operator = condition_item.get("operator", "=")
                 value = condition_item.get("value", "")
                 is_subquery = condition_item.get("is_subquery", False)
                 subquery_details = condition_item.get("subquery_details")
-                
-                if not column and not is_subquery: 
-                    logging.warning(f"[SQLGenerator] Condición omitida por falta de columna y no ser subconsulta: {condition_item}")
+                table_for_column = main_table # Por defecto
+                actual_column_name = column_variant
+                if '.' in column_variant:
+                    parts = column_variant.split('.',1)
+                    table_for_column = parts[0]
+                    column_name_only = parts[1]
+                    actual_column_name = self._find_actual_column_name(table_for_column, column_name_only)
+                    if actual_column_name:
+                        actual_column_name = f"{table_for_column}.{actual_column_name}"
+                elif column_variant:
+                    actual_column_name_candidate = self._find_actual_column_name(main_table, column_variant)
+                    if actual_column_name_candidate:
+                        if actual_column_name_candidate != column_variant:
+                            actual_column_name = f"{main_table}.{actual_column_name_candidate}"
+                        else:
+                            actual_column_name = actual_column_name_candidate
+                    else:
+                        actual_column_name = None
+
+                if not actual_column_name and not is_subquery: 
+                    logging.warning(f"[SQLGenerator] Condición omitida por falta de columna (después de validación en esquema): {condition_item}")
                     continue
 
                 operator = self._normalize_operator(operator)
-                logging.debug(f"[SQLGenerator] Condición dict: col='{column}', op='{operator}', val='{value}', subquery={is_subquery}")
+                logging.debug(f"[SQLGenerator] Condición dict: col='{actual_column_name}' (original: '{column_variant}'), op='{operator}', val='{value}', subquery={is_subquery}")
                 
                 if is_subquery and subquery_details:
-                    sub_select = subquery_details.get("select_column")
+                    sub_select_variant = subquery_details.get("select_column")
                     sub_from = subquery_details.get("from_table")
-                    sub_where_col = subquery_details.get("where_column")
+                    sub_where_col_variant = subquery_details.get("where_column")
                     sub_where_op = self._normalize_operator(subquery_details.get("where_operator", "LIKE"))
                     sub_where_val = subquery_details.get("where_value")
 
-                    if not all([sub_select, sub_from, sub_where_col, sub_where_val]):
-                        logging.warning(f"[SQLGenerator] Subconsulta mal formada, omitida: {subquery_details}")
+                    # Normalizar columnas de la subconsulta
+                    actual_sub_select = sub_select_variant
+                    if sub_from and sub_select_variant and '.' not in sub_select_variant: # Asumir que pertenece a sub_from si no está calificada
+                        actual_sub_select = self._find_actual_column_name(sub_from, sub_select_variant)
+                    elif sub_select_variant and '.' in sub_select_variant:
+                        sub_sel_table, sub_sel_col = sub_select_variant.split('.',1)
+                        actual_sub_select = f"{sub_sel_table}.{self._find_actual_column_name(sub_sel_table, sub_sel_col)}"
+                    
+                    actual_sub_where_col = sub_where_col_variant
+                    if sub_from and sub_where_col_variant and '.' not in sub_where_col_variant:
+                        actual_sub_where_col = self._find_actual_column_name(sub_from, sub_where_col_variant)
+                    elif sub_where_col_variant and '.' in sub_where_col_variant:
+                        sub_wh_table, sub_wh_col = sub_where_col_variant.split('.',1)
+                        actual_sub_where_col = f"{sub_wh_table}.{self._find_actual_column_name(sub_wh_table, sub_wh_col)}"
+
+                    if not all([actual_sub_select, sub_from, actual_sub_where_col, sub_where_val]):
+                        logging.warning(f"[SQLGenerator] Subconsulta mal formada (después de normalización), omitida: {subquery_details}")
                         continue
                     
-                    # Asegurarse de que el valor para LIKE en subconsulta tenga comodines si es necesario
-                    # Esta es una heurística, el LLM debería idealmente proveerlos.
                     processed_sub_where_val = sub_where_val
                     if sub_where_op == "LIKE" and not ('%' in sub_where_val or '_' in sub_where_val):
                         processed_sub_where_val = f"%{sub_where_val}%"
 
-                    # La columna de la condición principal (ej: EPIS_DIAGNOSTICS.CDTE_ID) 
-                    # se compara con el resultado de la subconsulta.
-                    where_clauses.append(f"{column} {operator} (SELECT {sub_select} FROM {sub_from} WHERE {sub_where_col} {sub_where_op} ?)")
+                    where_clauses.append(f"{actual_column_name} {operator} (SELECT {actual_sub_select} FROM {sub_from} WHERE {actual_sub_where_col} {sub_where_op} ?)")
                     params.append(processed_sub_where_val)
-                    logging.debug(f"[SQLGenerator] Subconsulta añadida: {column} {operator} (SELECT {sub_select} FROM {sub_from} WHERE {sub_where_col} {sub_where_op} {processed_sub_where_val})")
+                    logging.debug(f"[SQLGenerator] Subconsulta añadida: {actual_column_name} {operator} (SELECT {actual_sub_select} FROM {sub_from} WHERE {actual_sub_where_col} {sub_where_op} {processed_sub_where_val})")
 
                 elif operator in ["IN", "NOT IN"]:
-                    # ... (código existente para IN/NOT IN, sin cambios)
                     if isinstance(value, list) and value:
                         placeholders = ", ".join(["?" for _ in value])
-                        where_clauses.append(f"{column} {operator} ({placeholders})")
+                        where_clauses.append(f"{actual_column_name} {operator} ({placeholders})")
                         params.extend(value)
                     elif isinstance(value, str) and value: 
-                        where_clauses.append(f"{column} {operator} (?)")
+                        where_clauses.append(f"{actual_column_name} {operator} (?)")
                         params.append(value)
                     else:
-                        logging.warning(f"[SQLGenerator] Valor no válido para operador {operator} en columna {column}: {value}. Condición omitida.")
+                        logging.warning(f"[SQLGenerator] Valor no válido para operador {operator} en columna {actual_column_name}: {value}. Condición omitida.")
                         continue
                 elif operator == "BETWEEN":
                     # ... (código existente para BETWEEN, sin cambios)
                     if isinstance(value, list) and len(value) == 2:
-                        where_clauses.append(f"{column} BETWEEN ? AND ?")
+                        where_clauses.append(f"{actual_column_name} BETWEEN ? AND ?")
                         params.extend(value)
                     else:
-                        logging.warning(f"[SQLGenerator] Valor no válido para operador BETWEEN en columna {column}: {value}. Condición omitida.")
+                        logging.warning(f"[SQLGenerator] Valor no válido para operador BETWEEN en columna {actual_column_name}: {value}. Condición omitida.")
                         continue
                 elif operator == "LIKE":
                     # ... (código existente para LIKE, sin cambios)
@@ -510,7 +694,7 @@ class SQLGenerator:
                         try:
                             value = str(value)
                         except:
-                            logging.warning(f"[SQLGenerator] No se pudo convertir el valor para LIKE a string en columna {column}: {value}. Condición omitida.")
+                            logging.warning(f"[SQLGenerator] No se pudo convertir el valor para LIKE a string en columna {actual_column_name}: {value}. Condición omitida.")
                             continue
                     # Asegurarse de que el valor para LIKE tenga comodines si es necesario
                     # Esta es una heurística, el LLM debería idealmente proveerlos.
@@ -518,11 +702,11 @@ class SQLGenerator:
                     if not ('%' in value or '_' in value):
                         processed_value = f"%{value}%" # Añadir comodines si no están
                     
-                    where_clauses.append(f"{column} {operator} ?")
+                    where_clauses.append(f"{actual_column_name} {operator} ?")
                     params.append(processed_value)
                 else: 
                     # ... (código existente para otros operadores, sin cambios)
-                    where_clauses.append(f"{column} {operator} ?")
+                    where_clauses.append(f"{actual_column_name} {operator} ?")
                     params.append(value)
                 logging.debug(f"[SQLGenerator] Condición dict procesada. where_clauses: {where_clauses}, params: {params}")
             
