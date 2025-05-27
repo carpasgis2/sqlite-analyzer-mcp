@@ -824,3 +824,66 @@ class SQLGenerator:
         #     # return "SELECT 'Error: Consulta no permitida por la lista blanca' AS mensaje", []
 
         return sql, params
+
+    def _build_where_clause(self, conditions: List[Dict[str, Any]], current_aliases: Dict[str, str]) -> str:
+        """
+        Construye la cláusula WHERE de la consulta SQL a partir de la información estructurada.
+        
+        Args:
+            conditions: Lista de diccionarios con la información de las condiciones WHERE.
+            current_aliases: Diccionario con los alias actuales de las tablas en la consulta.
+
+        Returns:
+            Cadena con la cláusula WHERE construida.
+        """
+        where_conditions = []
+
+        for condition in conditions:
+            logging.debug(f"[SQLGenerator] Procesando condición para WHERE: {condition}")
+            condition_type = condition.get("type", "simple").lower()
+
+            if condition_type == "simple":
+                # Condiciones simples como "columna = valor"
+                column_name = condition.get("column")
+                operator = condition.get("operator", "=")
+                value = condition.get("value")
+
+                if column_name is not None and value is not None:
+                    # Normalizar el operador
+                    operator = self._normalize_operator(operator)
+
+                    # Formatear el valor para la consulta
+                    formatted_value = self.db_config.format_value_for_query(value)
+
+                    # Asegurarse de que la columna tenga el alias correcto si es necesario
+                    column_alias = self._get_alias_for_table(column_name, current_aliases)
+
+                    where_conditions.append(f"{column_alias} {operator} {formatted_value}")
+
+            elif condition_type == "subquery":
+                # Esto maneja subconsultas como "columna IN (SELECT ...)"
+                subquery_dict = condition.get("subquery")
+                subquery_sql_str = self._generate_sql_recursive(subquery_dict, is_subquery=True, outer_aliases=current_aliases)
+                
+                # Asegurarse de que la columna para comparación esté correctamente aliased
+                outer_column_alias = self._get_alias_for_table(condition.get("outer_table", condition.get("table")), current_aliases)
+                where_conditions.append(f"{outer_column_alias}.{condition['column']} {condition['operator']} ({subquery_sql_str})")
+
+            elif condition_type == "exists":
+                # Manejo de subconsultas EXISTS
+                subquery_details = condition.get("subquery_details", {})
+                correlation_rules = condition.get("correlation_conditions", [])
+
+                if not subquery_details or not correlation_rules:
+                    # Fallback a un EXISTS más simple si faltan detalles (registrar una advertencia o error)
+                    where_conditions.append(f"-- MALFORMED EXISTS: {condition.get('original_text', 'Unknown condition')} --")
+                    continue
+
+                sub_from_table_info = subquery_details["from_table"]
+                sub_from_clause = f"FROM {sub_from_table_info['name']} {sub_from_table_info['alias']}"
+
+                sub_join_parts = []
+                for join_info in subquery_details.get("joins", []):
+                    sub_join_parts.append(
+                        f"{join_info.get('type', 'INNER')} JOIN {join_info['target_table']['name']} {join_info['target_table']['alias']} "
+                        f"ON {join_info['on_condition']}")

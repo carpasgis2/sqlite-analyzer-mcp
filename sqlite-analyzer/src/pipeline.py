@@ -4,6 +4,7 @@ import json
 import re
 import threading
 from typing import List, Dict, Any, Optional, Union, Tuple
+from datetime import datetime, timedelta # NUEVO
 
 # Importaciones directas/absolutas para módulos en el mismo directorio src
 from db_config import DBConnector, DEFAULT_DB_CONFIG as DATABASE_CONFIG # MODIFICADO
@@ -212,8 +213,8 @@ WORKSPACE_ROOT_DIR = os.path.abspath(os.path.join(PROJECT_ROOT_DIR, "..")) # ...
 SCHEMA_DATA_DIR = os.path.join(SCRIPT_DIR, "data") # .../sqlite-analyzer/src/data/
 SCHEMA_FULL_PATH = os.path.join(SCHEMA_DATA_DIR, "schema_enhanced.json")
 SCHEMA_SIMPLE_PATH = os.path.join(SCHEMA_DATA_DIR, "schema_simple.json") # Asegúrate de que este archivo exista y sea una versión reducida del esquema
-RELACIONES_PATH_FOR_LLM = os.path.join(WORKSPACE_ROOT_DIR, "table_relationships_corrected.json") # Usar el archivo corregido
-RELACIONES_PATH = os.path.join(WORKSPACE_ROOT_DIR, "table_relationships_corrected.json") # Para build_relationship_graph, etc.
+RELACIONES_PATH_FOR_LLM = os.path.join(WORKSPACE_ROOT_DIR, "table_relationships.json") # Usar el archivo corregido
+RELACIONES_PATH = os.path.join(WORKSPACE_ROOT_DIR, "table_relationships.json") # Para build_relationship_graph, etc.
 
 TERMS_DICT_PATH = os.path.join(SCHEMA_DATA_DIR, "dictionary.json") # Ejemplo
 

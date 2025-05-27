@@ -229,7 +229,6 @@ def extract_info_from_question_llm(question: str, db_schema_str_full_details: st
 
     Returns:
         Un diccionario con la información estructurada extraída.
-        Ejemplo: {'tables': ['PATI_PATIENT_ALLERGIES', 'ALLE_ALLERGY_TYPES'], 'columns': ['ALLE_ALLERGY_TYPES.ALTY_DESCRIPTION_ES'], 'conditions': [{'column': 'PATI_PATIENT_ALLERGIES.PATI_ID', 'operator': '=', 'value': '1931'}], 'joins': [{'type': 'INNER', 'table1': 'PATI_PATIENT_ALLERGIES', 'table2': 'ALLE_ALLERGY_TYPES', 'on': 'PATI_PATIENT_ALLERGIES.ALTY_ID = ALLE_ALLERGY_TYPES.ALTY_ID'}]}
     """
     if config is None:
         config = {} # Usar configuración por defecto de call_llm_with_fallbacks
@@ -237,18 +236,26 @@ def extract_info_from_question_llm(question: str, db_schema_str_full_details: st
     system_message_template = """
 Eres un asistente experto en SQL y bases de datos médicas. Tu tarea es analizar la pregunta del usuario
 y extraer la siguiente información en formato JSON:
-1.  `tables`: Lista de tablas principales necesarias para responder la pregunta. Identifica TODAS las tablas implicadas por las condiciones y columnas solicitadas. La primera tabla de esta lista será la tabla principal en la cláusula FROM.
-2.  `columns`: Lista de columnas que se deben seleccionar. Por defecto, selecciona todas las columnas (`["*"]`) de la tabla principal si no se especifican columnas. Si se mencionan explícitamente, inclúyelas con el nombre de la tabla (ej: "TABLE.COLUMN").
-3.  `conditions`: Lista de condiciones para la cláusula WHERE. Cada condición debe ser un diccionario con "column", "operator" y "value".
-    -   Identifica la columna correcta para cada parte de la pregunta. Por ejemplo, si la pregunta es "Pacientes con síntoma X y diagnóstico Y", X podría estar en `EPIS_DIAGNOSTICS.DIAG_OBSERVATION` y Y podría ser un código en `EPIS_DIAGNOSTICS.CDTE_ID` o también texto en `EPIS_DIAGNOSTICS.DIAG_OBSERVATION`.
-    -   Para frases como "reportaron 'síntoma A'", la condición podría ser `{{"column": "TRIA_SYMPTOMS.SYMP_DESCRIPTION", "operator": "LIKE", "value": "%síntoma A%"}}` (asumiendo que los síntomas están en TRIA_SYMPTOMS).
-    -   Para frases como "diagnosticados con 'enfermedad B'", si 'enfermedad B' es un texto descriptivo, considera usar la columna de observaciones o notas (ej: `{{"column": "EPIS_DIAGNOSTICS.DIAG_OBSERVATION", "operator": "LIKE", "value": "%enfermedad B%"}}`). Si 'enfermedad B' es un código de diagnóstico, utiliza la columna correspondiente (ej: `{{"column": "EPIS_DIAGNOSTICS.CDTE_ID", "operator": "=", "value": "CODIGO_ENFERMEDAD"}}`).
-    -   Extrae valores directamente de la pregunta (ej: PATI_ID = 1931 de "¿Qué alergias tiene el paciente 1931?").
-4.  `joins`: Lista de JOINs necesarios para conectar las tablas.
-    -   DEBES incluir un JOIN si las columnas en `columns` o `conditions` pertenecen a tablas diferentes de la primera tabla listada en `tables` (la tabla principal del FROM).
-    -   DEBES incluir JOINs para conectar cualquier tabla adicional listada en `tables` (después de la primera) con la tabla principal o con otras tablas ya unidas.
-    -   Utiliza el esquema y las relaciones proporcionadas para determinar las condiciones ON correctas.
-    -   Cada JOIN debe ser un diccionario con "type" (INNER, LEFT, etc.), "table1" (la tabla ya presente en el FROM o unida previamente), "table2" (la nueva tabla a unir), y "on" (la condición del join completa, ej: "TABLE1.ID_RELACION = TABLE2.ID_RELACION").
+1.  `tables`: Lista de tablas principales necesarias para responder la pregunta. La primera tabla será la principal del FROM.
+2.  `columns`: Lista de columnas a seleccionar (ej: ["TABLE.COLUMN1", "TABLE.COLUMN2"]). Por defecto `["*"]` de la tabla principal.
+3.  `conditions`: Lista de condiciones para WHERE. Cada condición es un diccionario.
+    -   Para condiciones simples: `{"column": "TABLE.COLUMN", "operator": "LIKE", "value": "%valor%"}`.
+    -   Para subconsultas `EXISTS`:
+        -   `"type": "exists"`
+        -   `"original_text"`: El fragmento de la pregunta que origina esta condición EXISTS.
+        -   `"subquery_details"`: Un diccionario que define la subconsulta:
+            -   `"select_expression"`: Qué seleccionar en la subconsulta (usualmente "1").
+            -   `"from_table"`: Tabla principal de la subconsulta `{"name": "SUB_TABLE_NAME", "alias": "sub_alias"}`.
+            -   `"joins"`: (Opcional) Lista de joins DENTRO de la subconsulta, similar al formato de joins principal.
+                `[{"type": "INNER", "target_table": {"name": "SUB_JOIN_TABLE", "alias": "sjt_alias"}, "on_condition": "sub_alias.FK_ID = sjt_alias.PK_ID"}]`
+            -   `"conditions"`: (Opcional) Lista de condiciones WHERE INTERNAS de la subconsulta.
+                `[{"table_alias": "sub_alias", "column": "COLUMN_NAME", "operator": "LIKE", "value": "%sub_valor%"}]`
+        -   `"correlation_conditions"`: Lista de condiciones que CORRELACIONAN la subconsulta con la consulta externa.
+            `[{"outer_query_alias": "alias_tabla_externa", "outer_query_column": "EXTERNAL_COLUMN", "operator": "=", "subquery_alias": "sub_alias", "subquery_column": "SUB_COLUMN_FOR_CORRELATION"}]`
+
+4.  `joins`: Lista de JOINs para la consulta principal.
+    -   Cada JOIN: `{"type": "INNER", "table1": "MAIN_TABLE_ALIAS_OR_NAME", "table2_name": "OTHER_TABLE_NAME", "table2_alias": "ot_alias", "on": "MAIN_TABLE_ALIAS_OR_NAME.FK_ID = ot_alias.PK_ID"}`.
+    -   Asegúrate de que `table1` se refiere a un alias ya definido o al nombre de la tabla principal si es el primer join.
 
 Contexto de la Base de Datos:
 Esquema Simplificado:
@@ -257,49 +264,53 @@ Esquema Simplificado:
 Relaciones entre Tablas:
 {1}
 
-Ejemplo de pregunta 1: "Mostrar los síntomas reportados por pacientes diagnosticados con 'gripe común'."
-Asumir que los síntomas están en `TRIA_SYMPTOMS (SYMP_DESCRIPTION)` y los diagnósticos en `EPIS_DIAGNOSTICS (DIAG_OBSERVATION, CDTE_ID)`. Ambas tablas pueden tener `EPIS_ID` y/o `PATI_ID`. `PATI_ID` también está en `PATI_PATIENTS`.
-Posible JSON (si `TRIA_SYMPTOMS` es la tabla principal y se une con `EPIS_DIAGNOSTICS`):
-{{
-  "tables": ["TRIA_SYMPTOMS", "EPIS_DIAGNOSTICS"],
-  "columns": ["TRIA_SYMPTOMS.SYMP_DESCRIPTION"],
-  "conditions": [
-    {{"column": "EPIS_DIAGNOSTICS.DIAG_OBSERVATION", "operator": "LIKE", "value": "%gripe común%"}}
-  ],
-  "joins": [
-    {{
-      "type": "INNER",
-      "table1": "TRIA_SYMPTOMS",
-      "table2": "EPIS_DIAGNOSTICS",
-      "on": "TRIA_SYMPTOMS.EPIS_ID = EPIS_DIAGNOSTICS.EPIS_ID"
-    }}
-  ]
-}}
+Ejemplo de pregunta con EXISTS: "¿Qué médicos (PROF_ID_ASSIGNMENT en EPIS_DIAGNOSTICS) han tratado a pacientes (EPIS_DIAGNOSTICS.PATI_ID) diagnosticados con 'diabetes tipo 2' (DIAT_DESCRIPTION_ES en DIAT_DIABETIC_TYPES) que también están tomando 'metformina' (ACIN_DESCRIPTION_ES en MEDI_ACTIVE_INGREDIENTS)?"
 
-Ejemplo de pregunta 2: "Pacientes con nombre 'Juan Pérez' que reportaron 'fuerte dolor de cabeza' como síntoma y fueron diagnosticados con 'migraña crónica'."
-Tablas involucradas: `PATI_PATIENTS` (para nombre), `TRIA_SYMPTOMS` (para síntomas), `EPIS_DIAGNOSTICS` (para diagnósticos).
-Asumir relaciones: `PATI_PATIENTS.PATI_ID = TRIA_SYMPTOMS.PATI_ID` (si síntomas tiene PATI_ID) o `PATI_PATIENTS.PATI_ID = EPIS_DIAGNOSTICS.PATI_ID` y luego `TRIA_SYMPTOMS` se une a `EPIS_DIAGNOSTICS` por `EPIS_ID`.
-Posible JSON (usando `PATI_PATIENTS` como tabla principal):
+Tablas y relaciones relevantes:
+- EPIS_DIAGNOSTICS (alias 'd') tiene PROF_ID_ASSIGNMENT, PATI_ID.
+- PATI_USUAL_MEDICATION (alias 'pum') se une a EPIS_DIAGNOSTICS por PATI_ID. Tiene ACIN_ID.
+- MEDI_ACTIVE_INGREDIENTS (alias 'mai') se une a PATI_USUAL_MEDICATION por ACIN_ID. Tiene ACIN_DESCRIPTION_ES.
+- HADT_DIABETES_TYPES (alias 'hdt') se une a EPIS_DIAGNOSTICS por PATI_ID. Tiene DIAT_ID.
+- DIAT_DIABETIC_TYPES (alias 'ddt') se une a HADT_DIABETES_TYPES por DIAT_ID. Tiene DIAT_DESCRIPTION_ES.
+
+JSON esperado para el ejemplo con EXISTS:
 {{
-  "tables": ["PATI_PATIENTS", "TRIA_SYMPTOMS", "EPIS_DIAGNOSTICS"],
-  "columns": ["PATI_PATIENTS.PATI_ID", "PATI_PATIENTS.PATI_NAME", "TRIA_SYMPTOMS.SYMP_DESCRIPTION", "EPIS_DIAGNOSTICS.DIAG_OBSERVATION"],
+  "tables": ["EPIS_DIAGNOSTICS d"],
+  "columns": ["d.PROF_ID_ASSIGNMENT"],
   "conditions": [
-    {{"column": "PATI_PATIENTS.PATI_NAME", "operator": "LIKE", "value": "%Juan Pérez%"}},
-    {{"column": "TRIA_SYMPTOMS.SYMP_DESCRIPTION", "operator": "LIKE", "value": "%fuerte dolor de cabeza%"}},
-    {{"column": "EPIS_DIAGNOSTICS.DIAG_OBSERVATION", "operator": "LIKE", "value": "%migraña crónica%"}}
+    {{"column": "mai.ACIN_DESCRIPTION_ES", "operator": "LIKE", "value": "%metformina%"}},
+    {{
+      "type": "exists",
+      "original_text": "diagnosticados con 'diabetes tipo 2'",
+      "subquery_details": {{
+        "select_expression": "1",
+        "from_table": {{"name": "HADT_DIABETES_TYPES", "alias": "hdt"}},
+        "joins": [
+          {{
+            "type": "INNER",
+            "target_table": {{"name": "DIAT_DIABETIC_TYPES", "alias": "ddt"}},
+            "on_condition": "hdt.DIAT_ID = ddt.DIAT_ID"
+          }}
+        ],
+        "conditions": [
+          {{"table_alias": "ddt", "column": "DIAT_DESCRIPTION_ES", "operator": "LIKE", "value": "%diabetes tipo 2%"}}
+        ]
+      }},
+      "correlation_conditions": [
+        {{"outer_query_alias": "d", "outer_query_column": "PATI_ID", "operator": "=", "subquery_alias": "hdt", "subquery_column": "PATI_ID"}}
+      ]
+    }}
   ],
   "joins": [
     {{
-      "type": "INNER",
-      "table1": "PATI_PATIENTS",
-      "table2": "EPIS_DIAGNOSTICS",
-      "on": "PATI_PATIENTS.PATI_ID = EPIS_DIAGNOSTICS.PATI_ID"
+      "type": "INNER", "table1": "d", 
+      "table2_name": "PATI_USUAL_MEDICATION", "table2_alias": "pum", 
+      "on": "d.PATI_ID = pum.PATI_ID"
     }},
     {{
-      "type": "INNER",
-      "table1": "EPIS_DIAGNOSTICS", 
-      "table2": "TRIA_SYMPTOMS",
-      "on": "EPIS_DIAGNOSTICS.EPIS_ID = TRIA_SYMPTOMS.EPIS_ID"
+      "type": "INNER", "table1": "pum", 
+      "table2_name": "MEDI_ACTIVE_INGREDIENTS", "table2_alias": "mai", 
+      "on": "pum.ACIN_ID = mai.ACIN_ID"
     }}
   ]
 }}

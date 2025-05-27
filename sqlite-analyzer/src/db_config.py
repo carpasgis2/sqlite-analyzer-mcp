@@ -142,30 +142,36 @@ class DBConnector:
             else:
                 cursor.execute(query)
 
-            if query.strip().upper().startswith(("SELECT", "PRAGMA")):
+            # Modificado: Usar cursor.description para determinar el tipo de consulta
+            if cursor.description is not None:  # Indica que la consulta devolvió columnas (SELECT, PRAGMA, WITH...SELECT)
                 try:
                     rows = cursor.fetchall()
-                    MAX_ROWS = 10000
+                    MAX_ROWS = 10000  # Considerar hacerlo configurable
                     if len(rows) > MAX_ROWS:
                         self.logger.warning(f"Demasiadas filas devueltas ({len(rows)}), truncando a {MAX_ROWS}")
                         rows = rows[:MAX_ROWS]
-                    column_names = [col[0] for col in cursor.description] if cursor.description else []
+                    
+                    # cursor.description ya está verificado, no se necesita 'if cursor.description else []'
+                    column_names = [col[0] for col in cursor.description]
+                    
                     results = []
                     for row in rows:
                         try:
                             row_dict = {column_names[i]: value for i, value in enumerate(row)}
                         except Exception as conv_err:
                             self.logger.error(f"Error convirtiendo fila a dict: {conv_err}")
+                            # Fallback si hay problemas con los nombres de columna
                             row_dict = {str(i): value for i, value in enumerate(row)}
                         results.append(row_dict)
-                    self.logger.info(f"Consulta SELECT/PRAGMA ejecutada. Filas devueltas: {len(results)}")
+                    
+                    self.logger.info(f"Consulta de datos ejecutada. Filas devueltas: {len(results)}")
                     return results, None
                 except Exception as fetch_err:
                     self.logger.error(f"Error al obtener o procesar resultados: {fetch_err}", exc_info=True)
                     return None, f"Error al procesar resultados: {str(fetch_err)}"
-            else:
-                rowcount = cursor.rowcount
-                self.logger.info(f"Consulta de modificación ejecutada. Filas afectadas: {rowcount}")
+            else:  # La consulta no devolvió columnas (ej. INSERT, UPDATE, DELETE, CREATE TABLE, etc.)
+                rowcount = cursor.rowcount  # Para DML, rowcount es relevante. Para DDL, puede ser -1 o 0.
+                self.logger.info(f"Consulta de no-datos (modificación/DDL) ejecutada. Filas afectadas/estado: {rowcount}")
                 return rowcount, None
         except sqlite3.Error as e:
             self.logger.error(f"Error de SQLite al ejecutar la consulta: {e}", exc_info=True)

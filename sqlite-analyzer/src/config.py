@@ -21,8 +21,8 @@ SCHEMA_SIMPLE_PATH = os.path.join(SCHEMA_DATA_DIR, "schema_simple.json")
 
 # Rutas para los archivos de relaciones
 # Usando WORKSPACE_ROOT_DIR para archivos que podrían estar fuera de la carpeta 'src'
-RELACIONES_PATH_FOR_LLM = os.path.join(WORKSPACE_ROOT_DIR, "cursos_actividades", "sina_mcp", "table_relationships_corrected.json")
-RELACIONES_PATH = os.path.join(WORKSPACE_ROOT_DIR, "cursos_actividades", "sina_mcp", "table_relationships_corrected.json")
+RELACIONES_PATH_FOR_LLM = os.path.join(WORKSPACE_ROOT_DIR, "cursos_actividades", "sina_mcp", "table_relationships.json")
+RELACIONES_PATH = os.path.join(WORKSPACE_ROOT_DIR, "cursos_actividades", "sina_mcp", "table_relationships.json")
 
 # Ruta para el diccionario de términos
 TERMS_DICT_PATH = os.path.join(SCHEMA_DATA_DIR, "dictionary.json")
