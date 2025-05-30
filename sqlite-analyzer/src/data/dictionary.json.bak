@@ -3544,11 +3544,6 @@
     "MI_TABLA": {
       "common_terms": [
         "- ejemplo"
-      ],
-      "description_es": "Tabla 'MI_TABLA' diseñada para almacenar y gestionar información específica de la aplicación, con estructura adaptable a diversos tipos de datos según requerimientos.",
-      "examples": [
-        "\"Registro de preferencias de usuario, como tema de interfaz y configuración de notificaciones.\"",
-        "\"Inventario de recursos digitales con metadatos como tipo, fecha de creación y tamaño.\""
       ]
     }
   },

@@ -77,18 +77,26 @@ def create_simple_schema():
         table_name = None
         table_details = None
 
-        if isinstance(enhanced_schema, list): # Si el origen era una lista de tablas
-            if isinstance(item, dict) and "table_name" in item:
-                table_name = item.get("table_name")
-                table_details = item
-            else:
-                print(f"Advertencia: Elemento en la lista de esquemas no tiene 'table_name' o no es un diccionario: {str(item)[:100]}. Se omite.")
-                continue
-        elif isinstance(enhanced_schema, dict): # Si el origen era un diccionario de tablas
-            table_name, table_details = item # item es una tupla (key, value)
+        if isinstance(item, tuple) and len(item) == 2:
+            # Caso: item es (nombre_tabla, detalles_tabla), típicamente de .items()
+            table_name, table_details = item
+        elif isinstance(item, dict) and "table_name" in item:
+            # Caso: item es un diccionario de tabla que contiene su propio nombre
+            # típicamente cuando tables_data_iterable es una lista de estos diccionarios
+            table_name = item.get("table_name")
+            table_details = item # El item completo es los detalles de la tabla
+        else:
+            print(f"Advertencia: Elemento en tables_data_iterable tiene un formato inesperado o falta 'table_name': {str(item)[:200]}. Se omite.")
+            continue
 
-        if not table_name or not table_details:
-            print(f"Advertencia: No se pudo extraer table_name o table_details del item: {str(item)[:100]}. Se omite.")
+        if not table_name: # Asegurarse de que table_name se haya extraído correctamente
+            print(f"Advertencia: No se pudo determinar table_name para el item: {str(item)[:200]}. Se omite.")
+            continue
+            
+        # Asegurarse de que table_details sea un diccionario para el procesamiento posterior
+        if not isinstance(table_details, dict):
+            print(f"Advertencia: table_details para la tabla '{table_name}' no es un diccionario: {str(table_details)[:200]}. Se procesará como tabla sin columnas.")
+            simple_schema[table_name] = {"columns": []}
             continue
             
         column_names = []

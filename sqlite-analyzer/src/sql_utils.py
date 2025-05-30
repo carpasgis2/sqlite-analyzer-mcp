@@ -17,6 +17,20 @@ except ImportError:
     from llm_utils import call_llm
 from json.decoder import JSONDecodeError, JSONDecoder
 from pathlib import Path
+import sqlparse
+from sqlparse.sql import Identifier, IdentifierList, Case
+from sqlparse.tokens import Keyword, Name, Punctuation
+
+# Configuración del logger para este módulo
+logger = logging.getLogger(__name__)
+# Evitar añadir múltiples manejadores si el logger ya está configurado por otra parte del programa
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    # Establecer el nivel de logging. Cambiar a logging.DEBUG para más detalles si es necesario.
+    logger.setLevel(logging.INFO)
 
 try:
     from fuzzywuzzy import fuzz, process
@@ -314,7 +328,7 @@ def validate_sql_entities(sql_query: str, db_structure: Dict[str, Any]) -> Tuple
         
         # Iterar sobre las coincidencias de subconsultas con alias
         for sub_match in re.finditer(subquery_alias_pattern, full_from_join_segment, re.IGNORECASE | re.DOTALL):
-            alias_name = sub_match.group(2)
+            alias_name = sub_match.group(1)  # Corregido de group(2) a group(1)
             alias_upper = alias_name.upper()
             # Marcar este alias como proveniente de una subconsulta.
             # No tenemos un "nombre real de tabla" para él, pero el alias es válido.
@@ -635,14 +649,26 @@ def detect_table_from_question(question: str, terms_dict: Optional[Dict[str, Any
     # Usar LLM para identificar la tabla más relevante
     system_message = (
         "Como experto en bases de datos médicas, tu tarea es identificar la tabla más adecuada "
-        "para responder a una pregunta. Considera el contexto y el significado de los términos médicos.\n\n"
-        "INSTRUCCIONES:\n"
-        "- Analiza la pregunta y determina qué recurso o entidad es el foco principal.\n"
-        "- Identifica la tabla más relevante de la lista proporcionada.\n"
-        "- Responde SOLAMENTE con el nombre de la tabla, sin explicaciones adicionales. Ejemplo: NOMBRETABLA\n"
+        "para responder a una pregunta. Considera el contexto y el significado de los términos médicos.\\n\\n"
+        "INSTRUCCIONES:\\n"
+        "- Analiza la pregunta y determina qué recurso o entidad es el foco principal.\\n"
+        "- Identifica la tabla más relevante de la lista proporcionada.\\n"
+        "- Responde SOLAMENTE con el nombre de la tabla, sin explicaciones adicionales. Ejemplo: NOMBRETABLA\\n"
+        "INSTRUCCIONES ADICIONALES PARA CONSULTAS DE MEDICAMENTOS:\\n"
+        "- Si la pregunta se refiere a medicamentos 'aptos para niños', 'pediátricos' o similares, asegúrate de que la lógica SQL generada incluya condiciones para filtrar por descripciones que contengan 'niños' o 'pediátrico' Y EXCLUYAN 'adultos' en el campo de descripción del medicamento. Por ejemplo: (MEDI_DESCRIPTION_ES NOT LIKE '%adultos%' OR MEDI_DESCRIPTION_ES LIKE '%niños%' OR MEDI_DESCRIPTION_ES LIKE '%pediátrico%')\\n"
+        "INSTRUCCIONES ADICIONALES PARA CONSULTAS DE DIAGNÓSTICOS Y DURACIÓN DE HOSPITALIZACIÓN:\\n"
+        "- Para obtener la descripción textual OFICIAL de un diagnóstico, debes unir la tabla `EPIS_DIAGNOSTICS` (alias 'd') con `CODR_DIAGNOSTIC_GROUPS` (alias 'cg') usando `d.CDTE_ID = cg.DGGR_ID`. La descripción está en `cg.DGGR_DESCRIPTION_ES`.\\n"
+        "- El campo `EPIS_DIAGNOSTICS.DIAG_OTHER_DIAGNOSTIC` es un texto libre y NO debe usarse para la descripción oficial del diagnóstico principal.\\n"
+        "- Para diagnósticos principales, filtra siempre usando `d.DIAG_MAIN = 1`.\\n"
+        "- Cuando calcules duraciones de hospitalización (por ejemplo, usando `EPIS_EPISODES.EPIS_START_DATE` y `EPIS_EPISODES.EPIS_CLOSED_DATE`), asegúrate de filtrar los episodios donde `EPIS_CLOSED_DATE` no sea nulo (`e.EPIS_CLOSED_DATE IS NOT NULL`).\\n"
+        "- ERROR COMÚN A EVITAR: Al calcular promedios de duración, la forma correcta es `AVG(julianday(e.EPIS_CLOSED_DATE) - julianday(e.EPIS_START_DATE))`. NO anides funciones AVG como `AVG(... - AVG(...))`.\\n"
+        "- Si necesitas agrupar resultados basados en una expresión CASE (por ejemplo, para categorizar diagnósticos como 'Cardiaca' o 'Neumonía' basados en `cg.DGGR_DESCRIPTION_ES`), DEBES REPETIR la expresión CASE completa en la cláusula `GROUP BY`. NO uses el alias de la columna del SELECT en el GROUP BY para SQLite. Ejemplo:\\n"
+        "  SELECT CASE WHEN cg.DGGR_DESCRIPTION_ES LIKE '%cardiaca%' THEN 'Cardiaca' ELSE 'Otro' END AS tipo_diag, COUNT(*) \\n"
+        "  FROM EPIS_DIAGNOSTICS d JOIN CODR_DIAGNOSTIC_GROUPS cg ON d.CDTE_ID = cg.DGGR_ID \\n"
+        "  GROUP BY CASE WHEN cg.DGGR_DESCRIPTION_ES LIKE '%cardiaca%' THEN 'Cardiaca' ELSE 'Otro' END;\\n"
     )
     
-    tables_list_str = "\n".join([f"- {table_name}: {list(info.get('columns', {}).keys())[:3]}" # Mostrar menos columnas para brevedad
+    tables_list_str = "\\n".join([f"- {table_name}: {list(info.get('columns', {}).keys())[:3]}" # Mostrar menos columnas para brevedad
                                for table_name, info in db_structure.items()])
     
     # Añadir información de terms_dict al prompt si está disponible
@@ -928,4 +954,311 @@ def search_schema(schema_path:str, keyword:str) -> dict:
                 if keyword in c["name"].lower() or keyword in (c.get("description") or "").lower():
                     result["columns"].append({"table": t["table_name"], "column": c["name"], "description": c.get("description","")})
     return result
+
+def _extract_select_aliases(stmt):
+    """
+    Extrae un mapeo de alias a sus expresiones originales de la cláusula SELECT.
+    Devuelve: dict {alias_string: expression_string}
+    """
+    aliases_map = {}
+    if not stmt or not hasattr(stmt, 'tokens'):
+        return aliases_map
+
+    select_elements_token = None
+    in_select_clause = False
+    
+    # Buscar el inicio de la cláusula SELECT y luego los identificadores
+    # Esto es una simplificación; sqlparse puede ser complejo para casos borde.
+    
+    # Primero, encontrar el token SELECT
+    select_keyword_idx = -1
+    for i, token in enumerate(stmt.tokens):
+        if token.is_keyword and token.normalized == 'SELECT':
+            select_keyword_idx = i
+            break
+    
+    if select_keyword_idx == -1:
+        return aliases_map # No hay SELECT
+
+    # Buscar el primer Identifier o IdentifierList después de SELECT
+    # que no esté dentro de subconsultas (esto es una simplificación)
+    for i in range(select_keyword_idx + 1, len(stmt.tokens)):
+        token = stmt.tokens[i]
+        if token.is_whitespace:
+            continue
+        if isinstance(token, (IdentifierList, Identifier)):
+            select_elements_token = token
+            break
+        # Si encontramos otra palabra clave principal antes de un Identifier/IdentifierList,
+        # entonces la lista de selección podría estar vacía o ser algo inesperado.
+        if token.is_keyword and token.normalized in ('FROM', 'WHERE', 'GROUP', 'ORDER', 'LIMIT'):
+            break
+            
+    if not select_elements_token:
+        return aliases_map
+
+    identifiers = []
+    if isinstance(select_elements_token, IdentifierList):
+        identifiers = [t for t in select_elements_token.get_identifiers()]
+    elif isinstance(select_elements_token, Identifier):
+        identifiers = [select_elements_token]
+
+    for ident in identifiers:
+        alias = ident.get_alias()
+        if alias:
+            # Intentar obtener la expresión original antes de 'AS alias' o ' alias'
+            # sqlparse a veces incluye 'AS' en el token anterior, a veces no.
+            # ident.tokens usually es [expresion, whitespace, AS, whitespace, alias_token]
+            # o [expresion, whitespace, alias_token]
+            
+            expression_tokens = []
+            found_alias_or_as = False
+            for t_idx in range(len(ident.tokens) -1, -1, -1):
+                tok = ident.tokens[t_idx]
+                if tok.is_keyword and tok.normalized == 'AS':
+                    found_alias_or_as = True
+                    # Los tokens anteriores a AS (y el espacio antes de AS) son la expresión
+                    expression_tokens = ident.tokens[:t_idx-1] if t_idx > 0 and ident.tokens[t_idx-1].is_whitespace else ident.tokens[:t_idx]
+                    break
+                # Comprobar si el token es el alias mismo
+                # Puede ser un Name o un Identifier simple
+                if tok.to_unicode().strip() == alias:
+                    found_alias_or_as = True
+                    # Los tokens anteriores al alias (y el espacio antes del alias) son la expresión
+                    expression_tokens = ident.tokens[:t_idx-1] if t_idx > 0 and ident.tokens[t_idx-1].is_whitespace else ident.tokens[:t_idx]
+                    break
+            
+            if found_alias_or_as and expression_tokens:
+                expression_str = "".join(t.to_unicode() for t in expression_tokens).strip()
+                aliases_map[alias] = expression_str
+            elif not found_alias_or_as: # No 'AS' y el último token no es el alias? Podría ser un alias implícito sin espacio
+                 # Si el alias es el último token y no hay 'AS'
+                if ident.tokens and ident.tokens[-1].to_unicode().strip() == alias:
+                    # Tomar todos los tokens excepto el último (y el espacio anterior si existe)
+                    num_tokens_for_alias_part = 1
+                    if len(ident.tokens) > 1 and ident.tokens[-2].is_whitespace:
+                        num_tokens_for_alias_part = 2
+                    
+                    expression_tokens = ident.tokens[:-num_tokens_for_alias_part]
+                    if expression_tokens:
+                        expression_str = "".join(t.to_unicode() for t in expression_tokens).strip()
+                        aliases_map[alias] = expression_str
+                    else: # Caso: SELECT mi_columna AS alias -> ident.tokens puede ser solo [mi_columna, AS, alias] o [mi_columna, alias]
+                          # Si expression_tokens está vacío, significa que la "expresión" es el primer token antes del alias/AS.
+                          # Esto es cubierto por get_name() o el inicio de ident.
+                        first_part = ident.get_name() # Intenta obtener la parte principal antes del alias
+                        if first_part and first_part != alias : # Asegurarse que no es el alias mismo
+                             aliases_map[alias] = first_part
+                        else:
+                             logger.debug(f"No se pudo extraer la expresión para el alias implícito \'{alias}\' de forma simple a partir de \'{ident.to_unicode()}\'. Tokens: {[t.to_unicode() for t in ident.tokens]}")
+                else:
+                    logger.debug(f"No se pudo determinar la expresión para el alias \'{alias}\' en \'{ident.to_unicode()}\'. Tokens: {[t.to_unicode() for t in ident.tokens]}")
+
+            else: # Fallback o log si la extracción no fue clara
+                logger.debug(f"No se pudo extraer la expresión para el alias \'{alias}\' de forma clara a partir de \'{ident.to_unicode()}\'. Tokens: {[t.to_unicode() for t in ident.tokens]}")
+                # Como fallback muy simple, si la expresión no se pudo aislar,
+                # se podría intentar tomar todo hasta el alias, pero es arriesgado.
+                # Por ahora, si no se extrae limpiamente, se omite.
+
+    return aliases_map
+
+def _replace_aliases_in_group_by_elements(group_by_elements, aliases_map):
+    """
+    Reemplaza alias en una lista de elementos de GROUP BY (que son Identifiers).
+    Devuelve una lista de cadenas (expresiones o nombres de columna) y un flag si hubo modificación.
+    """
+    new_elements_str_list = []
+    modified_in_clause = False
+    
+    for item_token in group_by_elements: 
+        element_identifier_str = item_token.to_unicode().strip()
+
+        if element_identifier_str in aliases_map:
+            expression = aliases_map[element_identifier_str]
+            # Envolver expresiones en paréntesis para seguridad en GROUP BY, especialmente si son complejas.
+            # No envolver si ya es un identificador simple o ya está entre paréntesis.
+            is_simple_identifier = expression.isidentifier() and not (expression.upper() in ['CASE', 'WHEN', 'THEN', 'ELSE', 'END'])
+            is_already_parenthesized = expression.startswith('(') and expression.endswith(')')
+
+            if not is_simple_identifier and not is_already_parenthesized:
+                 # Evitar doble paréntesis si la expresión original ya los tenía (ej. (col1 + col2) )
+                 # Esto es difícil de determinar perfectamente sin un parseo más profundo de la expresión misma.
+                 # Una heurística simple: si es un CASE, no añadir paréntesis extra.
+                if expression.upper().startswith("CASE"):
+                    new_elements_str_list.append(expression)
+                else:
+                    new_elements_str_list.append(f"({expression})")
+            else:
+                new_elements_str_list.append(expression)
+            modified_in_clause = True
+        else:
+            new_elements_str_list.append(element_identifier_str)
+            
+    return new_elements_str_list, modified_in_clause
+
+def fix_sqlite_group_by_aliases(sql_query):
+    """
+    Reescribe una consulta SQL para reemplazar alias en cláusulas GROUP BY
+    con sus expresiones originales, para compatibilidad con SQLite.
+    """
+    try:
+        parsed_statements = sqlparse.parse(sql_query)
+        if not parsed_statements:
+            return sql_query # No se pudo parsear
+        
+        stmt = parsed_statements[0] # Asumir una sola declaración por simplicidad
+        
+        # Primero, extraer todos los alias de la cláusula SELECT
+        aliases_map = _extract_select_aliases(stmt)
+
+        if not aliases_map:
+            return sql_query # No hay alias o no se pudieron extraer
+
+        overall_modified = False
+        
+        reconstructed_tokens = []
+        idx = 0
+        while idx < len(stmt.tokens):
+            token = stmt.tokens[idx]
+
+            if token.is_keyword and token.normalized == 'GROUP BY':
+                reconstructed_tokens.append(token) # Añadir "GROUP BY"
+                idx += 1 
+
+                # Manejar espacio después de GROUP BY
+                if idx < len(stmt.tokens) and stmt.tokens[idx].is_whitespace:
+                    reconstructed_tokens.append(stmt.tokens[idx])
+                    idx += 1
+                
+                if idx < len(stmt.tokens):
+                    group_by_content_token = stmt.tokens[idx]
+                    elements_to_group_by = []
+
+                    # El contenido de GROUP BY puede ser un IdentifierList (múltiples columnas)
+                    # o un solo Identifier (una columna/expresión)
+                    if isinstance(group_by_content_token, IdentifierList):
+                        # get_identifiers() devuelve los elementos individuales
+                        elements_to_group_by = list(group_by_content_token.get_identifiers())
+                    elif isinstance(group_by_content_token, Identifier): 
+                        elements_to_group_by = [group_by_content_token]
+                    # Podría haber otros casos, como funciones, etc., que sqlparse trata como Identifier.
+                    
+                    if elements_to_group_by:
+                        new_group_by_strs, modified_this_clause = _replace_aliases_in_group_by_elements(elements_to_group_by, aliases_map)
+                        if modified_this_clause:
+                            overall_modified = True
+                            # Unir los elementos con comas y crear un nuevo token para ellos
+                            # Esto es una simplificación; idealmente, se preservarían los tokens originales
+                            # de coma y espacios si no hay modificaciones.
+                            reconstructed_tokens.append(sqlparse.sql.Token(sqlparse.tokens.Text, ", ".join(new_group_by_strs)))
+                        else: 
+                            reconstructed_tokens.append(group_by_content_token)
+                idx += 1 
+                continue 
+
+            # TODO: Implementar manejo para la cláusula HAVING si es necesario.
+            # La lógica sería similar: identificar expresiones en HAVING,
+            # y si usan un alias, reemplazarlo.
+
+            reconstructed_tokens.append(token)
+            idx += 1
+        
+        if overall_modified:
+            new_query = "".join(t.to_unicode() for t in reconstructed_tokens)
+            logger.info(f"Consulta SQL modificada para compatibilidad de alias en GROUP BY (SQLite): {new_query}")
+            return new_query
+        else:
+            return sql_query
+
+    except Exception as e:
+        logger.error(f"Error al intentar corregir alias en SQL para SQLite: {e}", exc_info=True)
+        return sql_query # Devolver original en caso de error
+
+# Se recomienda que la función que valida y sanea el SQL en sql_validator.py
+# llame a fix_sqlite_group_by_aliases. Por ejemplo:
+#
+# En sql_validator.py (o donde se encuentre SQLValidator.validate_and_sanitize_sql):
+#
+# from . import sql_utils # o la importación correcta
+#
+# class SQLValidator:
+#     def validate_and_sanitize_sql(self, sql_query, allowed_tables_columns_map, db_structure=None):
+#         # ... (otro código de validación) ...
+#
+#         # Aplicar corrección de alias para SQLite ANTES de otras validaciones de entidades si es posible
+#         # o justo antes de la ejecución si la validación de entidades necesita la forma original.
+#         # Para el problema actual, la corrección debe aplicarse a la consulta que se va a ejecutar.
+#         
+#         corrected_sql_query = sql_utils.fix_sqlite_group_by_aliases(sql_query)
+#
+#         # Continuar validaciones con corrected_sql_query
+#         # Por ejemplo, la advertencia de sql_utils.validate_sql_entities sobre alias en GROUP BY
+#         # ya no debería aparecer si la corrección fue exitosa.
+#         # ...
+#         # return corrected_sql_query
+#
+# Nota: La integración exacta depende de la estructura de sql_validator.py.
+# La función validate_sql_entities que emite la advertencia también podría ser un lugar
+# para invocar esta corrección o usar su lógica de detección de alias.
+
+import re # Asegúrate de que re está importado al principio del archivo
+
+def _rewrite_group_by_alias_for_sqlite(sql_query: str) -> str:
+    """
+    Reescribe la cláusula GROUP BY si usa un alias de una expresión CASE en el SELECT,
+    reemplazando el alias por la expresión CASE completa. Específico para SQLite.
+    Devuelve la consulta modificada o la original si no se aplica el patrón.
+    """
+    try:
+        # Patrón mejorado para capturar la expresión CASE y su alias, y el uso del alias en GROUP BY
+        # Busca: SELECT ... CASE ... END AS alias ... GROUP BY alias
+        # Es sensible a comentarios y otras cláusulas, por lo que se mantiene relativamente simple.
+        # Limitación: asume que el alias es una palabra simple.
+        pattern = re.compile(
+            r"(SELECT\\s+.*?CASE\\s+.*?\\s+END\\s+AS\\s+([a-zA-Z_][a-zA-Z0-9_]*).*?)(GROUP\\s+BY\\s+\\2)",
+            re.IGNORECASE | re.DOTALL
+        )
+        match = pattern.search(sql_query)
+
+        if match:
+            select_part_with_case = match.group(1) # Parte del SELECT hasta el alias
+            alias_name = match.group(2)
+            group_by_clause_to_replace = match.group(3) # "GROUP BY alias_name"
+
+            # Extraer la expresión CASE completa
+            case_expression_match = re.search(
+                r"CASE\\s+.*?\\s+END",
+                select_part_with_case,
+                re.IGNORECASE | re.DOTALL
+            )
+            if case_expression_match:
+                case_expression = case_expression_match.group(0)
+                
+                # Reemplazar "GROUP BY alias" con "GROUP BY [expresión CASE completa]"
+                # Se usa un marcador temporal para evitar problemas si el alias aparece en otro lugar.
+                placeholder = f"__GROUP_BY_ALIAS_PLACEHOLDER_FOR_{alias_name}__"
+                temp_sql = sql_query.replace(group_by_clause_to_replace, placeholder)
+                corrected_sql = temp_sql.replace(placeholder, f"GROUP BY {case_expression}")
+
+                if corrected_sql != sql_query:
+                    # logger.info(f"Corrección de GROUP BY con alias para SQLite aplicada. Alias: {alias_name}")
+                    # print(f"INFO (sql_utils_rewrite): Corrección de GROUP BY con alias para SQLite aplicada. Alias: {alias_name}") # Para debug
+                    return corrected_sql
+    except Exception as e:
+        # logger.error(f"Error al intentar reescribir GROUP BY con alias: {e}")
+        # print(f"ERROR (sql_utils_rewrite): Error al intentar reescribir GROUP BY con alias: {e}") # Para debug
+        pass # Si falla, devuelve la consulta original
+    return sql_query
+
+# ... más abajo, donde se procesa o valida la consulta antes de la ejecución ...
+# Ejemplo de cómo podría integrarse (esto es conceptual):
+#
+# if is_direct_sql_query:
+#     # ...
+#     prepared_sql = sql_utils.prepare_sql_for_execution(direct_sql_query, db_type="sqlite")
+#     results = db_connector.execute_query(prepared_sql, ...)
+#     # ...
+# --- FIN DE LA SECCIÓN A MODIFICAR ---
+
+# ... resto del archivo sql_utils.py ...
 

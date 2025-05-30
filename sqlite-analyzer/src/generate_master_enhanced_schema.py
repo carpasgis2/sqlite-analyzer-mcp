@@ -11,13 +11,14 @@ from db_config import DBConnector # Importar la clase DBConnector
 
 # Configuración del LLM (preferiblemente desde variables de entorno o un archivo de config centralizado)
 # Estas se usarán si no están ya configuradas en llm_utils o pasadas directamente
-LLM_CONFIG_DEFAULTS = {
-    "llm_api_key": "sk-aedf531ee17447aa95c9102e595f29ae", # API Key proporcionada
-    "llm_api_url": "https://api.deepseek.com/v1/chat/completions", # URL de API proporcionada
-    "llm_model": "deepseek-chat", # Modelo proporcionado
-    "temperature": 0.2, # Temperatura baja para descripciones más consistentes
-    "max_tokens": 200 # Suficiente para una descripción concisa
+LM_CONFIG_DEFAULTS = {
+    "llm_api_key": "sk-aedf531ee17447aa95c9102e595f29ae",
+    "llm_api_url": "https://api.deepseek.com/v1",
+    "llm_model": os.getenv("DEEPSEEK_MODEL_NAME", "deepseek-chat"),  # Usar variable de entorno, default a deepseek-chat
+    "temperature": 0.3,
+    "max_tokens": 200
 }
+
 
 # Directorio base del script actual
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -46,8 +47,26 @@ def get_llm_generated_description(element_name: str, element_type: str, existing
     """
     prompt_parts = [
         f"Eres un asistente experto en documentación de bases de datos médicas. Tu tarea es generar una descripción clara y concisa para un elemento de un esquema de base de datos."
-        f"El elemento es de tipo '{element_type}' y se llama '{element_name}'.",
     ]
+
+    if element_type == "tabla":
+        prompt_parts.append(f"El elemento es una TABLA llamada '{element_name}'.")
+        prompt_parts.append("Describe su propósito principal, el tipo de entidad o información que almacena, y cualquier característica clave obvia por su nombre.")
+    elif element_type == "columna":
+        prompt_parts.append(f"El elemento es una COLUMNA llamada '{element_name}'.")
+        if context_schema and context_schema.get("table_name"):
+            prompt_parts.append(f"Esta columna pertenece a la tabla '{context_schema.get('table_name')}' (descripción de la tabla: '{context_schema.get('description', 'No disponible')}').")
+        
+        prompt_parts.append("Describe su propósito específico. Presta atención a sufijos comunes y explica su significado:")
+        prompt_parts.append("  - '_ID': Generalmente un identificador único (clave primaria o foránea).")
+        prompt_parts.append("  - '_CODE', '_CD': Un código o clave alfanumérica.")
+        prompt_parts.append("  - '_NAME', '_DESCRIPTION', '_TEXT', '_LABEL': Un nombre o descripción textual. Indica si parece ser la descripción principal/humana de una entidad.")
+        prompt_parts.append("  - '_DATE', '_DT', '_TIMESTAMP': Un campo de fecha o fecha/hora.")
+        prompt_parts.append("  - '_FLAG', '_IND', 'IS_': Un indicador booleano (flag).")
+        prompt_parts.append("  - '_ES', '_EN', '_FR': Indica el idioma del contenido (Español, Inglés, Francés, etc.).")
+        prompt_parts.append("  - '_TYPE', '_CATEGORY': Indica un tipo o categoría.")
+        prompt_parts.append("Si parece una clave foránea por su nombre (ej. 'PATIENT_ID' en una tabla de episodios), menciónalo.")
+        prompt_parts.append("Si el nombre sugiere que es la descripción oficial de un diagnóstico o un término médico codificado, indícalo.")
 
     if existing_description: # This will likely be None when reading fresh from DB
         prompt_parts.append(f"La descripción actual es: '{existing_description}'. Por favor, revisa y mejora esta descripción si es necesario, o genera una nueva si la actual no es adecuada o está vacía.")
@@ -56,21 +75,10 @@ def get_llm_generated_description(element_name: str, element_type: str, existing
 
     prompt_parts.append("La descripción debe ser informativa para un analista de datos o un desarrollador que necesite entender el propósito de este elemento.")
     
-    if element_type == "columna" and context_schema and context_schema.get("table_name"):
-        prompt_parts.append(f"Esta columna pertenece a la tabla '{context_schema.get('table_name')}' que tiene la siguiente descripción (si está disponible): '{context_schema.get('description', 'No disponible')}'.")
-        # Provide names of other columns in the same table for context, excluding the current one
-        if context_schema.get("columns"):
-            other_column_names = [col.get('name') for col in context_schema.get("columns", []) if col.get('name') != element_name]
-            if other_column_names:
-                prompt_parts.append(f"Otras columnas en esta tabla (ya procesadas o existentes en el contexto) incluyen: {', '.join(other_column_names[:5])}{'...' if len(other_column_names) > 5 else ''}.")
-
-    prompt_parts.append("Considera el posible significado en un contexto médico si el nombre lo sugiere.")
-    prompt_parts.append("Si el nombre es un acrónimo o abreviatura común en bases de datos (ej: ID, ES, CODE, DESC), explica su posible significado (ej: 'Identificador único', 'en Español', 'Código', 'Descripción').")
-    
     # Caso especial para PHTH_DESCRIPTION_ES para asegurar que el LLM entiende la guía crítica
     if element_name == "PHTH_DESCRIPTION_ES" and context_schema and context_schema.get("table_name") == "MEDI_PHARMA_THERAPEUTIC_GROUPS":
         prompt_parts.append("IMPORTANTE: Para la columna 'PHTH_DESCRIPTION_ES' en la tabla 'MEDI_PHARMA_THERAPEUTIC_GROUPS', la descripción DEBE enfatizar que se refiere a una CLASIFICACIÓN FARMACOLÓGICA y NO a una condición médica o enfermedad. Debe guiar al usuario a buscar primero la clasificación farmacológica relevante para una condición y luego usar esa clasificación aquí.")
-        prompt_parts.append("Ejemplo de énfasis: 'Descripción en español de la CLASIFICACIÓN FARMACOLÓGICA del grupo terapéutico (ej: \'Inhibidores de la enzima convertidora de angiotensina\'). IMPORTANTE: Esta columna se refiere a una clasificación farmacológica, NO a una condición médica o enfermedad que el grupo trata.'")
+        prompt_parts.append("Ejemplo de énfasis: 'Descripción en español de la CLASIFICACIÓN FARMACOLÓGICA del grupo terapéutico (ej: \\\\'Inhibidores de la enzima convertidora de angiotensina\\\\'). IMPORTANTE: Esta columna se refiere a una clasificación farmacológica, NO a una condición médica o enfermedad que el grupo trata.'")
 
     elif element_name == "MEDI_PHARMA_THERAPEUTIC_GROUPS" and element_type == "tabla":
         prompt_parts.append("IMPORTANTE: Para la tabla 'MEDI_PHARMA_THERAPEUTIC_GROUPS', la descripción DEBE aclarar que la columna PHTH_DESCRIPTION_ES describe la CLASIFICACIÓN FARMACOLÓGICA y NO debe usarse para buscar directamente nombres de enfermedades.")
@@ -86,11 +94,11 @@ def get_llm_generated_description(element_name: str, element_type: str, existing
     ]
 
     # Usar una copia de los defaults y permitir overrides si es necesario
-    llm_config = LLM_CONFIG_DEFAULTS.copy()
+    llm_config = LM_CONFIG_DEFAULTS.copy()
     # Aquí podrías añadir lógica para pasar configuraciones específicas si es necesario
 
     print(f"Generando descripción para {element_type} '{element_name}'...")
-    response = call_llm_with_fallbacks(messages, llm_config, step_name=f"GenerateDescFor_{element_type}_{element_name}")
+    response = call_llm_with_fallbacks(llm_config, messages) # Corregido el orden de los argumentos
 
     if response and not response.startswith("ERROR:"):
         # Limpiar la respuesta si el LLM añade frases extra (aunque se le pidió que no)
@@ -155,16 +163,25 @@ def generate_enhanced_schema():
             cursor.execute(f"PRAGMA table_info('{table_name}');")
             db_columns_info = cursor.fetchall()
             
+            # Obtener información de claves foráneas para la tabla actual UNA VEZ
+            cursor.execute(f"PRAGMA foreign_key_list('{table_name}');")
+            foreign_keys_for_table = cursor.fetchall()
+            # Mapear columnas origen de FK a su información de referencia para búsqueda rápida
+            fk_map = {fk_row[3]: {"references_table": fk_row[2], "references_column": fk_row[4]} for fk_row in foreign_keys_for_table}
+            
             print(f"  Encontradas {len(db_columns_info)} columnas para la tabla {table_name}.")
 
             for col_idx, db_col_row in enumerate(db_columns_info):
                 col_name = db_col_row[1]  # 'name' está en el índice 1
-                col_type = db_col_row[2]  # 'type' está en el índice 2
+                col_type = db_col_row[2]  # 'type' está en el índice 2 (afinidad)
+                # col_notnull = bool(db_col_row[3]) # 'notnull' está en el índice 3. No la usamos directamente aquí pero es info útil.
+                col_pk = bool(db_col_row[5])    # 'pk' está en el índice 5 (si es parte de la PK)
+                
                 print(f"  Procesando columna ({col_idx + 1}/{len(db_columns_info)}): {col_name} (Tipo: {col_type}) en tabla {table_name}")
 
                 column_data = {
                     "name": col_name,
-                    "type": col_type,
+                    "type": col_type, # Afinidad del tipo de dato
                     "description": "" # Se generará a continuación
                 }
 
@@ -178,6 +195,32 @@ def generate_enhanced_schema():
                     context_schema=table_data # table_data contiene table_name, table_description, y cols previas
                 )
                 column_data["description"] = column_description if column_description else "Descripción no generada por el LLM."
+
+                # --- INICIO DE MODIFICACIONES ESPECÍFICAS (ej. EPIS_DIAGNOSTICS) ---
+                if table_name == "EPIS_DIAGNOSTICS":
+                    if col_name == "DIAG_OTHER_DIAGNOSTIC":
+                        column_data["description"] = "Descripción textual libre del diagnóstico, ingresada manualmente. IMPORTANTE: Para análisis y búsquedas de diagnósticos oficiales y codificados, utilice la tabla CODR_DIAGNOSTIC_GROUPS unida a través de EPIS_DIAGNOSTICS.CDTE_ID. Esta columna puede contener información no estandarizada o complementaria."
+                        column_data["is_official_diagnostic_description"] = False
+                    elif col_name == "CDTE_ID":
+                        column_data["description"] = "Identificador único del término diagnóstico codificado. IMPORTANTE: Esta columna es la clave foránea para enlazar con la tabla CODR_DIAGNOSTIC_GROUPS (específicamente con la columna DGGR_ID) y obtener la descripción oficial y estandarizada del diagnóstico."
+                        # La información de FK se añade programáticamente abajo, pero la descripción puede reforzarlo.
+                    elif col_name == "DIAG_MAIN":
+                        column_data["description"] = "Indicador booleano (0 o 1) que señala si el diagnóstico es el principal del episodio. 1 significa que es el diagnóstico principal, 0 que no lo es. IMPORTANTE: Utilice esta columna para filtrar por diagnósticos principales cuando sea relevante para la consulta."
+                # --- FIN DE MODIFICACIONES ESPECÍFICAS ---
+
+                # --- INICIO DE ADICIÓN PROGRAMÁTICA DE METADATOS ESTRUCTURALES ---
+                column_data["is_primary_key"] = col_pk
+                
+                is_fk = col_name in fk_map
+                column_data["is_foreign_key"] = is_fk
+                if is_fk:
+                    column_data["references_table"] = fk_map[col_name]["references_table"]
+                    column_data["references_column"] = fk_map[col_name]["references_column"]
+                else:
+                    column_data["references_table"] = None
+                    column_data["references_column"] = None
+                # --- FIN DE ADICIÓN PROGRAMÁTICA DE METADATOS ESTRUCTURALES ---
+                
                 table_data["columns"].append(column_data)
 
             enhanced_schema.append(table_data)

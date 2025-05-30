@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Flujo Técnico - Chatbot Médico SQL Analyzer</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; background: #f9f9f9; color: #222; }
+    h1, h2, h3 { color: #2a4d7a; }
+    code, pre { background: #eef; padding: 2px 6px; border-radius: 3px; font-family: "Courier New", Courier, monospace; }
+    .diagram { background: #fff; border: 1px solid #ccc; padding: 1em; margin: 1em 0; border-radius: 6px; }
+    ul { margin-bottom: 1em; }
+    .file { color: #0a5; font-weight: bold; }
+    .mod { color: #07a; }
+    .section { margin-bottom: 2em; }
+    .json-structure { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<h1>Flujo Técnico y Arquitectura del Proyecto</h1>
+
+<div class="section">
+  <h2>1. Diagrama General del Flujo</h2>
+  <div class="diagram">
+    <pre>
+[USUARIO] → Pregunta en lenguaje natural (simple o compleja, ej. comparaciones de cohortes)
+    ↓
+[PREPROCESAMIENTO]
+    - Corrección de typos y normalización (usa dictionary.json)
+    - Extracción de términos clave y entidades
+    - Identificación preliminar de intención (consulta simple, comparación, secuencia)
+    ↓
+[RAG - PASO 1: Identificación de Entidades y Contexto del Esquema]
+    - Recupera contexto semántico relevante del esquema (usa schema_enhanced.json)
+    - Identifica tablas y columnas candidatas usando embeddings y sinónimos
+    - Considera el tipo de pregunta para guiar la recuperación (ej. campos de fecha para secuencias)
+    ↓
+[LLM - PASO 1: Traducción a JSON Estructurado Avanzado]
+    - Prompt al LLM con la pregunta, contexto de esquema y tipo de pregunta inferido.
+    - El LLM devuelve un JSON estructurado detallado. Para consultas complejas, puede incluir:
+        - Múltiples "query_details" anidados para subconsultas o CTEs.
+        - Secciones para "comparison_details" (cohortes, métricas, condiciones de comparación).
+        - Secciones para "sequence_details" (pasos de eventos, condiciones temporales).
+    - (Ver estructura JSON detallada más abajo)
+    ↓
+[RAG - PASO 2: Enriquecimiento y Validación del JSON Estructurado]
+    - Valida la estructura JSON recibida.
+    - Infiere relaciones faltantes, valida joins (multi-hop).
+    - Normaliza nombres de tablas/columnas (ej. DIAG_OBSERVATION para diagnósticos textuales).
+    - Añade información de tipos de datos, especialmente para fechas (JULIANDAY).
+    ↓
+[SQL GENERATOR (`sql_generator.py`)]
+    - Traduce la estructura JSON (potencialmente con CTEs) a una consulta SQL válida.
+    - Construye CTEs para cohortes, secuencias o subconsultas complejas.
+    - Maneja la lógica de comparación y secuenciación.
+    - Utiliza el esquema corregido (ej. `DIAG_OBSERVATION`).
+    ↓
+[VALIDADOR SQL]
+    - Verifica seguridad, sintaxis y entidades válidas.
+    - Corrige errores comunes y aplica whitelists.
+    ↓
+[BASE DE DATOS]
+    - Ejecuta la consulta SQL (que puede incluir CTEs).
+    - Devuelve resultados tabulares.
+    ↓
+[LLM - PASO 2: Interpretación de Resultados y Generación de Respuesta]
+    - Prompt al LLM con la pregunta original, la SQL generada (con CTEs) y los resultados.
+    - El LLM genera una respuesta natural, explicando los resultados, especialmente para comparaciones o secuencias.
+    ↓
+[USUARIO] ← Recibe respuesta en lenguaje natural
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2. Estructura JSON Avanzada Generada por el LLM (Ejemplo Conceptual)</h2>
+  <p>Para manejar consultas complejas, el LLM puede generar una estructura JSON más elaborada. A continuación, un ejemplo conceptual que ilustra cómo se podrían representar comparaciones de cohortes o secuencias, llevando a la generación de CTEs.</p>
+  <div class="diagram">
+    <pre class="json-structure">
+{
+  "query_type": "comparison", // o "sequence" o "select"
+  "comparison_details": { // Presente si query_type es "comparison"
+    "cohorts": [
+      {
+        "name": "CohortA_PacientesConInsuficienciaCardiaca",
+        "query_details": { // Estructura query_details estándar para definir esta cohorte
+          "select_fields": [{"field_name": "PATI_ID", "table_name": "PATI_PATIENTS", "alias": "PacienteID"}],
+          "tables_involved": ["PATI_PATIENTS", "EPIS_DIAGNOSTICS"],
+          "joins": [
+            {"type": "INNER", "from_table": "PATI_PATIENTS", "to_table": "EPIS_DIAGNOSTICS", "on_condition": "PATI_PATIENTS.PATI_ID = EPIS_DIAGNOSTICS.PATI_ID"}
+          ],
+          "filters": [
+            {"field_name": "DIAG_OBSERVATION", "table_name": "EPIS_DIAGNOSTICS", "operator": "LIKE", "value": "%insuficiencia cardíaca%", "logical_group": "AND"}
+          ]
+        }
+      },
+      {
+        "name": "CohortB_PacientesConNeumonia",
+        "query_details": { /* ... similar para otra cohorte ... */ }
+      }
+    ],
+    "metrics": [
+      {"name": "NumeroReingresos30Dias", "calculation": "COUNT(DISTINCT e2.EPIS_ID)", "description": "Número de reingresos dentro de los 30 días"}
+    ],
+    "comparison_conditions": [
+      // Condiciones para comparar métricas entre cohortes, o filtrar resultados combinados
+    ]
+  },
+  "sequence_details": { // Presente si query_type es "sequence"
+    "event_steps": [
+      {
+        "name": "DiagnosticoInsuficienciaCardiaca",
+        "query_details": { /* ... query_details para el primer evento ... */ }
+      },
+      {
+        "name": "ProcedimientoQuirurgico",
+        "query_details": { /* ... query_details para el segundo evento ... */ },
+        "temporal_constraint_with_previous": {"operator": "AFTER", "max_days": 10} // Opcional
+      },
+      {
+        "name": "AltaMenos5Dias",
+        "query_details": {
+            "select_fields": [{"field_name": "PATI_ID", "table_name": "PATI_PATIENTS"}],
+            "tables_involved": ["EPIS_EPISODES"],
+            "filters": [
+                {"field_name": "JULIANDAY(EPIS_CLOSED_DATE) - JULIANDAY(EPIS_START_DATE)", "operator": "<", "value": 5}
+            ]
+        },
+        "temporal_constraint_with_previous": {"operator": "CONCURRENT_WITH_EVENT", "event_name": "ProcedimientoQuirurgico"}
+      }
+    ],
+    "final_select_fields_from_sequence": [{"field_name": "PATI_ID", "origin_event_step": "AltaMenos5Dias"}]
+  },
+  "main_query_details": { // Usado para consultas "select" simples o como parte final de "comparison"/"sequence"
+    "select_fields": [
+      {"field_name": "p.PATI_NAME", "alias": "NombrePaciente"},
+      {"field_name": "e.EPIS_ID", "alias": "IDEpisodio"}
+    ],
+    "tables_involved": ["PATI_PATIENTS p", "EPIS_EPISODES e"], // Puede incluir alias
+    "joins": [
+      {"type": "INNER", "from_table": "PATI_PATIENTS p", "to_table": "EPIS_EPISODES e", "on_condition": "p.PATI_ID = e.PATI_ID"}
+    ],
+    "filters": [
+      {"field_name": "e.EPIS_REASONS", "operator": "LIKE", "value": "%dolor%", "logical_group": "AND"},
+      {"field_name": "p.PATI_BIRTH_DATE", "operator": "<", "value": "1970-01-01", "logical_group": "AND"}
+    ],
+    "group_by_fields": [{"field_name": "p.PATI_NAME"}],
+    "order_by_fields": [{"field_name": "e.EPIS_ID", "direction": "DESC"}],
+    "limit": 10
+  }
+}
+    </pre>
+  </div>
+  <p><b>Nota sobre el esquema:</b> El sistema ahora entiende que los diagnósticos textuales deben buscarse preferentemente en <code>EPIS_DIAGNOSTICS.DIAG_OBSERVATION</code> en lugar de campos como <code>DIAG_OTHER_DIAGNOSTIC</code> o descripciones en <code>CODR_DIAGNOSTIC_GROUPS</code>, a menos que el contexto lo indique explícitamente. Las fechas se manejan con funciones como <code>JULIANDAY()</code> para cálculos de duración.</p>
+</div>
+
+<div class="section">
+  <h2>3. Componentes y Archivos Principales (detalle)</h2>
+  <ul>
+    <li><span class="file">generate_enhanced_dict.py</span> y <span class="file">schema_enhancer.py</span>:<br>
+      <ul>
+        <li>Generan <b>dictionary.json</b> y <b>schema_enhanced.json</b> respectivamente. Estos archivos son cruciales y ahora deben reflejar el conocimiento actualizado del esquema, incluyendo la importancia de <code>DIAG_OBSERVATION</code> y el uso de funciones de fecha.</li>
+      </ul>
+    </li>
+    <li><span class="file">pipeline.py</span>:<br>
+      <ul>
+        <li>Orquesta el flujo. Modificado para manejar la nueva estructura JSON más compleja, identificando si la consulta requiere generación de CTEs (para comparaciones o secuencias) y pasando esta información al <code>sql_generator.py</code>.</li>
+      </ul>
+    </li>
+    <li><span class="file">sql_generator.py</span>:<br>
+      <ul>
+        <li><b>Refactorizado significativamente</b> para ser más robusto y modular.</li>
+        <li>Capaz de construir cláusulas SQL (SELECT, FROM, WHERE, JOIN, GROUP BY, ORDER BY, LIMIT) de forma independiente.</li>
+        <li><b>Genera CTEs</b> (Common Table Expressions) cuando el JSON de entrada lo especifica (ej. para definir cohortes en <code>comparison_details</code> o pasos en <code>sequence_details</code>).</li>
+        <li>Utiliza la información de <code>DIAG_OBSERVATION</code> y funciones de fecha como <code>JULIANDAY()</code> según lo indicado por el JSON enriquecido.</li>
+        <li>Mejor manejo de subconsultas en cláusulas WHERE (<code>IN</code>, <code>NOT IN</code>).</li>
+      </ul>
+    </li>
+    <li><span class="file">llm_utils.py</span>:<br>
+      <ul>
+        <li>Contiene las funciones para interactuar con el LLM. Los prompts enviados al LLM para la Paso 1 (traducción a JSON) han sido actualizados para solicitar la nueva estructura JSON detallada cuando se detectan preguntas complejas.</li>
+      </ul>
+    </li>
+    <li>Otros módulos como <span class="file">sql_utils.py</span>, <span class="file">rag_enhancements.py</span>, <span class="file">db_relationship_graph.py</span> continúan desempeñando sus roles, pero ahora informan y son informados por la estructura JSON más rica.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>4. Detalle del Pipeline Técnico (con énfasis en CTEs y consultas complejas)</h2>
+  <ol>
+    <li><b>Entrada del usuario y Preprocesamiento</b>: Similar al flujo anterior, pero con una mejor identificación de la *intención* de la consulta (simple, comparación, secuencia).</li>
+    <li><b>Recuperación de contexto (RAG - Paso 1)</b>: Como antes, pero puede buscar información más específica si la intención es compleja (ej. campos relevantes para definir cohortes o eventos).</li>
+    <li><b>Extracción estructurada (LLM - Paso 1)</b>:
+      - El LLM, guiado por la intención y el contexto, genera el JSON estructurado avanzado (ver ejemplo arriba).
+      - Este JSON puede contener múltiples bloques <code>query_details</code> que se convertirán en CTEs o subconsultas.
+    </li>
+    <li><b>Enriquecimiento y validación (RAG - Paso 2)</b>:
+      - Se valida la estructura JSON.
+      - Se normalizan los nombres de campos (ej. asegurando que "diagnóstico de insuficiencia cardíaca" se mapee a un filtro sobre <code>EPIS_DIAGNOSTICS.DIAG_OBSERVATION</code>).
+      - Se verifica la coherencia de las definiciones de cohortes, métricas o pasos de secuencia.
+    </li>
+    <li><b>Generación de SQL con CTEs (`sql_generator.py`)</b>:
+      - Si el JSON contiene <code>comparison_details</code> o <code>sequence_details</code>, <code>sql_generator.py</code> primero construye las CTEs necesarias.
+        - Cada cohorte o paso de evento definido en un <code>query_details</code> anidado se traduce en una CTE.
+        - Ejemplo: <code>WITH CohorteA AS (SELECT ... WHERE DIAG_OBSERVATION LIKE ...), CohorteB AS (SELECT ...)</code>
+      - Luego, construye la consulta principal que opera sobre estas CTEs y/o tablas base.
+        - Ejemplo: <code>SELECT metric1, metric2 FROM CohorteA JOIN CohorteB ON ...</code>
+      - Si es una consulta simple, genera SQL directamente sin CTEs (o con CTEs si la subconsulta es compleja).
+    </li>
+    <li><b>Validación de SQL</b>: Como antes.</li>
+    <li><b>Ejecución</b>: La base de datos ejecuta la consulta SQL, que ahora puede ser más compleja debido a los CTEs.</li>
+    <li><b>Generación de respuesta (LLM - Paso 2)</b>:
+      - El LLM recibe la pregunta, la SQL (con CTEs) y los resultados.
+      - Es especialmente importante aquí que el LLM pueda explicar los resultados de una comparación de cohortes o los hallazgos de un análisis de secuencia de eventos de manera clara.
+    </li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2>5. Ejemplo de Flujo con Comparación de Cohortes (Generando CTEs)</h2>
+  <pre class="diagram">
+Usuario: "Comparar el número de reingresos a 30 días para pacientes con 'insuficiencia cardíaca' vs 'neumonía'."
+↓
+Preprocesamiento: Detecta intención de "comparación".
+↓
+RAG (Paso 1): Identifica tablas (PATI_PATIENTS, EPIS_DIAGNOSTICS, EPIS_EPISODES), columnas (PATI_ID, DIAG_OBSERVATION, EPIS_START_DATE, EPIS_CLOSED_DATE).
+↓
+LLM (Paso 1): Genera JSON estructurado con `query_type: "comparison"`, dos `cohorts` (una para "insuficiencia cardíaca" filtrando DIAG_OBSERVATION, otra para "neumonía"), y una `metric` para "reingresos a 30 días" (requerirá auto-joins o subconsultas en la definición de la métrica dentro de la CTE o consulta final).
+  <span class="json-structure">
+  {
+    "query_type": "comparison",
+    "comparison_details": {
+      "cohorts": [
+        {
+          "name": "PacientesInsuficienciaCardiaca",
+          "query_details": {
+            "select_fields": [{"field_name": "PATI_ID", "table_name": "EPIS_DIAGNOSTICS", "alias": "PacienteID"}, {"field_name": "EPIS_ID", "table_name": "EPIS_DIAGNOSTICS"}],
+            "tables_involved": ["EPIS_DIAGNOSTICS"],
+            "filters": [{"field_name": "DIAG_OBSERVATION", "operator": "LIKE", "value": "%insuficiencia cardíaca%"}]
+          }
+        },
+        {
+          "name": "PacientesNeumonia",
+          "query_details": {
+            "select_fields": [{"field_name": "PATI_ID", "table_name": "EPIS_DIAGNOSTICS", "alias": "PacienteID"}, {"field_name": "EPIS_ID", "table_name": "EPIS_DIAGNOSTICS"}],
+            "tables_involved": ["EPIS_DIAGNOSTICS"],
+            "filters": [{"field_name": "DIAG_OBSERVATION", "operator": "LIKE", "value": "%neumonía%"}]
+          }
+        }
+      ],
+      "metrics": [
+        {
+          "name": "TasaReingresos30Dias",
+          // La lógica para calcular esto sería compleja y probablemente definida
+          // a través de una subconsulta o una CTE adicional que una episodios.
+          // Por simplicidad, el LLM podría solicitar un "COUNT de pacientes con reingreso".
+          // El sql_generator necesitaría construir la lógica de reingreso.
+          "calculation_template": "COUNT(DISTINCT p.PATI_ID) WHERE /* lógica de reingreso */"
+        }
+      ],
+      "group_by_for_comparison": ["cohort_name"] // Implícito para comparar las cohortes
+    },
+    "main_query_details": { // Podría ser usado para la consulta final que une las métricas de las CTEs
+        "select_fields": [
+            {"field_name": "cohort_name"}, 
+            {"field_name": "TasaReingresos30Dias"}
+        ],
+        "from_clause_is_complex": true // Indica que el FROM se basará en CTEs o subconsultas complejas
+    }
+  }
+  </span>
+↓
+SQLGenerator:
+  Genera CTE para Insuficiencia Cardíaca (IC_Cohorte):
+  <pre><code>WITH IC_Cohorte AS (
+  SELECT DISTINCT ed.PATI_ID, ed.EPIS_ID
+  FROM EPIS_DIAGNOSTICS ed
+  WHERE ed.DIAG_OBSERVATION LIKE '%insuficiencia cardíaca%'
+),
+Neumonia_Cohorte AS (
+  SELECT DISTINCT ed.PATI_ID, ed.EPIS_ID
+  FROM EPIS_DIAGNOSTICS ed
+  WHERE ed.DIAG_OBSERVATION LIKE '%neumonía%'
+),
+Reingresos_IC AS (
+  SELECT DISTINCT ic.PATI_ID
+  FROM IC_Cohorte ic
+  JOIN EPIS_EPISODES e1 ON ic.EPIS_ID = e1.EPIS_ID
+  JOIN EPIS_EPISODES e2 ON ic.PATI_ID = e2.PATI_ID AND e1.EPIS_ID != e2.EPIS_ID
+  WHERE e2.EPIS_START_DATE > e1.EPIS_CLOSED_DATE
+    AND JULIANDAY(e2.EPIS_START_DATE) - JULIANDAY(e1.EPIS_CLOSED_DATE) <= 30
+),
+Reingresos_Neumonia AS (
+  SELECT DISTINCT nc.PATI_ID
+  FROM Neumonia_Cohorte nc
+  JOIN EPIS_EPISODES e1 ON nc.EPIS_ID = e1.EPIS_ID
+  JOIN EPIS_EPISODES e2 ON nc.PATI_ID = e2.PATI_ID AND e1.EPIS_ID != e2.EPIS_ID
+  WHERE e2.EPIS_START_DATE > e1.EPIS_CLOSED_DATE
+    AND JULIANDAY(e2.EPIS_START_DATE) - JULIANDAY(e1.EPIS_CLOSED_DATE) <= 30
+)
+SELECT
+  'Insuficiencia Cardíaca' AS Cohorte,
+  (SELECT COUNT(*) FROM Reingresos_IC) AS TotalReingresos30Dias
+UNION ALL
+SELECT
+  'Neumonía' AS Cohorte,
+  (SELECT COUNT(*) FROM Reingresos_Neumonia) AS TotalReingresos30Dias;</code></pre>
+  (Nota: La SQL exacta para reingresos puede ser más compleja y variar según la estrategia del LLM/sql_generator)
+↓
+Ejecución: Ejecuta SQL y obtiene resultados (ej: IC: 15 reingresos, Neumonía: 10 reingresos)
+↓
+LLM (Paso 2): Formula respuesta natural:
+"Los pacientes con insuficiencia cardíaca tuvieron 15 reingresos en 30 días, mientras que los pacientes con neumonía tuvieron 10 reingresos en el mismo periodo."
+↓
+Usuario: Recibe respuesta final
+  </pre>
+</div>
+
+
+<div class="section">
+  <h2>6. Notas Adicionales</h2>
+  <ul>
+    <li>La robustez del sistema depende de la calidad de <code>schema_enhanced.json</code> y <code>dictionary.json</code>, así como de la capacidad del LLM para generar el JSON estructurado correctamente.</li>
+    <li>La modularidad de <code>sql_generator.py</code> es clave para manejar la complejidad creciente de las consultas.</li>
+    <li>El manejo de errores y la capacidad de fallback en cada etapa son cruciales.</li>
+  </ul>
+</div>
+
+</body>
+</html>

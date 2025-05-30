@@ -82,6 +82,15 @@
         <li>Diseñado para RAG, prompts LLM y razonamiento avanzado.</li>
       </ul>
     </li>
+    <li><span class="file">langchain_chatbot.py</span>:<br>
+      <ul>
+        <li>Implementa un agente conversacional utilizando LangChain.</li>
+        <li>Este agente puede orquestar el flujo de preguntas y respuestas, utilizando herramientas como el pipeline principal del chatbot.</li>
+        <li>Configura el modelo de lenguaje (LLM) a través de LangChain, permitiendo cambiar fácilmente entre diferentes proveedores de LLM (como OpenAI, DeepSeek).</li>
+        <li>Maneja la memoria de la conversación para mantener el contexto a lo largo de múltiples interacciones.</li>
+        <li>Podría interactuar con un servidor MCP (Model Context Protocol) para obtener contexto adicional o delegar tareas específicas.</li>
+      </ul>
+    </li>
     <li><span class="file">pipeline.py</span>:<br>
       <ul>
         <li>Contiene el pipeline principal: orquesta el flujo de pregunta a respuesta.</li>
@@ -144,7 +153,7 @@
           - Generación de explicaciones y respuestas ricas</li>
       </ul>
     </li>
-    <li>Ambos archivos pueden regenerarse fácilmente para nuevas BDs o cambios en el esquema, sin tocar el pipeline principal.</li>
+    <li>Ambos archivos pueden regenerse fácilmente para nuevas BDs o cambios en el esquema, sin tocar el pipeline principal.</li>
   </ul>
 </div>
 
@@ -152,8 +161,9 @@
   <h2>4. Detalle del Pipeline Técnico (profundo)</h2>
   <ol>
     <li><b>Entrada del usuario</b>:<br>
-      - El usuario ingresa una pregunta en lenguaje natural (soporta español y variantes, con errores comunes).</li>
+      - El usuario ingresa una pregunta en lenguaje natural (soporta español y variantes, con errores comunes) a la interfaz del chatbot (potencialmente gestionada por LangChain).</li>
     <li><b>Preprocesamiento</b> (<span class="mod">sql_utils.py</span>):<br>
+      - (Puede ser un paso dentro de una herramienta LangChain o previo a llamar al agente principal)
       - Se corrigen typos usando <code>common_typos</code> y <code>valid_terms</code> de dictionary.json.<br>
       - Se extraen entidades, patrones de IDs, y se normaliza el texto.<br>
       - Se detecta el tipo de consulta (COUNT, SELECT, AVG, etc.) y se enriquecen los metadatos.</li>
@@ -161,12 +171,15 @@
       - Se usan embeddings y sinónimos para identificar tablas y columnas relevantes.<br>
       - Se consulta schema_enhanced.json para obtener descripciones y relaciones.<br>
       - Permite robustez ante lenguaje ambiguo o sinónimos no exactos.</li>
-    <li><b>Extracción estructurada (LLM)</b> (<span class="mod">pipeline.py</span>):<br>
-      - Se construye un prompt con la pregunta y el contexto de esquema.<br>
-      - El LLM devuelve un JSON estructurado con:<br>
+    <li><b>Extracción estructurada (LLM via LangChain Agent)</b> (<span class="mod">langchain_chatbot.py</span> y <span class="mod">pipeline.py</span> como herramienta):<br>
+      - El agente LangChain recibe la pregunta preprocesada y el contexto RAG.
+      - El agente LangChain, utilizando el LLM configurado (ej. DeepSeek), interactúa con herramientas especializadas (como el pipeline principal encapsulado) para interpretar la pregunta.
+      - Se construye un prompt con la pregunta y el contexto de esquema para el LLM.
+      - El LLM (llamado a través de LangChain) devuelve un JSON estructurado con:<br>
         <code>{ tables: [...], actions: [...], columns: [...], conditions: [...], joins: [...] }</code><br>
-      - Se extraen y validan las entidades detectadas.</li>
-    <li><b>Enriquecimiento y validación</b> (<span class="mod">pipeline.py</span>):<br>
+      - Se extraen y validan las entidades detectadas.
+      - El contexto podría ser enriquecido o gestionado a través de un servidor MCP si estuviera integrado.</li>
+    <li><b>Enriquecimiento y validación</b> (<span class="mod">pipeline.py</span>, como parte de una herramienta LangChain):<br>
       - Se normaliza la estructura, se validan relaciones y se infieren joins faltantes (incluyendo joins de múltiples saltos utilizando el grafo de relaciones de `dictionary.json`).<br>
       - Se aplican reglas médicas y de negocio para asegurar la coherencia.<br>
       - Se usan funciones como <code>validate_and_fix_relations</code> y <code>enhance_structured_info</code>.</li>
@@ -180,8 +193,9 @@
     <li><b>Ejecución</b>:<br>
       - Ejecuta la consulta SQL en la base de datos.<br>
       - Captura resultados, errores y tiempos de ejecución.</li>
-    <li><b>Generación de respuesta (LLM)</b>:<br>
-      - Prompt al LLM con la pregunta, SQL y resultados.<br>
+    <li><b>Generación de respuesta (LLM via LangChain Agent)</b>:<br>
+      - El agente LangChain recibe los resultados de la consulta SQL.
+      - Prompt al LLM (a través de LangChain) con la pregunta original, la consulta SQL y los resultados.
       - El LLM genera una respuesta natural, explicando los resultados y su contexto médico.<br>
       - Soporta fallback y autocorrección si la respuesta es ambigua o incompleta.</li>
   </ol>
@@ -190,7 +204,8 @@
 <div class="section">
   <h2>5. Esquema de Dependencias y Extensión (profundo)</h2>
   <ul>
-    <li>El pipeline es modular y desacoplado: cada etapa puede ser reemplazada o extendida (por ejemplo, cambiar el modelo LLM, añadir nuevas reglas de validación, o mejorar el sistema RAG).</li>
+    <li>El pipeline es modular y desacoplado: cada etapa puede ser reemplazada o extendida. LangChain facilita la orquestación de estas etapas como herramientas de un agente.</li>
+    <li>La integración con un servidor MCP (Model Context Protocol) podría permitir una gestión de contexto más sofisticada y distribuida, donde diferentes modelos o servicios especializados aportan información al LLM principal a través de un protocolo estándar.</li>
     <li>Los scripts de generación de diccionario y esquema pueden adaptarse a nuevas BDs o dominios médicos sin modificar el pipeline.</li>
     <li>El sistema soporta fallback y autocorrección en cada etapa: si falla la generación de SQL, se intenta con el LLM; si falla la respuesta, se regenera o simplifica automáticamente.</li>
     <li>Se pueden añadir nuevas fuentes de contexto (por ejemplo, ontologías médicas externas) integrando en la etapa RAG o en los prompts LLM.</li>
@@ -229,6 +244,35 @@ LLM: Formula respuesta natural:
 ↓
 Usuario: Recibe respuesta final
   </pre>
+  <!-- Ejemplo de flujo para la pregunta de ubicación de cita -->
+  <pre class="diagram">
+Usuario: "Dime la ubicación de la cita 8810"
+↓
+Preprocesamiento: Detecta tipo SELECT, corrige typos, extrae términos clave ("ubicación", "cita", "8810")
+↓
+RAG: Identifica tabla APPO_APPOINTMENTS y columna APPO_LOCATION
+↓
+LLM: Genera estructura JSON:
+{
+  "tables": ["APPO_APPOINTMENTS"],
+  "actions": ["SELECT"],
+  "columns": ["APPO_LOCATION"],
+  "conditions": ["APPO_APPO_ID = 8810"],
+  "joins": []
+}
+↓
+SQLGenerator: Genera SQL:
+SELECT APPO_LOCATION
+FROM APPO_APPOINTMENTS
+WHERE APPO_APPO_ID = 8810
+↓
+Ejecución: Ejecuta SQL y obtiene resultados (ej: "Unidad A, sala 12")
+↓
+LLM: Formula respuesta natural:
+"La ubicación de la cita 8810 es Unidad A, sala 12."
+↓
+Usuario: Recibe respuesta final
+  </pre>
 </div>
 
 <div class="section">
@@ -245,4 +289,3 @@ Usuario: Recibe respuesta final
 
 </body>
 </html>
-``` 

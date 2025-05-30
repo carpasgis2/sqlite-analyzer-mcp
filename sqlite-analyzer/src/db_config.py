@@ -326,7 +326,7 @@ class DBConnector:
             self.logger.error(f"Error al cerrar conexiones: {str(e)}")
 
 # Ruta por defecto a la base de datos SQLite
-DEFAULT_DB_CONNECTION_STRING = r"C:\\Users\\cpascual\\PycharmProjects\\pythonProject\\cursos_actividades\\sina_mcp\\sqlite-analyzer\\src\\db\\database_new.sqlite3.db"
+DEFAULT_DB_CONNECTION_STRING = os.path.abspath(os.path.join(os.path.dirname(__file__), "db", "database_new.sqlite3.db"))
 
 # Para compatibilidad con la importación en pipeline.py, aunque usemos DEFAULT_DB_CONNECTION_STRING
 DEFAULT_DB_CONFIG = {

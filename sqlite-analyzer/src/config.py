@@ -21,8 +21,8 @@ SCHEMA_SIMPLE_PATH = os.path.join(SCHEMA_DATA_DIR, "schema_simple.json")
 
 # Rutas para los archivos de relaciones
 # Usando WORKSPACE_ROOT_DIR para archivos que podrían estar fuera de la carpeta 'src'
-RELACIONES_PATH_FOR_LLM = os.path.join(WORKSPACE_ROOT_DIR, "cursos_actividades", "sina_mcp", "table_relationships.json")
-RELACIONES_PATH = os.path.join(WORKSPACE_ROOT_DIR, "cursos_actividades", "sina_mcp", "table_relationships.json")
+RELACIONES_PATH_FOR_LLM = os.path.join(WORKSPACE_ROOT_DIR, "sina_mcp", "table_relationships.json")
+RELACIONES_PATH = os.path.join(WORKSPACE_ROOT_DIR, "sina_mcp", "table_relationships.json")
 
 # Ruta para el diccionario de términos
 TERMS_DICT_PATH = os.path.join(SCHEMA_DATA_DIR, "dictionary.json")
@@ -33,3 +33,12 @@ MAX_RESPONSE_DATA_ROWS_CONFIG = 100  # Un valor por defecto, ajústalo según se
 # Podrías añadir otras configuraciones globales aquí, por ejemplo:
 # LOG_LEVEL = "INFO"
 # DATABASE_PATH = os.path.join(PROJECT_ROOT_DIR, "data", "database.sqlite") # Ejemplo
+
+MAX_CONTEXT_TOKENS_FOR_SCHEMA_RELATIONS_APPROX = 60000  # O el valor que consideres apropiado
+
+LLM_PROVIDER_FOR_TOKEN_COUNT = "deepseek" # Proveedor de LLM para el conteo de tokens
+
+MAX_SQL_EXECUTION_TIME_PIPELINE = 90 # Tiempo máximo de ejecución de SQL en el pipeline en segundos
+LLM_MODEL_NAME_FOR_QUERY_GENERATION = "deepseek-coder" # Modelo LLM para generación de consultas
+MAX_TOKENS_FOR_QUERY_GENERATION = 4096 # Máximos tokens para la generación de consultas
+TEMPERATURE_FOR_QUERY_GENERATION = 0.0 # Temperatura para la generación de consultas
