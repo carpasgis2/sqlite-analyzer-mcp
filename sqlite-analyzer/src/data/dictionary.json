@@ -378,11 +378,6 @@
         "ausencias médicas",
         "justificantes de inasistencia",
         "causas de no presentación"
-      ],
-      "description_es": "La tabla 'APPO_NOT_ATTENDED_REASONS' almacena los motivos registrados por los cuales no se atendió una cita, proporcionando un catálogo de razones para su seguimiento y análisis.",
-      "examples": [
-        "\"Paciente canceló la cita por motivos personales\".",
-        "\"Paciente no se presentó sin previo aviso (no-show)\"."
       ]
     },
     "APPO_ORIGIN_TYPES": {
@@ -393,11 +388,6 @@
         "fuente de citación",
         "procedencia de citas",
         "clasificación de origen"
-      ],
-      "description_es": "La tabla 'APPO_ORIGIN_TYPES' almacena los diferentes tipos de origen o procedencia asociados a citas o eventos, categorizando su fuente de creación o generación.",
-      "examples": [
-        "\"Cita generada automáticamente por el sistema de recordatorios.\"",
-        "\"Evento creado manualmente por un administrador a través del panel de control.\""
       ]
     },
     "APPO_PENDING_REVIEW_REASONS": {
@@ -408,11 +398,6 @@
         "citas pendientes",
         "justificaciones de retraso",
         "estado pendiente"
-      ],
-      "description_es": "La tabla 'APPO_PENDING_REVIEW_REASONS' almacena los motivos por los cuales las citas o solicitudes quedan pendientes de revisión, registrando las razones específicas de dicho estado.",
-      "examples": [
-        "\"Falta documentación requerida para procesar la cita.\"",
-        "\"Conflicto de horario que requiere validación por parte del administrador.\""
       ]
     },
     "APPO_PERIODICS": {
@@ -423,11 +408,6 @@
         "programación de citas",
         "frecuencia de citas",
         "repetición de eventos"
-      ],
-      "description_es": "La tabla 'APPO_PERIODICS' almacena información sobre citas o eventos periódicos programados, registrando sus detalles y configuraciones de recurrencia.",
-      "examples": [
-        "\"Reunión de equipo cada lunes a las 9:00 AM con recordatorio por correo electrónico.\"",
-        "\"Consulta médica mensual el día 15 de cada mes a las 4:30 PM.\""
       ]
     },
     "APPO_POSTPONED_REASONS": {
@@ -438,11 +418,6 @@
         "causas de retraso",
         "justificaciones de demora",
         "postergación de citas"
-      ],
-      "description_es": "La tabla 'APPO_POSTPONED_REASONS' almacena los motivos de aplazamiento de citas, registrando las razones por las cuales una cita programada ha sido pospuesta.",
-      "examples": [
-        "\"El paciente solicitó reprogramar la cita por conflicto de horario laboral.\"",
-        "\"La cita se pospuso debido a la indisponibilidad temporal del especialista médico.\""
       ]
     },
     "APPO_PROPOSALS": {
@@ -453,11 +428,6 @@
         "agendamiento médico",
         "derivaciones",
         "gestión de citas"
-      ],
-      "description_es": "Almacena información sobre propuestas o solicitudes presentadas, incluyendo detalles relevantes para su gestión y seguimiento.",
-      "examples": [
-        "\"Propuesta de mejora para el sistema de gestión interna presentada por el departamento de TI, incluye descripción, beneficios estimados y fecha límite de implementación.\"",
-        "\"Solicitud de presupuesto para evento corporativo, con detalles del evento, participantes esperados y recursos requeridos.\""
       ]
     },
     "APPO_PROPOSAL_STATES": {
@@ -468,11 +438,6 @@
         "etapas de propuesta",
         "estatus de propuesta",
         "progreso de propuesta"
-      ],
-      "description_es": "La tabla 'APPO_PROPOSAL_STATES' almacena los diferentes estados posibles que puede tener una propuesta, como pendiente, aprobada o rechazada, para gestionar su ciclo de vida.",
-      "examples": [
-        "\"Pendiente de revisión\": estado inicial de una propuesta recién creada, antes de ser evaluada.",
-        "\"Aprobada\": estado que indica que la propuesta ha sido validada y pasa a la siguiente fase de implementación."
       ]
     },
     "APPO_PROPOSAL_TYPE_STATES": {
@@ -483,11 +448,6 @@
         "configuración de propuestas",
         "flujo de estados",
         "gestión de propuestas"
-      ],
-      "description_es": "La tabla 'APPO_PROPOSAL_TYPE_STATES' almacena los diferentes estados posibles que puede tener un tipo de propuesta, definiendo su ciclo de vida o flujo de trabajo.",
-      "examples": [
-        "\"Borrador\" - Estado inicial de una propuesta cuando está siendo creada o editada.",
-        "\"Aprobada\" - Estado que indica que la propuesta ha sido revisada y aceptada para su implementación."
       ]
     },
     "APPO_PROP_ATTENTION_TYPES": {
@@ -498,11 +458,6 @@
         "citas atención",
         "clasificación atención",
         "estados atención"
-      ],
-      "description_es": "Almacena los tipos de atención disponibles para las propuestas de citas, definiendo las diferentes modalidades o categorías de atención que pueden ser asignadas.",
-      "examples": [
-        "\"Consulta presencial\": Tipo de atención donde el cliente y el profesional se reúnen físicamente en un lugar determinado.",
-        "\"Asesoría virtual\": Modalidad de atención que se realiza a través de plataformas digitales, sin necesidad de presencia física."
       ]
     },
     "APPO_REPETITION_INTERVAL": {
@@ -513,11 +468,6 @@
         "periodicidad",
         "eventos recurrentes",
         "repetición de citas"
-      ],
-      "description_es": "La tabla 'APPO_REPETITION_INTERVAL' almacena los intervalos de repetición configurados para las citas o eventos recurrentes en el sistema. Define la frecuencia y periodicidad con la que se repiten las citas programadas.",
-      "examples": [
-        "\"Cada 2 semanas los miércoles a las 15:00\" para una reunión de equipo recurrente.",
-        "\"Diariamente a las 08:00\" para un recordatorio de medicación."
       ]
     },
     "APPO_RESCHEDULE_REASONS": {
@@ -528,11 +478,6 @@
         "causas de cambio de cita",
         "justificaciones de reagendar",
         "reprogramación de citas"
-      ],
-      "description_es": "Tabla que almacena los motivos de reprogramación de citas, utilizada para categorizar y registrar las razones por las cuales una cita médica es reagendada.",
-      "examples": [
-        "\"Paciente solicitó cambio de fecha por conflicto de horario.\"",
-        "\"Reprogramación debido a emergencia médica del profesional.\""
       ]
     },
     "APPO_SESSION_TYPES": {
@@ -543,11 +488,6 @@
         "clases de reserva",
         "modalidades de atención",
         "categorías de sesión"
-      ],
-      "description_es": "La tabla 'APPO_SESSION_TYPES' almacena los diferentes tipos de sesiones disponibles para las citas, definiendo sus características y configuraciones básicas.",
-      "examples": [
-        "\"Consulta médica presencial\": tipo de sesión para citas que requieren asistencia física al consultorio.",
-        "\"Terapia en línea\": tipo de sesión configurada para videollamadas con duración estándar de 50 minutos."
       ]
     },
     "APPO_STATES": {
@@ -558,11 +498,6 @@
         "situación de citas",
         "estados de reservas",
         "estados de turnos"
-      ],
-      "description_es": "La tabla 'APPO_STATES' almacena los diferentes estados o fases que pueden tener las citas o appointments en el sistema, como programadas, canceladas o completadas. Su propósito es gestionar y rastrear el ciclo de vida de las citas mediante estos estados definidos.",
-      "examples": [
-        "\"Programada\" - Estado inicial de una cita cuando es creada y confirmada en el sistema.",
-        "\"Cancelada\" - Estado que indica que una cita fue anulada, ya sea por el cliente o por el proveedor."
       ]
     },
     "APPO_TYPES": {
@@ -573,11 +508,6 @@
         "categorías de citas",
         "tipología de eventos",
         "agendamiento"
-      ],
-      "description_es": "La tabla 'APPO_TYPES' almacena los diferentes tipos de citas o compromisos disponibles en el sistema, definiendo categorías y características básicas de cada uno.",
-      "examples": [
-        "\"Consulta médica\": tipo de cita para atención clínica con un profesional de la salud.",
-        "\"Reunión de equipo\": tipo de compromiso laboral para coordinación entre miembros de un departamento."
       ]
     },
     "APPR_ANESTHESIA_STATES": {
@@ -588,11 +518,6 @@
         "registros anestésicos",
         "clasificación anestesia",
         "niveles sedación"
-      ],
-      "description_es": "La tabla 'APPR_ANESTHESIA_STATES' almacena los diferentes estados o fases del proceso de anestesia, registrando información relevante para su seguimiento y gestión durante procedimientos médicos.",
-      "examples": [
-        "\"Inducción anestésica: registro del momento en que se administra el fármaco anestésico al paciente y se inicia el monitoreo de signos vitales.\"",
-        "\"Mantenimiento: seguimiento de parámetros como frecuencia cardíaca, presión arterial y saturación de oxígeno durante el procedimiento quirúrgico.\""
       ]
     },
     "APPR_CLIN_HIST_CANCEL_REASONS": {
@@ -603,11 +528,6 @@
         "causas eliminación historial clínico",
         "justificativos cancelación HC",
         "tipos de cancelación en historias médicas"
-      ],
-      "description_es": "La tabla 'APPR_CLIN_HIST_CANCER_REASONS' almacena los motivos de cancelación asociados a historias clínicas o aprobaciones médicas, registrando las razones específicas por las cuales se anulan procesos o registros.",
-      "examples": [
-        "\"Paciente decidió no continuar con el tratamiento oncológico y solicitó la cancelación de su historia clínica.\"",
-        "\"Error en la documentación médica que invalidó el proceso de aprobación, requiriendo su cancelación y reinicio.\""
       ]
     },
     "APPR_CLIN_HIST_FILE_CATEGORIES": {
@@ -618,11 +538,6 @@
         "documentación clínica",
         "tipos de expediente médico",
         "categorización de registros de salud"
-      ],
-      "description_es": "La tabla 'APPR_CLIN_HIST_FILE_CATEGORIES' almacena las categorías de archivos asociados a historias clínicas, organizando los tipos de documentos médicos para su gestión y recuperación.",
-      "examples": [
-        "\"Informes de laboratorio: categoría para almacenar resultados de análisis clínicos como hemogramas o pruebas bioquímicas.\"",
-        "\"Imágenes diagnósticas: categoría que agrupa archivos de radiografías, resonancias magnéticas y ecografías asociadas a un paciente.\""
       ]
     },
     "APPR_CLIN_HIST_FILE_PRIORITIES": {
@@ -633,11 +548,6 @@
         "archivos médicos",
         "importancia clínica",
         "registros de salud"
-      ],
-      "description_es": "La tabla 'APPR_CLIN_HIST_FILE_PRIORITIES' almacena y gestiona los niveles de prioridad asignados a los archivos de historiales clínicos en procesos de aprobación.",
-      "examples": [
-        "\"Prioridad alta\" asignada a un historial clínico de paciente en urgencias que requiere aprobación inmediata.",
-        "\"Prioridad estándar\" asignada a un historial clínico de consulta rutinaria para aprobación en plazo normal."
       ]
     },
     "APPR_CLIN_HIST_FILE_REASONS": {
@@ -648,11 +558,6 @@
         "causas historial médico",
         "justificaciones clínicas",
         "registro de motivos médicos"
-      ],
-      "description_es": "Almacena los motivos o razones asociados a los archivos de historias clínicas, registrando las causas por las cuales se generan o modifican dichos archivos.",
-      "examples": [
-        "\"Actualización de tratamiento médico: registro de cambios en la terapia del paciente.\"",
-        "\"Archivado por alta médica: documentación del cierre de historia clínica tras el alta del paciente.\""
       ]
     },
     "APPR_CLIN_HIST_FILE_STATES": {
@@ -663,11 +568,6 @@
         "aprobaciones clínicas",
         "estados de documentos",
         "registros médicos"
-      ],
-      "description_es": "La tabla 'APPR_CLIN_HIST_FILE_STATES' almacena los diferentes estados del historial clínico durante el proceso de aprobación, registrando las transiciones y cambios de estado.",
-      "examples": [
-        "\"Pendiente de revisión\": estado inicial del historial clínico cuando es enviado para aprobación.",
-        "\"Aprobado con observaciones\": estado que indica que el historial clínico fue aprobado pero requiere ajustes menores."
       ]
     },
     "APPR_CLIN_HIST_FILE_TYPES": {
@@ -678,11 +578,6 @@
         "documentos médicos",
         "archivos de historia clínica",
         "formatos de historial clínico"
-      ],
-      "description_es": "Almacena los tipos de archivos permitidos para historiales clínicos, definiendo formatos y extensiones aceptadas en el sistema.",
-      "examples": [
-        "\"Tipo de archivo PDF - Documentos clínicos en formato PDF, extensión .pdf, aceptado para informes médicos y resultados de laboratorio.\"",
-        "\"Tipo de archivo DICOM - Imágenes médicas en formato DICOM, extensión .dcm, utilizado para almacenar radiografías y resonancias magnéticas.\""
       ]
     },
     "APPR_CLIN_HIST_FILE_USES": {
@@ -693,11 +588,6 @@
         "usos de documentos",
         "auditoría clínica",
         "gestión de archivos"
-      ],
-      "description_es": "Esta tabla registra los usos y accesos a los archivos de historias clínicas, almacenando información sobre las interacciones realizadas con estos documentos médicos.",
-      "examples": [
-        "Registro de acceso del Dr. García a la historia clínica del paciente Juan Pérez el 15/03/2023 para revisión de tratamiento.",
-        "Auditoría de la enfermera Laura Martínez consultando los archivos del paciente Carlos Gómez el 20/04/2023 con propósito de actualización de medicamentos."
       ]
     },
     "APPR_NOT_EXPLORATION_NEXT_ACTIONS": {
@@ -708,11 +598,6 @@
         "aprobaciones",
         "siguientes pasos",
         "gestión de acciones"
-      ],
-      "description_es": "La tabla 'APPR_NOT_EXPLORATION_NEXT_ACTIONS' almacena información sobre las siguientes acciones a realizar en procesos de aprobación cuando no se requiere exploración adicional. Registra posibles pasos o decisiones posteriores en flujos de trabajo de validación.",
-      "examples": [
-        "\"Aprobación automática del documento al cumplir todos los requisitos sin necesidad de revisión adicional.\"",
-        "\"Rechazo directo de la solicitud por incumplimiento de criterios básicos, sin requerir más análisis.\""
       ]
     },
     "APPR_TREATMENTS": {
@@ -723,11 +608,6 @@
         "citas de tratamiento",
         "programación terapéutica",
         "historial de tratamientos"
-      ],
-      "description_es": "La tabla 'APPR_TREATMENTS' almacena información sobre tratamientos médicos aprobados, incluyendo sus características y datos asociados para su gestión y seguimiento.",
-      "examples": [
-        "\"Registro de quimioterapia aprobada para cáncer de mama con código TX123, dosis 200mg y ciclo cada 21 días.\"",
-        "\"Tratamiento de fisioterapia para rehabilitación post-operatoria con 10 sesiones programadas y terapeuta asignado.\""
       ]
     },
     "APPR_TREATMENT_ACTIONS": {
@@ -738,11 +618,6 @@
         "registro de tratamientos",
         "gestión de acciones",
         "historial de tratamientos"
-      ],
-      "description_es": "La tabla 'APPR_TREATMENT_ACTIONS' almacena registros de acciones relacionadas con tratamientos médicos o terapéuticos, incluyendo posibles interacciones, aplicaciones o seguimientos asociados.",
-      "examples": [
-        "Registro de administración de quimioterapia al paciente X, incluyendo dosis, fecha y posibles interacciones con otros medicamentos.",
-        "Seguimiento semanal de terapia física para rehabilitación de lesión muscular, detallando ejercicios realizados y progreso del paciente."
       ]
     },
     "APPR_TREATMENT_DEST_DISCHARGE": {
@@ -753,11 +628,6 @@
         "alta médica",
         "destino postratamiento",
         "disposición al alta"
-      ],
-      "description_es": "Tabla que almacena información sobre los destinos de alta de pacientes tras tratamientos médicos, incluyendo posibles ubicaciones o instituciones posteriores al alta.",
-      "examples": [
-        "\"Paciente dado de alta con destino a centro de rehabilitación especializado en lesiones medulares.\"",
-        "\"Alta médica programada con traslado a residencia geriátrica para continuar cuidados paliativos.\""
       ]
     },
     "APPR_TREATMENT_DISCHARGE_TYPE": {
@@ -768,11 +638,6 @@
         "clasificación de altas",
         "egreso médico",
         "modalidad de alta"
-      ],
-      "description_es": "La tabla 'APPR_TREATMENT_DISCHARGE_TYPE' almacena los tipos de alta médica asociados a tratamientos, clasificando las diferentes modalidades de finalización de atención clínica.",
-      "examples": [
-        "\"Alta voluntaria\": cuando el paciente decide abandonar el tratamiento antes de su finalización médica recomendada.",
-        "\"Alta por curación\": registro que indica la finalización exitosa del tratamiento con recuperación total del paciente."
       ]
     },
     "APPR_TREATMENT_PROGRAMMING_TYPES": {
@@ -783,11 +648,6 @@
         "clasificación de tratamientos",
         "catálogo de terapias",
         "modalidades de tratamiento"
-      ],
-      "description_es": "La tabla 'APPR_TREATMENT_PROGRAMMING_TYPES' almacena los diferentes tipos de programación de tratamientos disponibles, definiendo categorías o modalidades para su aplicación.",
-      "examples": [
-        "\"Programación de tratamiento intensivo: modalidad con sesiones diarias para casos agudos.\"",
-        "\"Programación de tratamiento ambulatorio: modalidad con sesiones semanales para seguimiento continuo.\""
       ]
     },
     "APPR_TREATMENT_STATES": {
@@ -798,11 +658,6 @@
         "etapas de tratamiento",
         "estados terapéuticos",
         "status de tratamiento"
-      ],
-      "description_es": "La tabla 'APPR_TREATMENT_STATES' almacena los diferentes estados o fases de los tratamientos aprobados, registrando su progreso y condiciones asociadas.",
-      "examples": [
-        "\"Estado 'En Evaluación': tratamiento pendiente de aprobación por el comité médico.\"",
-        "\"Estado 'Finalizado': tratamiento completado con todos los procedimientos aplicados.\""
       ]
     },
     "ARTI_ARTICLES": {
@@ -813,11 +668,6 @@
         "contenidos",
         "materiales",
         "medios digitales"
-      ],
-      "description_es": "La tabla 'ARTI_ARTICLES' almacena información general sobre artículos, incluyendo sus datos básicos y atributos principales para su gestión y consulta.",
-      "examples": [
-        "\"ARTI_ARTICLES\" contiene datos como código de artículo, descripción y precio unitario para gestionar el inventario de productos.",
-        "En \"ARTI_ARTICLES\" se registran atributos como categoría, proveedor y fecha de última actualización para el seguimiento de artículos."
       ]
     },
     "ARTI_ARTICLE_TYPES": {
@@ -828,11 +678,6 @@
         "clasificación de artículos",
         "artículos",
         "tipología de artículos"
-      ],
-      "description_es": "La tabla ARTI_ARTICLE_TYPES almacena los diferentes tipos de artículos disponibles en el sistema, definiendo categorías o clasificaciones para su organización.",
-      "examples": [
-        "\"Electrónica\" - Tipo de artículo para productos como smartphones, laptops y accesorios tecnológicos.",
-        "\"Ropa\" - Tipo de artículo que clasifica prendas de vestir como camisetas, pantalones y zapatos."
       ]
     },
     "BEDS_BEDS": {
@@ -843,11 +688,6 @@
         "ubicación de camas",
         "estado de camas",
         "asignación de camas"
-      ],
-      "description_es": "La tabla 'BEDS_BEDS' almacena información sobre camas disponibles, incluyendo sus características y estado, para gestión de recursos hospitalarios o de alojamiento.",
-      "examples": [
-        "\"Cama 101 en el ala norte, tipo hospitalaria, estado: disponible, equipada con monitor cardíaco.\"",
-        "\"Cama 203 en suite premium, tipo king-size, estado: ocupada, servicios incluidos: desayuno y limpieza diaria.\""
       ]
     },
     "BEDS_BED_TYPES": {
@@ -858,11 +698,6 @@
         "clasificación de camas",
         "catálogo de camas",
         "variedades de camas"
-      ],
-      "description_es": "Tabla que almacena los diferentes tipos de camas disponibles, incluyendo sus características y categorías para gestión hospitalaria o de alojamiento.",
-      "examples": [
-        "\"Cama hospitalaria eléctrica con ajuste de altura y respaldo para pacientes con movilidad reducida.\"",
-        "\"Cama individual estándar con estructura metálica para habitaciones de hotel básicas.\""
       ]
     },
     "BEDS_CONSTRAINTS": {
@@ -873,11 +708,6 @@
         "reglas de camas",
         "disponibilidad de camas",
         "control de camas"
-      ],
-      "description_es": "La tabla 'BEDS_CONSTRAINTS' almacena información sobre restricciones y limitaciones asociadas a camas o espacios de alojamiento, posiblemente para gestión hospitalaria o de recursos. Registra datos que definen condiciones, capacidades o reglas aplicables a estos elementos.",
-      "examples": [
-        "\"Restricción: Cama solo para pacientes pediátricos, con peso máximo admitido de 50 kg.\"",
-        "\"Limitación: Cama de UCI con requisito de monitorización constante, no disponible para uso general.\""
       ]
     },
     "CARE_CARES": {
@@ -888,11 +718,6 @@
         "registro de cuidados",
         "descripción de cuidados",
         "eliminación lógica"
-      ],
-      "description_es": "La tabla 'CARE_CARES' almacena información sobre los cuidados o atenciones proporcionados, posiblemente registrando detalles de servicios, interacciones o seguimientos relacionados con asistencia o atención. Su propósito es centralizar los datos de actividades de cuidado para su gestión y consulta.",
-      "examples": [
-        "\"Registro de visita domiciliaria de enfermería con toma de signos vitales y administración de medicación prescrita el 15/03/2023.\"",
-        "\"Seguimiento telefónico semanal para monitorear progreso en terapia física tras intervención quirúrgica, anotando observaciones y próximos pasos.\""
       ]
     },
     "CLIP_CLINICAL_PROCESSES": {
@@ -903,11 +728,6 @@
         "gestión de pacientes",
         "seguimiento clínico",
         "registros médicos"
-      ],
-      "description_es": "La tabla 'CLIP_CLINICAL_PROCESSES' almacena información sobre procesos clínicos, incluyendo datos relacionados con flujos de trabajo, etapas y registros asociados a la atención médica. Su propósito es gestionar y rastrear las actividades clínicas dentro del sistema.",
-      "examples": [
-        "Registro de las etapas de un procedimiento quirúrgico, desde la preparación preoperatoria hasta el alta postoperatoria.",
-        "Seguimiento del flujo de trabajo de una consulta médica, incluyendo diagnóstico, tratamiento y seguimiento programado."
       ]
     },
     "CLIP_STATES": {
@@ -918,11 +738,6 @@
         "estatus de clips",
         "tipos de estado",
         "registro de estados"
-      ],
-      "description_es": "La tabla CLIP_STATES almacena los diferentes estados o fases que pueden tener los clips o elementos multimedia en el sistema, como estados de procesamiento, aprobación o disponibilidad.",
-      "examples": [
-        "\"En revisión\": estado que indica que un clip multimedia está siendo evaluado por un moderador antes de su publicación.",
-        "\"Disponible\": estado que señala que un clip ha sido aprobado y está listo para ser visualizado por los usuarios finales."
       ]
     },
     "CODR_CATALOGS": {
@@ -933,11 +748,6 @@
         "elementos de catálogo",
         "descripciones en español",
         "jerarquía de catálogos"
-      ],
-      "description_es": "La tabla 'CODR_CATALOGS' almacena catálogos de referencia utilizados en el sistema, conteniendo datos maestros y valores predefinidos para garantizar consistencia en la información.",
-      "examples": [
-        "\"Catálogo de tipos de documentos de identidad: DNI, pasaporte, cédula, etc.\"",
-        "\"Catálogo de estados civiles: soltero, casado, divorciado, viudo, etc.\""
       ]
     },
     "CODR_CODING_TYPES": {
@@ -948,11 +758,6 @@
         "sistemas de codificación",
         "clasificación de códigos",
         "categorías de codificación"
-      ],
-      "description_es": "La tabla 'CODR_CODING_TYPES' almacena los tipos de codificación disponibles en el sistema, definiendo sus características y parámetros básicos para su uso consistente.",
-      "examples": [
-        "\"Tipo de codificación 'UTF-8' para caracteres Unicode, con parámetros de compatibilidad multi-idioma y soporte para emojis.\"",
-        "\"Tipo de codificación 'ASCII' para caracteres básicos en inglés, con parámetros de 7 bits y soporte limitado a 128 caracteres.\""
       ]
     },
     "CODR_COMPLEXITY_DEGREE": {
@@ -963,11 +768,6 @@
         "clasificación de complejidad",
         "códigos complejos",
         "escala de complejidad"
-      ],
-      "description_es": "La tabla 'CODR_COMPLEXITY_DEGREE' almacena los distintos niveles de complejidad asociados a códigos o procesos, permitiendo su clasificación y gestión sistemática.",
-      "examples": [
-        "\"Alto\": Nivel asignado a procesos que requieren múltiples validaciones y aprobaciones jerárquicas.",
-        "\"Bajo\": Grado atribuido a tareas automatizadas con flujos simples y sin requerimientos especiales."
       ]
     },
     "CODR_DIAGNOSTIC_GROUPS": {
@@ -978,11 +778,6 @@
         "clasificación diagnóstica",
         "categorías de diagnósticos",
         "diagnósticos médicos"
-      ],
-      "description_es": "La tabla 'CODR_DIAGNOSTIC_GROUPS' almacena y organiza grupos de diagnósticos médicos para su clasificación y referencia en sistemas de salud.",
-      "examples": [
-        "\"Grupo de diagnósticos relacionados con enfermedades cardiovasculares, como insuficiencia cardíaca y arritmias, para facilitar su análisis estadístico.\"",
-        "\"Categoría de trastornos respiratorios que incluye asma, EPOC y neumonía, utilizada para guiar protocolos de tratamiento.\""
       ]
     },
     "CODR_DIAGNOSTIC_TYPES": {
@@ -993,11 +788,6 @@
         "categorías de diagnóstico",
         "diagnósticos médicos",
         "tipología diagnóstica"
-      ],
-      "description_es": "La tabla 'CODR_DIAGNOSTIC_TYPES' almacena los diferentes tipos de diagnósticos disponibles en el sistema, incluyendo sus categorías y características principales. Su propósito es estandarizar y organizar la información de diagnósticos para su uso consistente en la aplicación.",
-      "examples": [
-        "\"Tipo de diagnóstico: Alergia estacional - Categoría: Alergología - Características: Reacción al polen, síntomas estacionales.\"",
-        "\"Tipo de diagnóstico: Hipertensión arterial - Categoría: Cardiología - Características: Presión arterial elevada, requiere monitoreo continuo.\""
       ]
     },
     "CODR_DIAG_ALERT_TYPES": {
@@ -1008,11 +798,6 @@
         "códigos de alerta",
         "clasificación alertas",
         "alertas médicas"
-      ],
-      "description_es": "La tabla 'CODR_DIAG_ALERT_TYPES' almacena los tipos de alertas diagnósticas disponibles en el sistema, incluyendo sus categorías y configuraciones asociadas.",
-      "examples": [
-        "\"Alerta de diagnóstico por imagen: categoría 'Radiología', configuración de umbral para detección de anomalías en tejidos.\"",
-        "\"Alerta de laboratorio clínico: categoría 'Hematología', configuración para notificar resultados fuera de rangos de referencia.\""
       ]
     },
     "CURE_BED_VALUATIONS": {
@@ -1023,11 +808,6 @@
         "clasificación de camas",
         "tipos de camas médicas",
         "estado de camas"
-      ],
-      "description_es": "La tabla 'CURE_BED_VALUATIONS' almacena información sobre valoraciones y evaluaciones relacionadas con camas de curación, incluyendo posibles atributos como características, costos o disponibilidad. Su propósito es gestionar y registrar datos asociados a la calidad y valor de estos elementos médicos.",
-      "examples": [
-        "\"Registro de valoración de cama de curación modelo X-2000 con calificación 4.8/5, costo diario $150 y disponibilidad en zona de cuidados intensivos.\"",
-        "\"Evaluación comparativa entre camas modelo Alpha y Omega, destacando mayor ergonomía en Alpha pero mejor relación costo-beneficio en Omega.\""
       ]
     },
     "CURE_CLEAN_TYPES": {
@@ -1038,11 +818,6 @@
         "clasificación de limpieza",
         "tipos de curación",
         "limpieza de datos"
-      ],
-      "description_es": "La tabla 'CURE_CLEAN_TYPES' almacena los diferentes tipos de tratamientos de limpieza disponibles, incluyendo sus características y parámetros asociados. Su propósito es categorizar y gestionar las opciones de limpieza para su aplicación en procesos específicos.",
-      "examples": [
-        "\"Limpieza ultrasónica\" - Tipo de tratamiento que utiliza ondas de alta frecuencia para eliminar contaminantes en piezas delicadas.",
-        "\"Limpieza química por inmersión\" - Proceso que emplea soluciones químicas específicas para disolver residuos en componentes industriales."
       ]
     },
     "CURE_DEBRIDEMENT_TYPES": {
@@ -1053,11 +828,6 @@
         "curación de tejidos",
         "limpieza de heridas",
         "tratamiento de desbridamiento"
-      ],
-      "description_es": "La tabla 'CURE_DEBRIDEMENT_TYPES' almacena los diferentes tipos de desbridamiento utilizados en tratamientos médicos, incluyendo sus características y clasificaciones.",
-      "examples": [
-        "\"Desbridamiento quirúrgico: procedimiento invasivo para eliminar tejido necrótico o infectado con instrumentos estériles.\"",
-        "\"Desbridamiento enzimático: uso de enzimas tópicas para disolver tejido no viable de manera selectiva.\""
       ]
     },
     "CURE_DISINFECTION_TYPES": {
@@ -1068,11 +838,6 @@
         "tratamientos médicos",
         "cuidado de heridas",
         "limpieza médica"
-      ],
-      "description_es": "La tabla 'CURE_DISINFECTION_TYPES' almacena los diferentes tipos de métodos de curación y desinfección disponibles, incluyendo sus características y parámetros asociados.",
-      "examples": [
-        "\"Esterilización por calor húmedo\": método que utiliza vapor a alta presión para eliminar microorganismos, con parámetros como temperatura (121°C) y tiempo de exposición (15-20 minutos).",
-        "\"Desinfección UV\": técnica que emplea radiación ultravioleta para reducir patógenos, incluyendo datos como longitud de onda (254 nm) y dosis requerida (mJ/cm²)."
       ]
     },
     "CURE_DRAINAGE_TYPES": {
@@ -1083,11 +848,6 @@
         "clasificación de drenajes",
         "drenajes curativos",
         "catálogo de drenajes"
-      ],
-      "description_es": "La tabla 'CURE_DRAINAGE_TYPES' almacena los diferentes tipos de sistemas de drenaje utilizados en tratamientos médicos o curativos, incluyendo sus características y especificaciones técnicas.",
-      "examples": [
-        "\"Drenaje Jackson-Pratt: sistema de drenaje cerrado con bulbo de succión utilizado postoperatoriamente para eliminar fluidos corporales.\"",
-        "\"Drenaje Penrose: tubo de látex blando utilizado para drenaje pasivo en heridas quirúrgicas o abscesos.\""
       ]
     },
     "CURE_EXUDE_AMOUNTS": {
@@ -1098,11 +858,6 @@
         "cantidades médicas",
         "registro de exudados",
         "exámenes de heridas"
-      ],
-      "description_es": "La tabla 'CURE_EXUDE_AMOUNTS' almacena y registra las cantidades de exudados generados durante procesos de curado, posiblemente relacionados con materiales o sustancias específicas.",
-      "examples": [
-        "Registro de 150 ml de exudado generado durante el curado de una mezcla de concreto en la obra 'Puente Norte'.",
-        "Medición de 25 gramos de resina exudada en el proceso de curado de un compuesto polimérico en el lote #2045."
       ]
     },
     "CURE_EXUDE_TYPES": {
@@ -1113,11 +868,6 @@
         "clasificación de exudados",
         "tipos de secreciones",
         "exudados clínicos"
-      ],
-      "description_es": "La tabla 'CURE_EXUDE_TYPES' almacena los diferentes tipos de exudados relacionados con procesos de curación, clasificando sus características y propiedades. Su propósito es estandarizar y categorizar la información sobre exudados para su uso en aplicaciones médicas o de investigación.",
-      "examples": [
-        "\"Seroso\": exudado transparente y acuoso, típico en etapas iniciales de cicatrización.",
-        "\"Purulento\": exudado espeso y amarillento, indicativo de infección bacteriana en la herida."
       ]
     },
     "CURE_OINTMENT_TYPES": {
@@ -1128,11 +878,6 @@
         "tipos de medicamentos tópicos",
         "cremas medicinales",
         "categorías de ungüentos"
-      ],
-      "description_es": "La tabla 'CURE_OINTMENT_TYPES' almacena los diferentes tipos de ungüentos medicinales disponibles, incluyendo sus características y propiedades específicas.",
-      "examples": [
-        "Tipo de ungüento: Antiinflamatorio - Contiene ibuprofeno al 5%, indicado para reducir hinchazón y dolor muscular.",
-        "Tipo de ungüento: Antifúngico - Base de clotrimazol al 2%, utilizado para tratar infecciones por hongos en la piel."
       ]
     },
     "CURE_PHASES": {
@@ -1143,11 +888,6 @@
         "fases médicas",
         "proceso de curación",
         "etapas terapéuticas"
-      ],
-      "description_es": "La tabla 'CURE_PHASES' almacena información sobre las diferentes etapas o fases de un proceso de curación, incluyendo posibles atributos como duración, condiciones o progreso de cada fase.",
-      "examples": [
-        "Fase inicial de desintoxicación con duración de 7 días y progreso del 30% completado.",
-        "Fase de recuperación activa con condiciones de reposo relativo y duración estimada de 14 días."
       ]
     },
     "CURE_PRIMARY_DRESSINGS": {
@@ -1158,11 +898,6 @@
         "material de curación",
         "apósitos para heridas",
         "curación primaria"
-      ],
-      "description_es": "La tabla 'CURE_PRIMARY_DRESSINGS' almacena información sobre apósitos primarios utilizados en tratamientos médicos, incluyendo sus características y usos clínicos.",
-      "examples": [
-        "\"Gasas de algodón estériles, utilizadas para cubrir heridas limpias y absorber exudados leves.\"",
-        "\"Películas transparentes de poliuretano, empleadas como apósitos oclusivos para promover la cicatrización en heridas superficiales.\""
       ]
     },
     "CURE_SKIN_VALUATIONS": {
@@ -1173,11 +908,6 @@
         "calificaciones dermatológicas",
         "opiniones tratamientos piel",
         "registro valoraciones piel"
-      ],
-      "description_es": "La tabla 'CURE_SKIN_VALUATIONS' almacena evaluaciones y valoraciones relacionadas con tratamientos o condiciones de la piel, posiblemente incluyendo resultados de análisis, diagnósticos o seguimientos.",
-      "examples": [
-        "\"Paciente con diagnóstico de acné moderado: valoración inicial indica mejora del 30% después de 4 semanas de tratamiento tópico.\"",
-        "\"Seguimiento de dermatitis atópica: evaluación muestra reducción del enrojecimiento y picor tras 2 meses de terapia con emolientes específicos.\""
       ]
     },
     "CURE_STAPLES_REMOVE_TYPES": {
@@ -1188,11 +918,6 @@
         "tipos de remoción",
         "procedimientos quirúrgicos",
         "material médico"
-      ],
-      "description_es": "La tabla 'CURE_STAPLES_REMOVE_TYPES' almacena los diferentes tipos o métodos de remoción de grapas médicas utilizadas en procedimientos de curación. Registra categorías y características asociadas a cada técnica de extracción.",
-      "examples": [
-        "\"Remoción estándar con extractor de grapas\": método básico que utiliza pinzas médicas especializadas para retirar grapas una por una.",
-        "\"Remoción rápida con dispositivo desengrapador\": técnica eficiente que emplea herramientas especiales para retirar múltiples grapas simultáneamente con mínimo trauma."
       ]
     },
     "CURE_SURGI_COMPLICA_TYPES": {
@@ -1203,11 +928,6 @@
         "curación postoperatoria",
         "problemas médicos",
         "clasificación de complicaciones"
-      ],
-      "description_es": "La tabla 'CURE_SURGI_COMPLICA_TYPES' almacena los tipos de complicaciones asociadas a procedimientos quirúrgicos, incluyendo su clasificación y características relevantes.",
-      "examples": [
-        "\"Infección postoperatoria: Complicación clasificada como 'Infecciosa', con características como fiebre, enrojecimiento y supuración en la zona quirúrgica.\"",
-        "\"Hemorragia intraoperatoria: Complicación clasificada como 'Hemorrágica', con características como pérdida excesiva de sangre durante el procedimiento y necesidad de transfusión.\""
       ]
     },
     "CURE_TYPES": {
@@ -1218,11 +938,6 @@
         "clases de cura",
         "categorías de tratamiento",
         "cura médica"
-      ],
-      "description_es": "La tabla 'CURE_TYPES' almacena los diferentes tipos de tratamientos o terapias disponibles, incluyendo sus características y clasificaciones principales.",
-      "examples": [
-        "\"Fisioterapia: tratamiento no farmacológico para rehabilitación muscular y articular, clasificado como terapia física.\"",
-        "\"Quimioterapia: tratamiento oncológico basado en fármacos citotóxicos, clasificado como terapia médica.\""
       ]
     },
     "DIAG_DIAGNOSTIC_STATES": {
@@ -1233,11 +948,6 @@
         "estados médicos",
         "registros de diagnóstico",
         "clasificación diagnóstica"
-      ],
-      "description_es": "La tabla 'DIAG_DIAGNOSTIC_STATES' almacena los diferentes estados posibles de un diagnóstico, registrando información sobre su progreso o condición actual. Su propósito es gestionar y rastrear las fases o situaciones por las que puede pasar un proceso diagnóstico.",
-      "examples": [
-        "\"En revisión\": estado que indica que el diagnóstico está siendo evaluado por un especialista antes de su confirmación.",
-        "\"Confirmado\": estado que refleja que el diagnóstico ha sido validado y está listo para ser comunicado al paciente."
       ]
     },
     "DIAG_LATERALITIES": {
@@ -1248,11 +958,6 @@
         "diagnóstico lateral",
         "izquierdo derecho bilateral",
         "ubicación anatómica"
-      ],
-      "description_es": "La tabla 'DIAG_LATERALITIES' almacena información sobre las lateralidades asociadas a diagnósticos médicos, como izquierda, derecha o bilateral. Su propósito es registrar y categorizar la ubicación anatómica específica relacionada con condiciones o procedimientos médicos.",
-      "examples": [
-        "\"Registro de lateralidad 'izquierda' para un diagnóstico de fractura de fémur, indicando el lado afectado.\"",
-        "\"Asociación 'bilateral' a un diagnóstico de otitis media, señalando que la infección afecta ambos oídos.\""
       ]
     },
     "DOCS_DOCUMENTS": {
@@ -1263,11 +968,6 @@
         "archivos clínicos",
         "documentación hospitalaria",
         "expedientes electrónicos"
-      ],
-      "description_es": "La tabla 'DOCS_DOCUMENTS' almacena registros de documentos con sus metadatos asociados, sirviendo como repositorio central para la gestión y consulta de archivos en el sistema.",
-      "examples": [
-        "\"Registro de factura electrónica con metadatos: ID DOC-2023-001, tipo 'Factura', fecha emisión 15/05/2023, cliente 'Empresa XYZ', monto $1,200.00, estado 'Pagado'.\"",
-        "\"Documento de contrato legal: ID DOC-JUR-042, tipo 'Contrato', fecha firma 22/08/2023, partes involucradas 'Cliente A y Proveedor B', vigencia '2 años', keywords 'confidencial, servicio técnico'.\""
       ]
     },
     "DOCS_DOCUMENT_TYPES": {
@@ -1278,8 +978,7 @@
         "categorías de documentos",
         "documentos del sistema",
         "catálogo de documentos"
-      ],
-      "description_es": "Tabla que almacena los tipos de documentos disponibles en el sistema, definiendo categorías y características básicas para su clasificación y gestión."
+      ]
     },
     "DOCS_TYPE_CATEGORIES": {
       "description": "Tabla que almacena los tipos de categorías de documentos, incluyendo su descripción en español y estado de eliminación. Utilizada para clasificar y gestionar diferentes tipos de documentos en el sistema.",
@@ -1289,11 +988,6 @@
         "clasificación de documentos",
         "documentos eliminados",
         "descripción de documentos"
-      ],
-      "description_es": "La tabla 'DOCS_TYPE_CATEGORIES' almacena y organiza las diferentes categorías asociadas a tipos de documentos, permitiendo su clasificación sistemática.",
-      "examples": [
-        "\"Categorías de documentos legales como 'Contratos', 'Sentencias' o 'Escrituras' para clasificar tipos de documentos jurídicos.\"",
-        "\"Categorías de documentos académicos como 'Tesis', 'Artículos' o 'Exámenes' para organizar documentos educativos.\""
       ]
     },
     "EMER_EMERGENCY_ROOM_RESOURCES": {
@@ -1304,11 +998,6 @@
         "materiales hospitalarios",
         "equipos médicos",
         "inventario de emergencia"
-      ],
-      "description_es": "La tabla 'EMER_EMERGENCY_ROOM_RESOURCES' almacena información sobre los recursos disponibles en salas de emergencia, incluyendo equipos, suministros y personal asignado. Su propósito es gestionar y optimizar la disponibilidad de recursos críticos para la atención médica urgente.",
-      "examples": [
-        "\"Registro de monitores cardíacos disponibles en la sala de emergencias del Hospital Central, incluyendo modelo y estado operativo.\"",
-        "\"Inventario de medicamentos de urgencia y personal de enfermería asignado al turno nocturno en la Emergencia Pediátrica.\""
       ]
     },
     "EPIS_ADMIN_DISCHARGE_REASONS": {
@@ -1319,11 +1008,6 @@
         "alta administrativa",
         "descripción de altas",
         "episodios médicos"
-      ],
-      "description_es": "La tabla 'EPIS_ADMIN_DISCHARGE_REASONS' almacena los motivos de alta administrativa registrados en el sistema, utilizados para categorizar y gestionar las finalizaciones de episodios o procesos.",
-      "examples": [
-        "\"Alta por finalización del tratamiento programado\".",
-        "\"Alta administrativa por traslado a otro centro médico\"."
       ]
     },
     "EPIS_AMBI_STATES": {
@@ -1334,11 +1018,6 @@
         "registros ambientales",
         "descripción estados",
         "monitoreo ambiental"
-      ],
-      "description_es": "La tabla 'EPIS_AMBI_STATES' almacena información sobre los estados ambientales registrados, incluyendo posibles parámetros de medición y condiciones ambientales. Su propósito es gestionar y monitorear datos relacionados con el ambiente en diferentes situaciones o ubicaciones.",
-      "examples": [
-        "Registro de niveles de contaminación del aire (PM2.5 y CO2) en una zona industrial durante el mes de enero.",
-        "Monitoreo de condiciones climáticas (temperatura, humedad y velocidad del viento) en un parque natural durante la temporada de lluvias."
       ]
     },
     "EPIS_DESTINATIONS": {
@@ -1349,11 +1028,6 @@
         "lugares de destino",
         "destinos médicos",
         "registro de destinos"
-      ],
-      "description_es": "La tabla 'EPIS_DESTINATIONS' almacena información sobre los destinos asignados a los episodios o eventos registrados en el sistema, incluyendo posibles ubicaciones o rutas asociadas.",
-      "examples": [
-        "\"Destino asignado al episodio #1234: Sala de Emergencias, Hospital Central.\"",
-        "\"Ruta de traslado para el evento #5678: Desde Clínica Norte hasta Hospital General por ambulancia.\""
       ]
     },
     "EPIS_DIAGNOSTICS": {
@@ -1364,11 +1038,6 @@
         "episodios de salud",
         "registros de pacientes",
         "enfermedades"
-      ],
-      "description_es": "Tabla que almacena información sobre diagnósticos médicos asociados a episodios clínicos, incluyendo posibles códigos, fechas y relaciones con pacientes o profesionales.",
-      "examples": [
-        "\"Registro de diagnóstico de neumonía (código J18.9) asociado al episodio clínico del paciente con ID 12345, fechado el 15/03/2023 y realizado por el médico con matrícula 67890.\"",
-        "\"Diagnóstico principal de diabetes tipo 2 (código E11.9) vinculado al episodio de control metabólico del paciente con ID 54321, registrado el 22/07/2023 por el endocrinólogo con matrícula 13579.\""
       ]
     },
     "EPIS_DIET_SHIFTS": {
@@ -1379,11 +1048,6 @@
         "dietas hospitalarias",
         "programación de comidas",
         "registro de dietas"
-      ],
-      "description_es": "Tabla que registra los cambios o turnos en las dietas de los pacientes, almacenando información sobre modificaciones en los planes alimenticios asignados.",
-      "examples": [
-        "Registro del cambio de dieta del paciente de 'baja en sodio' a 'diabetes controlada' el 15/03/2023 por indicación médica.",
-        "Turno de dieta registrado: paciente asignado a 'líquidos claros' durante 24 horas postoperatorias según protocolo quirúrgico."
       ]
     },
     "EPIS_DIET_TYPES": {
@@ -1394,11 +1058,6 @@
         "alimentación en episodios",
         "dietas absolutas",
         "clasificación de dietas"
-      ],
-      "description_es": "La tabla 'EPIS_DIET_TYPES' almacena los diferentes tipos de dietas disponibles, incluyendo sus características y categorizaciones para su gestión y consulta.",
-      "examples": [
-        "\"Dieta baja en sodio: indicada para pacientes con hipertensión, restringe alimentos con alto contenido de sal.\"",
-        "\"Dieta vegetariana estricta: exclusión de todos los productos de origen animal, incluyendo lácteos y huevos.\""
       ]
     },
     "EPIS_DISCHARGE_SHIFTS": {
@@ -1409,11 +1068,6 @@
         "altas hospitalarias",
         "registro de turnos",
         "gestión de episodios"
-      ],
-      "description_es": "Tabla que registra los turnos de alta médica en episodios hospitalarios, almacenando información sobre las fechas, horarios y personal involucrado en el proceso.",
-      "examples": [
-        "Registro del turno de alta del paciente Juan Pérez el 15/03/2023 a las 14:30, atendido por la enfermera Laura Gómez.",
-        "Alta médica del paciente Ana Rodríguez el 22/06/2023 en el turno nocturno, supervisada por el Dr. Carlos Méndez."
       ]
     },
     "EPIS_EPISODES": {
@@ -1424,11 +1078,6 @@
         "historial médico",
         "atenciones médicas",
         "estancias hospitalarias"
-      ],
-      "description_es": "La tabla 'EPIS_EPISODES' almacena registros de episodios o eventos relacionados con un sistema o aplicación, incluyendo detalles como fechas, estados y posibles relaciones con otros elementos. Su propósito principal es gestionar y rastrear la información de cada episodio de manera estructurada.",
-      "examples": [
-        "Registro de un episodio de falla en un sistema hospitalario con fecha de inicio, estado 'resuelto' y relación con el equipo médico involucrado.",
-        "Episodio de actualización de software con detalles de la versión instalada, fecha de implementación y estado 'completado'."
       ]
     },
     "EPIS_ISOLATION_TYPES": {
@@ -1439,11 +1088,6 @@
         "categorías de aislamiento",
         "precauciones de aislamiento",
         "protocolos de aislamiento"
-      ],
-      "description_es": "La tabla 'EPIS_ISOLATION_TYPES' almacena los diferentes tipos de aislamiento utilizados en episodios médicos o procedimientos, definiendo sus características y protocolos asociados.",
-      "examples": [
-        "\"Aislamiento de contacto\": protocolo para prevenir infecciones por microorganismos transmitidos por contacto directo o indirecto con el paciente.",
-        "\"Aislamiento respiratorio\": medidas específicas para enfermedades transmitidas por gotículas aéreas, como el uso de mascarillas N95."
       ]
     },
     "EPIS_MEDICAL_DISCHARGE_REASONS": {
@@ -1454,11 +1098,6 @@
         "causas de alta en episodios",
         "descripción de altas médicas",
         "tipos de alta hospitalaria"
-      ],
-      "description_es": "La tabla 'EPIS_MEDICAL_DISCHARGE_REASONS' almacena los motivos de alta médica registrados en el sistema, utilizados para categorizar y documentar las circunstancias de finalización de episodios clínicos.",
-      "examples": [
-        "\"Alta por recuperación completa del paciente tras tratamiento exitoso de neumonía.\"",
-        "\"Alta voluntaria del paciente contra recomendación médica por motivos personales.\""
       ]
     },
     "EPIS_NOTIFIABLE_DISEASE_DIAGNOSTICS_STATES": {
@@ -1469,11 +1108,6 @@
         "diagnósticos médicos",
         "registro de enfermedades",
         "notificación obligatoria"
-      ],
-      "description_es": "Almacena los estados de diagnóstico asociados a enfermedades de notificación obligatoria, registrando información relevante sobre el proceso de identificación y seguimiento de casos.",
-      "examples": [
-        "\"Paciente con diagnóstico confirmado de tuberculosis en estado 'Activo' bajo tratamiento supervisado.\"",
-        "\"Caso sospechoso de dengue cambiado a estado 'Descartado' tras resultados negativos de laboratorio.\""
       ]
     },
     "EPIS_NOTIFIABLE_DISEASE_ORIGIN": {
@@ -1484,11 +1118,6 @@
         "registro epidemiológico",
         "enfermedades de declaración obligatoria",
         "vigilancia sanitaria"
-      ],
-      "description_es": "La tabla 'EPIS_NOTIFIABLE_DISEASE_ORIGIN' almacena información sobre el origen o procedencia de enfermedades de declaración obligatoria, registrando posibles fuentes o causas asociadas. Su propósito es facilitar el seguimiento epidemiológico y análisis de brotes de enfermedades notificables.",
-      "examples": [
-        "\"Origen: Consumo de agua contaminada en zona rural asociado a brote de cólera.\"",
-        "\"Procedencia: Contacto con aves infectadas como fuente probable de gripe aviar en el caso notificado.\""
       ]
     },
     "EPIS_PROCEDURES": {
@@ -1499,11 +1128,6 @@
         "actos médicos",
         "procedimientos quirúrgicos",
         "tratamientos hospitalarios"
-      ],
-      "description_es": "La tabla 'EPIS_PROCEDURES' almacena información sobre procedimientos médicos realizados a pacientes, incluyendo detalles como tipo de procedimiento, fecha y profesional responsable.",
-      "examples": [
-        "\"Inserción de catéter venoso central realizado el 15/03/2023 por el Dr. García en el paciente con ID 12345.\"",
-        "\"Cirugía de apendicectomía realizada el 22/06/2023 por la Dra. Martínez en el paciente con ID 67890.\""
       ]
     },
     "EPIS_STATES": {
@@ -1514,11 +1138,6 @@
         "estados de eventos",
         "tipos de estado",
         "EPIS_STATES"
-      ],
-      "description_es": "La tabla 'EPIS_STATES' almacena los diferentes estados o fases que pueden tener los episodios o eventos registrados en el sistema, permitiendo su seguimiento y gestión.",
-      "examples": [
-        "\"En curso\" - Estado que indica que un episodio médico está activo y siendo atendido actualmente.",
-        "\"Cerrado\" - Estado que marca un episodio como finalizado, ya sea por alta médica o conclusión del tratamiento."
       ]
     },
     "EXPL_DESCRIPTIONS": {
@@ -1529,11 +1148,6 @@
         "textos explicativos",
         "glosario",
         "definiciones"
-      ],
-      "description_es": "La tabla 'EXPL_DESCRIPTIONS' almacena descripciones detalladas asociadas a elementos específicos, posiblemente utilizadas para explicar conceptos, procesos o entidades en el sistema. Su propósito principal es proporcionar información contextual o aclaratoria sobre otros componentes de la base de datos.",
-      "examples": [
-        "\"Descripción del proceso de facturación: detalla los pasos desde la generación hasta el pago, incluyendo validaciones y estados intermedios.\"",
-        "\"Explicación del campo 'Nivel de Prioridad': define los valores posibles (Alta, Media, Baja) y su impacto en el flujo de trabajo del sistema.\""
       ]
     },
     "EXPL_IMAGE_TYPES": {
@@ -1544,11 +1158,6 @@
         "imágenes diagnósticas",
         "clasificación de imágenes",
         "estudios radiológicos"
-      ],
-      "description_es": "La tabla 'EXPL_IMAGE_TYPES' almacena y gestiona los diferentes tipos de imágenes utilizadas en el sistema, incluyendo sus características y clasificaciones asociadas.",
-      "examples": [
-        "\"Tipo de imagen: 'Radiografía' con características: formato DICOM, clasificación médica, resolución 2048x2048 píxeles.\"",
-        "\"Tipo de imagen: 'Fotografía de producto' con características: formato JPEG, clasificación comercial, resolución 1920x1080 píxeles.\""
       ]
     },
     "HACR_CRITERIA_RISKS": {
@@ -1559,11 +1168,6 @@
         "riesgos asociados",
         "clasificación de riesgos",
         "gestión de riesgos"
-      ],
-      "description_es": "La tabla 'HACR_CRITERIA_RISKS' almacena los criterios y parámetros asociados a la evaluación de riesgos, permitiendo su clasificación y gestión sistemática.",
-      "examples": [
-        "\"Criterio de riesgo: 'Exposición a sustancias químicas peligrosas' con parámetros como frecuencia de exposición y nivel de toxicidad.\"",
-        "\"Criterio de riesgo: 'Trabajo en alturas' clasificado por altura mínima requerida para considerarse riesgo y equipos de protección obligatorios.\""
       ]
     },
     "HADT_DIABETES_TYPES": {
@@ -1574,11 +1178,6 @@
         "códigos diabetes",
         "diabetes tipo 1 y 2",
         "enfermedades metabólicas"
-      ],
-      "description_es": "La tabla 'HADT_DIABETES_TYPES' almacena información sobre los diferentes tipos de diabetes, incluyendo sus características y clasificaciones médicas. Su propósito es facilitar el registro y consulta de datos relacionados con esta condición de salud.",
-      "examples": [
-        "\"Tipo 1: Diabetes autoinmune que generalmente se diagnostica en niños y jóvenes, caracterizada por la incapacidad del páncreas para producir insulina.\"",
-        "\"Tipo 2: Diabetes metabólica común en adultos, asociada a resistencia a la insulina y often linked to factores como obesidad y sedentarismo.\""
       ]
     },
     "HAHT_HYPERTENSION_TYPES": {
@@ -1589,11 +1188,6 @@
         "hipertensión arterial",
         "categorías de presión alta",
         "HTA tipos"
-      ],
-      "description_es": "La tabla 'HAHT_HYPERTENSION_TYPES' almacena y clasifica los diferentes tipos de hipertensión arterial, incluyendo sus características y categorías asociadas. Su propósito es facilitar la identificación y gestión de las variantes de esta condición médica.",
-      "examples": [
-        "\"Hipertensión primaria: Tipo sin causa médica identificable, representa el 90-95% de los casos.\"",
-        "\"Hipertensión secundaria: Causada por condiciones como enfermedad renal o trastornos endocrinos, representa 5-10% de los casos.\""
       ]
     },
     "HAIR_INDICATORS_RESULTS": {
@@ -1604,11 +1198,6 @@
         "resultados de análisis",
         "estado del cabello",
         "diagnóstico capilar"
-      ],
-      "description_es": "La tabla 'HAIR_INDICATORS_RESULTS' almacena los resultados de análisis o indicadores relacionados con muestras de cabello, posiblemente para estudios médicos, toxicológicos o de investigación.",
-      "examples": [
-        "Resultado de análisis de cabello que muestra niveles elevados de mercurio, indicando posible exposición a contaminantes ambientales.",
-        "Concentración de cortisol en cabello como indicador de estrés crónico en un estudio médico longitudinal."
       ]
     },
     "HAIT_INDICATOR_TYPES": {
@@ -1619,11 +1208,6 @@
         "clasificación de indicadores",
         "indicadores",
         "tipología de indicadores"
-      ],
-      "description_es": "La tabla 'HAIT_INDICATOR_TYPES' almacena los tipos de indicadores disponibles en el sistema, definiendo sus categorías y características principales para su clasificación y uso.",
-      "examples": [
-        "\"Tasa de desempleo juvenil\" - Indicador económico que mide el porcentaje de jóvenes desempleados en relación a la población activa juvenil.",
-        "\"Índice de calidad del aire\" - Indicador ambiental que evalúa los niveles de contaminación atmosférica en una zona determinada."
       ]
     },
     "HEAL_CONTROLS": {
@@ -1634,11 +1218,6 @@
         "códigos de control",
         "registros de controles",
         "controles eliminados"
-      ],
-      "description_es": "La tabla 'HEAL_CONTROLS' almacena registros de controles médicos o sanitarios, posiblemente relacionados con seguimientos, verificaciones o procesos de salud. Su propósito es gestionar y organizar información sobre evaluaciones o intervenciones en el ámbito de la salud.",
-      "examples": [
-        "Registro de presión arterial y frecuencia cardíaca tomados durante un chequeo médico rutinario.",
-        "Resultados de laboratorio y observaciones del médico en un control de seguimiento postoperatorio."
       ]
     },
     "HEAL_DIABETES_INDICATORS": {
@@ -1649,11 +1228,6 @@
         "registro pacientes diabéticos",
         "hábitos diabetes",
         "tratamientos diabetes"
-      ],
-      "description_es": "Tabla que almacena indicadores clave relacionados con el diagnóstico, tratamiento y seguimiento de pacientes con diabetes, incluyendo métricas de salud relevantes. Su propósito es facilitar el análisis y gestión de datos clínicos para mejorar la atención médica.",
-      "examples": [
-        "\"Niveles promedio de glucosa en sangre (HbA1c) registrados trimestralmente para monitorear el control glucémico de pacientes.\"",
-        "\"Porcentaje de pacientes que alcanzan sus metas de presión arterial según los estándares clínicos establecidos.\""
       ]
     },
     "HEAL_HEALTHY_TYPES": {
@@ -1664,11 +1238,6 @@
         "clasificación saludable",
         "estados de salud",
         "registros médicos"
-      ],
-      "description_es": "La tabla 'HEAL_HEALTHY_TYPES' almacena y gestiona los diferentes tipos de categorías o clasificaciones relacionados con la salud, permitiendo su organización y referencia en el sistema.",
-      "examples": [
-        "\"Tipos de dietas saludables (ej. keto, mediterránea, vegana).\"",
-        "\"Clasificaciones de actividad física (ej. cardio, fuerza, flexibilidad).\""
       ]
     },
     "HEAL_HYPERTENS_INDICATORS": {
@@ -1679,11 +1248,6 @@
         "riesgo cardiovascular",
         "seguimiento de pacientes",
         "procedimientos médicos"
-      ],
-      "description_es": "La tabla 'HEAL_HYPERTENS_INDICATORS' almacena indicadores y métricas relacionados con el monitoreo y evaluación de pacientes con hipertensión, posiblemente incluyendo datos clínicos y resultados de seguimiento.",
-      "examples": [
-        "\"Presión arterial sistólica y diastólica registrada durante el último control médico del paciente.\"",
-        "\"Número de incidentes de crisis hipertensivas reportadas por el paciente en los últimos 6 meses.\""
       ]
     },
     "HIST_ALCOHOL_TYPES": {
@@ -1694,11 +1258,6 @@
         "clasificación de alcohol",
         "licores",
         "categorías de bebidas"
-      ],
-      "description_es": "La tabla HIST_ALCOHOL_TYPES almacena información histórica sobre diferentes tipos de bebidas alcohólicas, incluyendo sus características y evolución a lo largo del tiempo.",
-      "examples": [
-        "Registro de cambios en los niveles de alcohol y métodos de producción del vino tinto entre 1900 y 2000.",
-        "Evolución de los ingredientes y gradación alcohólica de la cerveza artesanal en diferentes regiones desde 1980 hasta 2020."
       ]
     },
     "HIST_ANDROLOGICALS": {
@@ -1709,11 +1268,6 @@
         "reproducción",
         "datos médicos",
         "historial andrológico"
-      ],
-      "description_es": "La tabla HIST_ANDROLOGICALS almacena el historial de estudios y resultados andrológicos, incluyendo datos relevantes para el análisis de la salud reproductiva masculina.",
-      "examples": [
-        "Resultados de un espermiograma que incluyen concentración, movilidad y morfología espermática.",
-        "Historial de tratamientos hormonales para infertilidad masculina con fechas y dosis registradas."
       ]
     },
     "HIST_BIRTH_TYPES": {
@@ -1724,11 +1278,6 @@
         "registro de nacimientos",
         "partos",
         "alumbramientos"
-      ],
-      "description_es": "La tabla HIST_BIRTH_TYPES almacena los diferentes tipos de nacimientos registrados históricamente, sirviendo como catálogo de referencia para clasificar eventos de natalidad.",
-      "examples": [
-        "\"Parto natural\": registro de nacimientos ocurridos sin intervenciones médicas significativas.",
-        "\"Cesárea\": nacimientos realizados mediante intervención quirúrgica para extraer al bebé."
       ]
     },
     "HIST_CONTRACEPTIVE_METHODS": {
@@ -1739,11 +1288,6 @@
         "historial anticonceptivo",
         "control de natalidad",
         "planificación familiar"
-      ],
-      "description_es": "Registra el historial de métodos anticonceptivos utilizados por pacientes, incluyendo fechas, tipos de métodos y observaciones relevantes.",
-      "examples": [
-        "Registro del cambio de método anticonceptivo de una paciente, indicando el paso de píldoras a DIU el 15/03/2022, con nota sobre mejor tolerancia al nuevo método.",
-        "Historial de una paciente que utilizó preservativos desde 01/01/2020 hasta 30/06/2021, luego optó por implante subdérmico con observación de seguimiento programado."
       ]
     },
     "HIST_GYNECOBSTETRICS": {
@@ -1754,11 +1298,6 @@
         "gestaciones y partos",
         "síntomas ginecológicos",
         "menstruación y menopausia"
-      ],
-      "description_es": "La tabla HIST_GYNECOBSTETRICS almacena el historial médico ginecológico y obstétrico de pacientes, incluyendo información relevante sobre embarazos, partos y condiciones ginecológicas previas.",
-      "examples": [
-        "Registro de embarazos previos de la paciente, incluyendo fechas, tipos de parto (vaginal o cesárea) y complicaciones presentadas.",
-        "Historial de condiciones ginecológicas como endometriosis, quistes ováricos o cirugías uterinas, con fechas y tratamientos aplicados."
       ]
     },
     "HIST_HISTORY_DIAG_PROC": {
@@ -1769,11 +1308,6 @@
         "procedimientos",
         "registros clínicos",
         "evolución del paciente"
-      ],
-      "description_es": "Almacena el historial de diagnósticos y procedimientos médicos realizados a pacientes, registrando información relevante para su seguimiento clínico.",
-      "examples": [
-        "Registro del diagnóstico de diabetes tipo 2 y el procedimiento de prescripción de insulina para un paciente en seguimiento.",
-        "Historial de una cirugía de apendicectomía y los diagnósticos preoperatorios asociados para un paciente específico."
       ]
     },
     "HIST_HISTORY_TYPES": {
@@ -1784,11 +1318,6 @@
         "clasificación de historiales",
         "historiales del sistema",
         "tipos de eventos históricos"
-      ],
-      "description_es": "La tabla HIST_HISTORY_TYPES almacena los diferentes tipos de registros históricos o eventos que pueden ser registrados en el sistema, sirviendo como catálogo de clasificación.",
-      "examples": [
-        "\"Registro de cambios en datos de usuario (actualización de perfil).\"",
-        "\"Evento de seguridad (inicio de sesión fallido).\""
       ]
     },
     "HIST_MORPHOLOGICAL_TYPES": {
@@ -1799,11 +1328,6 @@
         "historial morfológico",
         "variantes morfológicas",
         "categorías morfológicas"
-      ],
-      "description_es": "La tabla HIST_MORPHOLOGICAL_TYPES almacena los tipos morfológicos históricos registrados, incluyendo posibles clasificaciones y características asociadas a cada tipo.",
-      "examples": [
-        "\"Tipo morfológico 'Aureus' con características de monedas romanas de oro de alta pureza, acuñadas entre el siglo I a.C. y el siglo IV d.C.\"",
-        "\"Clasificación 'Gótico Flamígero' para arquitectura del siglo XV, con detalles de arcos conopiales y tracerías exuberantes.\""
       ]
     },
     "HIST_OTOACOUSTIC_TYPES": {
@@ -1814,11 +1338,6 @@
         "pruebas auditivas",
         "PEOT",
         "audiología"
-      ],
-      "description_es": "La tabla HIST_OTOACOUSTIC_TYPES almacena los tipos históricos de emisiones otoacústicas registradas, utilizada para clasificar y rastrear las variaciones en los resultados de las pruebas auditivas.",
-      "examples": [
-        "\"Tipo 1: Emisiones otoacústicas transientes (EOAT) registradas en pruebas de tamizaje neonatal, indicando respuesta normal del oído interno.\"",
-        "\"Tipo 2: Emisiones otoacústicas de productos de distorsión (EOAPD) con amplitud reducida, asociadas a posibles alteraciones cocleares tempranas.\""
       ]
     },
     "HIST_PEDIATRICS": {
@@ -1829,11 +1348,6 @@
         "antecedentes médicos niños",
         "vacunas infantiles",
         "enfermedades pediátricas"
-      ],
-      "description_es": "La tabla HIST_PEDIATRICS almacena el historial médico de pacientes pediátricos, incluyendo registros de consultas, diagnósticos y tratamientos aplicados. Su propósito es centralizar la información clínica infantil para seguimiento y análisis médico.",
-      "examples": [
-        "Registro de consulta del paciente de 5 años con diagnóstico de varicela, incluyendo tratamiento con aciclovir y recomendaciones de cuidado en casa.",
-        "Historial de vacunación completo de una niña de 2 años, con fechas y lotes de las vacunas administradas según el calendario infantil."
       ]
     },
     "HIST_SOCIOECONOMICS": {
@@ -1844,11 +1358,6 @@
         "pacientes",
         "estudiantes",
         "registro histórico"
-      ],
-      "description_es": "Tabla que almacena información histórica sobre indicadores socioeconómicos, registrando datos demográficos, económicos y sociales a lo largo del tiempo.",
-      "examples": [
-        "\"Registro anual del PIB per cápita y tasa de desempleo por país desde 1990 hasta 2023.\"",
-        "\"Evolución mensual del índice de pobreza y acceso a servicios básicos en una región específica durante los últimos 5 años.\""
       ]
     },
     "HIST_SPORT_LEVELS": {
@@ -1859,11 +1368,6 @@
         "rangos deportivos",
         "clasificación deportiva",
         "niveles de destreza en deportes"
-      ],
-      "description_es": "La tabla HIST_SPORT_LEVELS almacena el historial de niveles deportivos alcanzados por los usuarios, registrando cambios y progresiones a lo largo del tiempo.",
-      "examples": [
-        "\"Registro de cambio: usuario 12345 actualizado de nivel 'Principiante' a 'Intermedio' en tenis el 15/03/2023.\"",
-        "\"Historial completo de niveles de natación para usuario 67890, mostrando progresión desde 'Básico' hasta 'Avanzado' entre 2020-2022.\""
       ]
     },
     "HIST_SPORT_TYPES": {
@@ -1874,11 +1378,6 @@
         "categorías deportivas",
         "historial deportivo",
         "deportes eliminados"
-      ],
-      "description_es": "Tabla que almacena el historial de tipos de deportes registrados en el sistema, incluyendo información sobre su evolución y cambios a lo largo del tiempo.",
-      "examples": [
-        "Registro del cambio de nombre de 'Balonmano' a 'Handball' en el sistema el 15/03/2020, reflejando la adopción del término internacional.",
-        "Histórico de la modificación en las reglas del fútbol sala, actualizando la descripción del deporte el 10/07/2019 para incluir el nuevo límite de faltas."
       ]
     },
     "HIST_TOXIC_HABITS": {
@@ -1889,11 +1388,6 @@
         "consumo de sustancias",
         "registro de toxicomanías",
         "antecedentes de vicio"
-      ],
-      "description_es": "La tabla HIST_TOXIC_HABITS almacena el historial de hábitos tóxicos de los pacientes, incluyendo información sobre consumo de sustancias, frecuencia y periodos de exposición. Su propósito es registrar y monitorear los patrones de conductas nocivas para evaluaciones médicas o estudios clínicos.",
-      "examples": [
-        "\"Registro de consumo de tabaco: paciente fumó 10 cigarrillos diarios durante 5 años (2015-2020), con intentos de abandono en 2018.\"",
-        "\"Historial de consumo de alcohol: paciente reporta ingesta semanal de 5 bebidas alcohólicas, con episodios de binge drinking los fines de semana durante los últimos 2 meses.\""
       ]
     },
     "I18N_LANGUAGES": {
@@ -1904,11 +1398,6 @@
         "idiomas soportados",
         "configuración de idioma",
         "traducciones"
-      ],
-      "description_es": "Tabla que almacena los idiomas soportados en un sistema de internacionalización, incluyendo sus códigos y nombres. Su propósito es centralizar la gestión de lenguajes disponibles para traducciones y localización.",
-      "examples": [
-        "\"Tabla que contiene registros como ('es', 'Español') y ('en', 'Inglés') para identificar los idiomas disponibles en la plataforma.\"",
-        "\"Almacena información básica de idiomas como código ISO (ej. 'fr') y nombre completo (ej. 'Francés') para su uso en selección de preferencias de usuario.\""
       ]
     },
     "INJU_BURN_STAGES": {
@@ -1919,11 +1408,6 @@
         "clasificación de quemaduras",
         "gravedad de quemaduras",
         "lesiones por quemaduras"
-      ],
-      "description_es": "La tabla 'INJU_BURN_STAGES' almacena información sobre las diferentes etapas o fases de quemaduras, incluyendo posibles características y clasificaciones relacionadas con lesiones por quemaduras.",
-      "examples": [
-        "\"Grado 1: Eritema doloroso sin formación de ampollas, afectando solo la epidermis (capa superficial de la piel).\"",
-        "\"Grado 3: Necrosis de todas las capas de la piel (epidermis, dermis e hipodermis), con apariencia seca y coriácea, sin dolor debido a la destrucción de terminaciones nerviosas.\""
       ]
     },
     "INJU_LOCATIONS": {
@@ -1934,11 +1418,6 @@
         "lugares siniestros",
         "sitios afectados",
         "zonas dañadas"
-      ],
-      "description_es": "Tabla que almacena información geográfica de ubicaciones relevantes para el Instituto de la Juventud, incluyendo datos de localización y posibles atributos asociados.",
-      "examples": [
-        "\"Sede principal del Instituto de la Juventud en Madrid, con dirección en Calle Ortega y Gasset 71, código postal 28006 y horario de atención de 9:00 a 14:00.\"",
-        "\"Centro juvenil 'La Casa de la Juventud' en Sevilla, ubicado en Plaza de Armas 2, con servicios de biblioteca, talleres y asesoría laboral.\""
       ]
     },
     "INJU_NEOPLA_STAGES": {
@@ -1949,11 +1428,6 @@
         "clasificación de injurias",
         "grados de neoplasia",
         "estadificación médica"
-      ],
-      "description_es": "Tabla que almacena información sobre los estadios de neoplasias, incluyendo posibles clasificaciones y características relevantes para el seguimiento médico. Su propósito es facilitar el registro y análisis de los diferentes grados de evolución de enfermedades tumorales.",
-      "examples": [
-        "\"Estadio IIIA de adenocarcinoma pulmonar según clasificación TNM, con metástasis en ganglios linfáticos regionales pero sin afectación de órganos distantes.\"",
-        "\"Neoplasia de colon en estadio II (Dukes B), con invasión de la capa muscular pero sin compromiso de ganglios linfáticos.\""
       ]
     },
     "INJU_PRESSURE_STAGES": {
@@ -1964,11 +1438,6 @@
         "grados de presión",
         "clasificación de presión",
         "estadios de lesión"
-      ],
-      "description_es": "La tabla 'INJU_PRESSURE_STAGES' almacena información sobre las etapas o fases de presión relacionadas con procesos de inyección, registrando parámetros y valores asociados a cada etapa.",
-      "examples": [
-        "\"Registro de presión inicial (100 psi) y temperatura (80°C) en la etapa de pre-inyección para el pozo X-2023.\"",
-        "\"Datos de presión máxima alcanzada (1500 psi) durante la fase de inyección principal en el proceso YZ-45, con fecha y hora de registro.\""
       ]
     },
     "INJU_SURGICAL_STAGES": {
@@ -1979,11 +1448,6 @@
         "procedimientos médicos",
         "estadios quirúrgicos",
         "intervenciones quirúrgicas"
-      ],
-      "description_es": "Tabla que almacena información sobre las etapas o fases de procedimientos quirúrgicos, incluyendo posibles estados, tiempos y transiciones entre etapas.",
-      "examples": [
-        "\"Registro de la etapa 'Preparación preoperatoria' con hora de inicio 08:30 y transición a 'Anestesia' a las 09:15.\"",
-        "\"Detalle de la etapa 'Cirugía principal' con duración de 2 horas 45 minutos y notas sobre instrumentos utilizados.\""
       ]
     },
     "INJU_TYPES": {
@@ -1994,11 +1458,6 @@
         "categorías de daños",
         "lesiones físicas",
         "injuria"
-      ],
-      "description_es": "La tabla 'INJU_TYPES' almacena los diferentes tipos de incidencias o categorías utilizadas para clasificar registros dentro del sistema, facilitando su organización y gestión.",
-      "examples": [
-        "\"Fallo en el sistema de iluminación\" - Tipo de incidencia para reportar problemas con las luces en un edificio.",
-        "\"Avería en equipos informáticos\" - Categoría para clasificar problemas relacionados con hardware o software en los ordenadores."
       ]
     },
     "INTE_EXTERNAL_ACTIVITY": {
@@ -2009,11 +1468,6 @@
         "registro externo",
         "eventos pacientes",
         "seguimiento externo"
-      ],
-      "description_es": "Almacena información sobre actividades externas realizadas por integrantes de la organización, incluyendo detalles como tipo de actividad, participantes y fechas de realización.",
-      "examples": [
-        "\"Conferencia sobre innovación tecnológica\" asistida por el Dr. Pérez el 15/03/2023, con participación de 5 miembros de la organización.",
-        "\"Taller de liderazgo juvenil\" organizado por la Sra. Gómez del 20 al 22/05/2023, con asistencia de 30 participantes externos."
       ]
     },
     "INVASIVE_DEVICES": {
@@ -2024,11 +1478,6 @@
         "equipo clínico",
         "material quirúrgico",
         "productos sanitarios"
-      ],
-      "description_es": "La tabla 'INVASIVE_DEVICES' almacena información sobre dispositivos médicos invasivos utilizados en pacientes, incluyendo sus características y tiempos de uso. Su propósito es registrar y gestionar datos clínicos relacionados con estos dispositivos para seguimiento y análisis.",
-      "examples": [
-        "Registro de un catéter venoso central con fecha de inserción, tipo de catéter y tiempo de permanencia en el paciente.",
-        "Datos de un marcapasos temporal incluyendo modelo, fecha de implantación y duración del uso en el paciente."
       ]
     },
     "INVASIVE_DEVICES_SUBTYPES": {
@@ -2039,8 +1488,7 @@
         "equipo médico invasivo",
         "categorías de dispositivos",
         "tipos de dispositivos médicos"
-      ],
-      "description_es": "La tabla 'INVASIVE_DEVICES_SUBTYPES' almacena los subtipos de dispositivos médicos invasivos utilizados en procedimientos clínicos, facilitando su clasificación y gestión."
+      ]
     },
     "INVASIVE_DEVICES_TYPES": {
       "description": "Tabla que almacena los tipos de dispositivos invasivos utilizados en procedimientos médicos, incluyendo códigos y descripciones en español. Registra si el tipo ha sido eliminado y la fecha de última modificación.",
@@ -2050,11 +1498,6 @@
         "instrumentos médicos invasivos",
         "catéteres y sondas",
         "equipo médico invasivo"
-      ],
-      "description_es": "La tabla 'INVASIVE_DEVICES_TYPES' almacena los diferentes tipos de dispositivos médicos invasivos utilizados en procedimientos clínicos, incluyendo sus características y categorías. Su propósito es facilitar la gestión y seguimiento de estos dispositivos en entornos sanitarios.",
-      "examples": [
-        "\"Catéter central de inserción periférica (PICC): Dispositivo para administración prolongada de medicamentos o nutrición parenteral.\"",
-        "\"Stent coronario: Dispositivo tubular metálico utilizado para mantener abiertas las arterias coronarias obstruidas.\""
       ]
     },
     "MEDI_ACTIVE_INGREDIENTS": {
@@ -2065,11 +1508,6 @@
         "componentes de medicamentos",
         "sustancias activas",
         "fármacos"
-      ],
-      "description_es": "La tabla 'MEDI_ACTIVE_INGREDIENTS' almacena información sobre los principios activos de medicamentos, incluyendo sus propiedades y características esenciales para su identificación y uso farmacéutico.",
-      "examples": [
-        "\"Paracetamol: principio activo con propiedades analgésicas y antipiréticas, utilizado en el tratamiento del dolor leve a moderado y la fiebre.\"",
-        "\"Ibuprofeno: principio activo antiinflamatorio no esteroideo (AINE), empleado para reducir la inflamación, aliviar el dolor y disminuir la fiebre.\""
       ]
     },
     "MEDI_GROUPS": {
@@ -2080,11 +1518,6 @@
         "clasificación de medicinas",
         "familias de fármacos",
         "tipos de medicamentos"
-      ],
-      "description_es": "La tabla 'MEDI_GROUPS' almacena información sobre grupos de medicamentos, incluyendo posibles categorizaciones o relaciones entre ellos para fines de organización y consulta.",
-      "examples": [
-        "\"Grupo de antiinflamatorios no esteroideos (AINEs)\" que incluye medicamentos como ibuprofeno y naproxeno.",
-        "\"Antibióticos betalactámicos\" que agrupa penicilinas, cefalosporinas y carbapenémicos."
       ]
     },
     "MEDI_LABORATORIES": {
@@ -2095,11 +1528,6 @@
         "análisis clínicos",
         "pruebas médicas",
         "centros de diagnóstico"
-      ],
-      "description_es": "La tabla 'MEDI_LABORATORIOS' almacena información sobre laboratorios médicos, incluyendo sus datos de identificación, ubicación y posiblemente servicios ofrecidos. Su propósito es gestionar y organizar los registros de laboratorios para facilitar su consulta y administración.",
-      "examples": [
-        "\"Laboratorio Clínico Central\" ubicado en Calle 123, Ciudad A, especializado en análisis hematológicos y pruebas COVID-19.",
-        "\"BioLab Diagnósticos\" con sede en Avenida XYZ 456, ofrece servicios de microbiología y genética molecular."
       ]
     },
     "MEDI_MEDICATIONS": {
@@ -2110,11 +1538,6 @@
         "dosis de medicación",
         "registro de medicinas",
         "administración de medicamentos"
-      ],
-      "description_es": "La tabla 'MEDI_MEDICATIONS' almacena información sobre medicamentos, incluyendo sus propiedades, dosis y posibles interacciones, para su gestión en sistemas de salud.",
-      "examples": [
-        "\"MEDI_MEDICATIONS\" contiene registros como 'Paracetamol 500mg, analgésico, máxima dosis diaria: 4g, interacciona con Warfarina'.",
-        "En \"MEDI_MEDICATIONS\" se encuentra 'Atorvastatina 20mg, hipolipemiante, administrar por la noche, evitar con jugo de pomelo'."
       ]
     },
     "MEDI_PHARMACEUTICAL_FORMS": {
@@ -2125,11 +1548,6 @@
         "formatos de medicación",
         "tipos de fármacos",
         "formulaciones médicas"
-      ],
-      "description_es": "La tabla 'MEDI_PHARMACEUTICAL_FORMS' almacena los diferentes formatos farmacéuticos disponibles para los medicamentos, como comprimidos, cápsulas o soluciones inyectables. Su propósito es catalogar las presentaciones de los productos médicos para su gestión y referencia.",
-      "examples": [
-        "\"Comprimidos recubiertos de 500 mg\" - Forma farmacéutica sólida para administración oral.",
-        "\"Solución inyectable en ampolla de 2 ml\" - Presentación líquida estéril para uso parenteral."
       ]
     },
     "MEDI_PHARMA_THERAPEUTIC_GROUPS": {
@@ -2140,11 +1558,6 @@
         "categorías farmacológicas",
         "fármacos por uso",
         "terapia medicamentosa"
-      ],
-      "description_es": "La tabla 'MEDI_PHARMA_THERAPEUTIC_GROUPS' almacena información sobre grupos terapéuticos de medicamentos, incluyendo su clasificación y características principales para fines farmacéuticos y médicos.",
-      "examples": [
-        "\"Grupo terapéutico: Antiinflamatorios no esteroideos (AINEs). Incluye medicamentos como ibuprofeno y naproxeno, utilizados para reducir inflamación y aliviar dolor.\"",
-        "\"Grupo terapéutico: Inhibidores de la bomba de protones (IBP). Contiene fármacos como omeprazol y esomeprazol, indicados para tratar acidez estomacal y úlceras gástricas.\""
       ]
     },
     "MEDI_ROUTES": {
@@ -2155,11 +1568,6 @@
         "formas de administrar medicamentos",
         "tipos de ruta médica",
         "administración de fármacos"
-      ],
-      "description_es": "La tabla 'MEDI_ROUTES' almacena las diferentes vías de administración de medicamentos, como oral, intravenosa o tópica, utilizadas en sistemas de gestión farmacéutica.",
-      "examples": [
-        "\"Oral\" como vía de administración para medicamentos en forma de pastillas o jarabes.",
-        "\"Intravenosa\" como ruta para administrar medicamentos directamente al torrente sanguíneo."
       ]
     },
     "NURSING_INTERVENTIONS_TYPES": {
@@ -2170,11 +1578,6 @@
         "actividades de enfermería",
         "clasificación de intervenciones",
         "procedimientos enfermeros"
-      ],
-      "description_es": "La tabla 'NURSING_INTERVENTIONS_TYPES' almacena los diferentes tipos de intervenciones de enfermería disponibles, categorizando y describiendo las acciones clínicas realizadas por el personal de enfermería.",
-      "examples": [
-        "\"Administración de medicamentos: incluye la preparación y suministro de fármacos según prescripción médica, con registro de dosis y horarios.\"",
-        "\"Cuidado de heridas: comprende la limpieza, aplicación de apósitos y seguimiento de la evolución de lesiones cutáneas o quirúrgicas.\""
       ]
     },
     "ONCO_BIOPSY_TYPES": {
@@ -2185,11 +1588,6 @@
         "clasificación de biopsias",
         "muestras tumorales",
         "diagnóstico patológico"
-      ],
-      "description_es": "La tabla 'ONCO_BIOPSY_TYPES' almacena los diferentes tipos de biopsias utilizados en oncología, incluyendo sus características y métodos de realización. Su propósito es estandarizar y categorizar los procedimientos de biopsia para su uso en registros médicos y análisis clínicos.",
-      "examples": [
-        "\"Biopsia por punción con aguja fina (PAAF): procedimiento mínimamente invasivo para extraer células de tumores superficiales o palpables, común en diagnóstico de cáncer de tiroides.\"",
-        "\"Biopsia excisional: extracción completa de una masa o área sospechosa, utilizada tanto para diagnóstico como tratamiento en casos de pequeños tumores cutáneos.\""
       ]
     },
     "ONCO_CANCERS": {
@@ -2200,11 +1598,6 @@
         "registro oncológico",
         "historial de cáncer",
         "datos tumorales"
-      ],
-      "description_es": "La tabla 'ONCO_CANCERS' almacena información sobre diferentes tipos de cáncer, incluyendo sus características y datos relevantes para su seguimiento y análisis.",
-      "examples": [
-        "\"Carcinoma ductal invasivo: tipo de cáncer de mama con código ICD-10 C50.911, estadio TNM IIB, receptor hormonal positivo.\"",
-        "\"Melanoma maligno cutáneo: localizado en espalda (C43.4), Breslow 1.2mm, sin ulceración, estadio IA según AJCC.\""
       ]
     },
     "ONCO_CLINICAL_STATUS": {
@@ -2215,11 +1608,6 @@
         "estado médico",
         "registro clínico",
         "historial oncológico"
-      ],
-      "description_es": "Tabla que almacena el estado clínico actual de pacientes oncológicos, incluyendo información relevante sobre su condición médica y evolución del tratamiento.",
-      "examples": [
-        "\"Paciente con diagnóstico de carcinoma de mama en estadio III, actualmente en tratamiento con quimioterapia neoadyuvante, mostrando respuesta parcial en la última evaluación de imágenes.\"",
-        "\"Paciente con melanoma metastásico en remisión completa después de 12 ciclos de inmunoterapia, sin evidencia de enfermedad en PET-CT reciente.\""
       ]
     },
     "ONCO_DIFFERENTIATION_STAGES": {
@@ -2230,11 +1618,6 @@
         "clasificación oncológica",
         "diferenciación tumoral",
         "etapas de desarrollo celular"
-      ],
-      "description_es": "Tabla que almacena los diferentes estadios de diferenciación celular en oncología, utilizada para clasificar el grado de madurez de las células tumorales.",
-      "examples": [
-        "\"Estadio indiferenciado: células tumorales con alta inmadurez y agresividad, típico en glioblastomas.\"",
-        "\"Estadio bien diferenciado: células tumorales que conservan características similares al tejido original, como en adenocarcinomas de bajo grado.\""
       ]
     },
     "ONCO_DISEASE_STATES": {
@@ -2245,11 +1628,6 @@
         "enfermedades cancerígenas",
         "tipos de cáncer",
         "estados clínicos oncológicos"
-      ],
-      "description_es": "La tabla 'ONCO_DISEASE_STATES' almacena información sobre los diferentes estados o etapas de enfermedades oncológicas, incluyendo posibles clasificaciones y características asociadas a cada estado.",
-      "examples": [
-        "\"Estadio IIIB de cáncer de pulmón: tumor primario de 5 cm con metástasis en ganglios linfáticos contralaterales.\"",
-        "\"Remisión completa en leucemia linfoblástica aguda: sin evidencia de enfermedad detectable tras tratamiento.\""
       ]
     },
     "ONCO_EPITHELIAL": {
@@ -2260,11 +1638,6 @@
         "tejido epitelial",
         "cáncer epitelial",
         "clasificación epitelial"
-      ],
-      "description_es": "La tabla 'ONCO_EPITHELIAL' almacena datos relacionados con el estudio de células epiteliales en oncología, incluyendo posibles marcadores tumorales y características histopatológicas.",
-      "examples": [
-        "\"Niveles de expresión de la proteína E-cadherina en muestras de carcinoma ductal invasivo, utilizado como marcador de progresión tumoral.\"",
-        "\"Resultados de análisis histopatológico que describen el grado de atipia nuclear en células epiteliales de biopsias de colon, clasificadas como leve, moderada o severa.\""
       ]
     },
     "ONCO_EVENT_INDICATIONS": {
@@ -2275,11 +1648,6 @@
         "descripciones médicas",
         "registro de indicaciones",
         "oncología"
-      ],
-      "description_es": "La tabla 'ONCO_EVENT_INDICATIONS' almacena información sobre indicaciones médicas relacionadas con eventos oncológicos, registrando posibles condiciones o situaciones clínicas asociadas. Su propósito es centralizar datos para el análisis y seguimiento de indicaciones en el ámbito oncológico.",
-      "examples": [
-        "\"Paciente con diagnóstico de cáncer de mama presenta indicación para quimioterapia adyuvante según protocolo NCCN.\"",
-        "\"Indicación de radioterapia paliativa registrada para evento oncológico de metástasis óseas en carcinoma pulmonar.\""
       ]
     },
     "ONCO_FAMILIAR_HISTORY": {
@@ -2290,11 +1658,6 @@
         "cáncer hereditario",
         "registro familiar de cáncer",
         "oncología familiar"
-      ],
-      "description_es": "La tabla 'ONCO_FAMILIAR_HISTORY' almacena información sobre los antecedentes familiares de cáncer de los pacientes, incluyendo posibles relaciones genéticas y patrones hereditarios.",
-      "examples": [
-        "\"Paciente con antecedentes familiares de cáncer de mama en madre y hermana, sugiriendo posible patrón hereditario BRCA.\"",
-        "\"Registro de abuelo paterno con cáncer de colon y tío con cáncer de estómago, indicando potencial síndrome de Lynch en la familia.\""
       ]
     },
     "ONCO_GYN_HISTOLOGIES": {
@@ -2305,11 +1668,6 @@
         "oncología femenina",
         "clasificación histológica",
         "tumores ginecológicos"
-      ],
-      "description_es": "La tabla 'ONCO_GYN_HISTOLOGIES' almacena información sobre los tipos histológicos de cáncer ginecológico, incluyendo características y clasificaciones de los tejidos afectados.",
-      "examples": [
-        "\"Carcinoma de células escamosas del cuello uterino - Tipo histológico más común en cáncer cervical, con grados de diferenciación bien, moderado o pobre.\"",
-        "\"Adenocarcinoma endometrioide de ovario - Variante de cáncer epitelial de ovario que muestra estructuras glandulares similares al endometrio.\""
       ]
     },
     "ONCO_GYN_HRD_STATUS": {
@@ -2320,11 +1678,6 @@
         "Oncología ginecológica HRD",
         "Estado HRD",
         "Marcador HRD ginecológico"
-      ],
-      "description_es": "Tabla que almacena el estado de deficiencia en la recombinación homóloga (HRD) en pacientes oncológicos ginecológicos, incluyendo resultados de pruebas y marcadores genéticos asociados.",
-      "examples": [
-        "\"Paciente con cáncer de ovario: Resultado HRD positivo (Score 52), con mutaciones en BRCA1 y pérdida de heterocigocidad (LOH) elevado.\"",
-        "\"Paciente con cáncer endometrial: HRD negativo (Score 28), sin mutaciones en genes BRCA pero con inestabilidad genómica moderada detectada.\""
       ]
     },
     "ONCO_GYN_TYPES": {
@@ -2335,11 +1688,6 @@
         "oncología ginecológica",
         "tumores ginecológicos",
         "historial oncológico ginecológico"
-      ],
-      "description_es": "Tabla que almacena los diferentes tipos de cáncer ginecológico, incluyendo sus clasificaciones y características principales para fines de registro y análisis médico.",
-      "examples": [
-        "\"Carcinoma de ovario epitelial: Tipo más común de cáncer de ovario, con subtipos como seroso, mucinoso y endometrioide.\"",
-        "\"Carcinoma de cuello uterino: Incluye clasificaciones como escamoso o adenocarcinoma, con estadificación según FIGO.\""
       ]
     },
     "ONCO_HISTOLOGICAL_TYPES": {
@@ -2350,11 +1698,6 @@
         "tejidos cancerosos",
         "oncología",
         "histopatología"
-      ],
-      "description_es": "La tabla 'ONCO_HISTOLOGICAL_TYPES' almacena y clasifica los diferentes tipos histológicos de tumores cancerígenos, facilitando su identificación y estudio en investigaciones oncológicas.",
-      "examples": [
-        "\"Carcinoma ductal infiltrante\" - Tipo histológico común en cáncer de mama, caracterizado por células malignas que invaden los tejidos circundantes.",
-        "\"Adenocarcinoma pulmonar\" - Variedad de cáncer de pulmón que se origina en las células glandulares de los alveolos."
       ]
     },
     "ONCO_HISTOLOGICS_TYPES": {
@@ -2365,11 +1708,6 @@
         "tejidos cancerosos",
         "oncología",
         "histología"
-      ],
-      "description_es": "La tabla 'ONCO_HISTOLOGICS_TYPES' almacena los diferentes tipos histológicos asociados a casos oncológicos, incluyendo clasificaciones y características específicas de tejidos tumorales.",
-      "examples": [
-        "\"Carcinoma ductal infiltrante\" - Tipo histológico común en cáncer de mama, con descripción de su patrón de crecimiento invasivo.",
-        "\"Melanoma nodular\" - Clasificación de tumor cutáneo maligno, especificando su característica formación en nódulos sin fase radial previa."
       ]
     },
     "ONCO_HISTOLOGIES": {
@@ -2380,11 +1718,6 @@
         "clasificación tisular",
         "oncología patológica",
         "tejidos tumorales"
-      ],
-      "description_es": "La tabla 'ONCO_HISTOLOGIES' almacena información sobre los tipos histológicos de tumores cancerígenos, incluyendo clasificaciones y características relevantes para el diagnóstico oncológico.",
-      "examples": [
-        "\"Carcinoma ductal infiltrante de mama - Tipo histológico invasivo más común en cáncer de mama, con código ICD-O 8500/3.\"",
-        "\"Melanoma nodular - Subtipo agresivo de cáncer de piel con código ICD-O 8721/3, caracterizado por crecimiento vertical rápido.\""
       ]
     },
     "ONCO_HORMONOTHERAPY_GUIDELINES": {
@@ -2395,11 +1728,6 @@
         "tratamiento hormonal cáncer",
         "directrices hormonoterapia",
         "oncología hormonal"
-      ],
-      "description_es": "La tabla 'ONCO_HORMONOTHERAPY_GUIDELINES' almacena pautas y protocolos de tratamiento hormonal en oncología, incluyendo recomendaciones terapéuticas para diferentes tipos de cáncer. Su propósito es estandarizar y facilitar el acceso a las directrices de hormonoterapia para profesionales médicos.",
-      "examples": [
-        "\"Pautas de hormonoterapia para cáncer de mama con receptores hormonales positivos, incluyendo duración recomendada de tratamiento con tamoxifeno o inhibidores de aromatasa.\"",
-        "\"Protocolo de terapia hormonal para cáncer de próstata avanzado, especificando secuencia de tratamientos (bloqueo androgénico, terapia de segunda línea, etc.) y criterios de cambio.\""
       ]
     },
     "ONCO_INTERVENTION_EVENTS": {
@@ -2410,11 +1738,6 @@
         "tratamientos cáncer",
         "procedimientos médicos",
         "registro intervenciones"
-      ],
-      "description_es": "La tabla 'ONCO_INTERVENTION_EVENTS' almacena registros de intervenciones médicas relacionadas con tratamientos oncológicos, incluyendo detalles de procedimientos, fechas y resultados asociados.",
-      "examples": [
-        "\"Registro de quimioterapia administrada el 15/03/2023 con protocolo FOLFOX para cáncer de colon, resultado: respuesta parcial observada en TC posterior.\"",
-        "\"Intervención quirúrgica de mastectomía radical el 22/07/2023 en paciente con carcinoma ductal, resultado: resección completa sin complicaciones postoperatorias.\""
       ]
     },
     "ONCO_IRRADIATION_METHODS": {
@@ -2425,11 +1748,6 @@
         "tratamiento oncológico",
         "técnicas de radiación",
         "oncología radioterápica"
-      ],
-      "description_es": "La tabla 'ONCO_IRRADIATION_METHODS' almacena los distintos métodos de irradiación utilizados en tratamientos oncológicos, incluyendo sus características y parámetros técnicos asociados.",
-      "examples": [
-        "\"Radioterapia externa de haz de fotones: técnica que utiliza rayos X de alta energía para destruir células cancerosas, con parámetros como dosis total de 50 Gy en 25 fracciones.\"",
-        "\"Braquiterapia de alta tasa de dosis (HDR): método interno que coloca fuentes radiactivas cerca del tumor, con parámetros como dosis de 7 Gy por sesión y tiempo de exposición de 10 minutos.\""
       ]
     },
     "ONCO_KIDNEY_TYPES": {
@@ -2440,11 +1758,6 @@
         "oncología renal",
         "cáncer de riñón",
         "neoplasias renales"
-      ],
-      "description_es": "La tabla 'ONCO_KIDNEY_TYPES' almacena información sobre los diferentes tipos de cáncer renal, incluyendo sus características y clasificaciones clínicas. Su propósito es facilitar el registro y consulta de datos oncológicos relacionados con patologías renales.",
-      "examples": [
-        "\"Carcinoma de células renales de tipo células claras, grado 2, con código ICD-O 8310/3.\"",
-        "\"Tumor de Wilms en estadio III, con mutación WT1 positiva, registrado para seguimiento pediátrico.\""
       ]
     },
     "ONCO_LUNG_DISEASE_EXTS": {
@@ -2455,11 +1768,6 @@
         "patologías pulmonares",
         "tumores pulmonares",
         "enfermedades respiratorias cancerosas"
-      ],
-      "description_es": "La tabla 'ONCO_LUNG_DISEASE_EXTS' almacena información extendida sobre enfermedades pulmonares oncológicas, posiblemente incluyendo datos complementarios a registros médicos principales.",
-      "examples": [
-        "\"Resultados detallados de biopsias pulmonares asociadas a casos de cáncer, incluyendo tipo histológico y grado tumoral.\"",
-        "\"Información extendida sobre tratamientos paliativos aplicados a pacientes con enfermedades pulmonares oncológicas, como radioterapia o quimioterapia.\""
       ]
     },
     "ONCO_LUNG_TYPES": {
@@ -2470,11 +1778,6 @@
         "oncología pulmonar",
         "tipos de tumores pulmonares",
         "cáncer de pulmón"
-      ],
-      "description_es": "La tabla 'ONCO_LUNG_TYPES' almacena información sobre los diferentes tipos de cáncer de pulmón, incluyendo sus características y clasificaciones clínicas. Su propósito es facilitar el registro y consulta de datos oncológicos específicos para este tipo de neoplasias.",
-      "examples": [
-        "\"Carcinoma de células pequeñas: Tipo agresivo que representa el 10-15% de casos, con rápida diseminación y asociado frecuentemente al tabaquismo.\"",
-        "\"Adenocarcinoma pulmonar: Subtipo más común en no fumadores, originado en células glandulares periféricas, con marcadores como mutaciones EGFR.\""
       ]
     },
     "ONCO_LYMPHOM_TYPES": {
@@ -2485,11 +1788,6 @@
         "clasificación de linfomas",
         "oncología hematológica",
         "enfermedades linfoproliferativas"
-      ],
-      "description_es": "La tabla 'ONCO_LYMPHOM_TYPES' almacena información sobre los diferentes tipos de linfomas en oncología, incluyendo sus características y clasificaciones.",
-      "examples": [
-        "\"Linfoma de Hodgkin clásico: subtipo nodular esclerosis, caracterizado por células Reed-Sternberg y afectación ganglionar típica.\"",
-        "\"Linfoma no Hodgkin de células B grandes difuso: clasificación WHO 2022, alta agresividad y marcador CD20 positivo.\""
       ]
     },
     "ONCO_MARKERS_RESULTS": {
@@ -2500,11 +1798,6 @@
         "biomarcadores oncológicos",
         "pruebas de cáncer",
         "indicadores tumorales"
-      ],
-      "description_es": "Almacena los resultados de marcadores oncológicos obtenidos en pruebas de laboratorio, incluyendo valores numéricos y referencias para el diagnóstico y seguimiento de pacientes.",
-      "examples": [
-        "Resultado del marcador tumoral CA-125: 35 U/mL (valor de referencia: 0-35 U/mL) para seguimiento de paciente con cáncer de ovario.",
-        "Nivel de PSA: 4.2 ng/mL (valor de referencia: 0-4 ng/mL) en prueba de detección temprana de cáncer de próstata."
       ]
     },
     "ONCO_PATIENT_STATES": {
@@ -2515,11 +1808,6 @@
         "estados clínicos oncología",
         "registro estados pacientes",
         "categorías paciente oncológico"
-      ],
-      "description_es": "La tabla 'ONCO_PATIENT_STATES' almacena los diferentes estados clínicos o fases de tratamiento de pacientes oncológicos, permitiendo el seguimiento de su evolución médica. Contiene registros que representan las condiciones y etapas específicas de los pacientes durante su atención oncológica.",
-      "examples": [
-        "\"Paciente en fase de inducción: primer ciclo de quimioterapia para leucemia aguda.\"",
-        "\"Paciente en remisión completa: sin evidencia de enfermedad tras finalizar tratamiento de cáncer de mama.\""
       ]
     },
     "ONCO_PROGNOSIS": {
@@ -2530,11 +1818,6 @@
         "descripción pronóstico",
         "clasificación cáncer",
         "tiempo modificación"
-      ],
-      "description_es": "La tabla 'ONCO_PROGNOSIS' almacena información relacionada con el pronóstico y evolución de pacientes oncológicos, incluyendo posibles indicadores clínicos y resultados de seguimiento.",
-      "examples": [
-        "\"Paciente con cáncer de mama en estadio III, con marcador tumoral CA 15-3 elevado y respuesta positiva a quimioterapia adyuvante, pronóstico estimado de supervivencia a 5 años del 65%.\"",
-        "\"Paciente con carcinoma pulmonar de células pequeñas, metástasis hepática detectada en seguimiento, escala ECOG 2, pronóstico desfavorable con supervivencia estimada menor a 12 meses.\""
       ]
     },
     "ONCO_RADIOTHERAPY_TYPES": {
@@ -2545,11 +1828,6 @@
         "oncología",
         "tratamiento radioterápico",
         "terapia de radiación"
-      ],
-      "description_es": "La tabla 'ONCO_RADIOTHERAPY_TYPES' almacena los diferentes tipos de radioterapia disponibles para tratamientos oncológicos, incluyendo sus características y parámetros asociados.",
-      "examples": [
-        "\"Radioterapia externa de haz de fotones: técnica que utiliza rayos X de alta energía para destruir células cancerosas desde fuera del cuerpo.\"",
-        "\"Brachiterapia: tratamiento interno donde se colocan fuentes radiactivas cerca o dentro del tumor para administrar radiación de forma localizada.\""
       ]
     },
     "ONCO_RECIST_CRITERION": {
@@ -2560,11 +1838,6 @@
         "respuesta al tratamiento",
         "evaluación tumoral",
         "cáncer"
-      ],
-      "description_es": "La tabla 'ONCO_RECIST_CRITERION' almacena los criterios RECIST utilizados en oncología para evaluar la respuesta tumoral a los tratamientos, incluyendo parámetros y definiciones estandarizadas.",
-      "examples": [
-        "\"Criterio RECIST 1.1: Lesión diana - reducción ≥30% en suma de diámetros.\"",
-        "\"Criterio RECIST: Progresión - aumento ≥20% en suma de diámetros o aparición de nuevas lesiones.\""
       ]
     },
     "ONCO_SARCOMA_TYPES": {
@@ -2575,11 +1848,6 @@
         "oncología sarcomas",
         "códigos de sarcoma",
         "sarcomas en español"
-      ],
-      "description_es": "La tabla 'ONCO_SARCOMA_TYPES' almacena información sobre los diferentes tipos de sarcomas en oncología, incluyendo sus características y clasificaciones.",
-      "examples": [
-        "\"Osteosarcoma: tumor óseo maligno más común en niños y adolescentes, caracterizado por la producción de hueso inmaduro por las células tumorales.\"",
-        "\"Liposarcoma: sarcoma de tejidos blandos que se origina en células grasas, con subtipos como bien diferenciado, mixoide y pleomórfico.\""
       ]
     },
     "ONCO_STATES": {
@@ -2590,11 +1858,6 @@
         "oncología",
         "registro de estados",
         "estados clínicos"
-      ],
-      "description_es": "La tabla 'ONCO_STATES' almacena información sobre los estados o etapas relacionadas con procesos oncológicos, posiblemente incluyendo clasificaciones de progresión de enfermedades cancerígenas. Su propósito es organizar y gestionar datos estandarizados sobre el avance o condición de casos oncológicos.",
-      "examples": [
-        "\"Estadio IIIA: Tumor de pulmón con afectación de ganglios linfáticos ipsilaterales pero sin metástasis a distancia.\"",
-        "\"Remisión completa: Paciente con leucemia linfoblástica aguda sin evidencia de enfermedad tras tratamiento.\""
       ]
     },
     "ONCO_SURGERY_GUIDELINES": {
@@ -2605,11 +1868,6 @@
         "recomendaciones quirúrgicas en cáncer",
         "normas de oncología quirúrgica",
         "cirugía oncológica estándar"
-      ],
-      "description_es": "La tabla 'ONCO_SURGERY_GUIDELINES' almacena protocolos y recomendaciones estandarizadas para procedimientos quirúrgicos oncológicos, sirviendo como referencia para profesionales médicos.",
-      "examples": [
-        "\"Recomendaciones para la resección de tumores colorrectales en estadio III, incluyendo márgenes quirúrgicos y abordajes preferidos.\"",
-        "\"Protocolo estándar para linfadenectomía en cirugía de cáncer de mama, con indicaciones sobre número mínimo de ganglios a extirpar.\""
       ]
     },
     "ONCO_TRANSPLANT_TYPES": {
@@ -2620,11 +1878,6 @@
         "códigos de trasplante",
         "oncología",
         "trasplante de médula"
-      ],
-      "description_es": "Tabla que almacena los diferentes tipos de trasplantes relacionados con oncología, incluyendo información sobre procedimientos y clasificaciones médicas específicas.",
-      "examples": [
-        "\"Trasplante autólogo de médula ósea para tratamiento de linfoma no Hodgkin, clasificado como procedimiento de alta complejidad.\"",
-        "\"Trasplante alogénico de células madre hematopoyéticas para leucemia mieloide aguda, con clasificación de compatibilidad HLA 10/10.\""
       ]
     },
     "ONCO_TUMOR_FOCALITIES": {
@@ -2635,11 +1888,6 @@
         "oncología",
         "tipos de tumor",
         "clasificación tumoral"
-      ],
-      "description_es": "Tabla que almacena información sobre las focalidades tumorales en oncología, incluyendo características y localizaciones de tumores para su seguimiento y análisis.",
-      "examples": [
-        "Registro de un tumor primario en el lóbulo superior derecho del pulmón con diámetro de 2.5 cm y características sólidas.",
-        "Detección de metástasis ósea en vértebra L3 con tamaño de 1.8 cm y patrón lítico en seguimiento oncológico."
       ]
     },
     "ONCO_TUMOR_LATERALITY_TYPES": {
@@ -2650,11 +1898,6 @@
         "tumor izquierdo/derecho",
         "localización del cáncer",
         "tipos de lateralidad"
-      ],
-      "description_es": "La tabla 'ONCO_TUMOR_LATERALITY_TYPES' almacena los tipos de lateralidad de tumores en oncología, como izquierdo, derecho, bilateral o desconocido, para su clasificación y análisis.",
-      "examples": [
-        "Registro de un tumor mamario con lateralidad derecha para seguimiento oncológico.",
-        "Clasificación de un tumor renal como bilateral para estudios epidemiológicos."
       ]
     },
     "ONCO_TUMOR_LOCALIZATIONS": {
@@ -2665,11 +1908,6 @@
         "códigos de tumores",
         "anatomía oncológica",
         "clasificación de tumores"
-      ],
-      "description_es": "La tabla 'ONCO_TUMOR_LOCALIZATIONS' almacena información sobre las localizaciones anatómicas de tumores en pacientes oncológicos, facilitando su clasificación y seguimiento médico.",
-      "examples": [
-        "\"Localización del tumor: mama izquierda, clasificado como C50.912 según CIE-O.\"",
-        "\"Tumor primario en pulmón derecho (lóbulo superior), con metástasis identificada en hígado.\""
       ]
     },
     "ONCO_TUMOR_MARKERS": {
@@ -2680,11 +1918,6 @@
         "indicadores tumorales",
         "diagnóstico oncológico",
         "seguimiento de tumores"
-      ],
-      "description_es": "La tabla 'ONCO_TUMOR_MARKERS' almacena información sobre marcadores tumorales utilizados en oncología, incluyendo sus valores, tipos y relaciones con diagnósticos específicos.",
-      "examples": [
-        "\"Niveles elevados del marcador CA-125 en paciente femenino, asociado a posible diagnóstico de cáncer de ovario.\"",
-        "\"Resultado de PSA (Antígeno Prostático Específico) de 8.2 ng/mL en paciente masculino, indicando necesidad de biopsia prostática.\""
       ]
     },
     "ONCO_TUMOR_PHASES": {
@@ -2695,11 +1928,6 @@
         "clasificación tumoral",
         "oncología",
         "estadios tumorales"
-      ],
-      "description_es": "La tabla 'ONCO_TUMOR_PHASES' almacena información sobre las distintas fases o etapas de desarrollo de tumores en pacientes oncológicos, incluyendo posibles características y clasificaciones asociadas a cada fase.",
-      "examples": [
-        "\"Fase inicial del tumor: carcinoma in situ, sin invasión de tejidos circundantes, clasificado como Tis en el sistema TNM.\"",
-        "\"Fase avanzada: tumor con metástasis a distancia (M1), tamaño mayor a 5 cm (T3) y afectación de ganglios linfáticos regionales (N1).\""
       ]
     },
     "ORMA_APPLICATIONS": {
@@ -2710,11 +1938,6 @@
         "software",
         "programas",
         "catálogo de aplicaciones"
-      ],
-      "description_es": "La tabla ORMA_APPLICATIONS almacena información sobre aplicaciones registradas en el sistema, incluyendo sus datos básicos y configuraciones asociadas.",
-      "examples": [
-        "\"Aplicación de gestión de inventario con configuración para alertas de stock bajo y permisos de acceso por departamento.\"",
-        "\"Portal de clientes con autenticación OAuth y configuración de temas personalizados por organización.\""
       ]
     },
     "ORMA_BENEFIT_TYPES": {
@@ -2725,11 +1948,6 @@
         "categorías de beneficios",
         "beneficios disponibles",
         "tipos de incentivos"
-      ],
-      "description_es": "La tabla ORMA_BENEFIT_TYPES almacena los diferentes tipos de beneficios o prestaciones disponibles en el sistema, incluyendo sus características y configuraciones asociadas.",
-      "examples": [
-        "\"Tipo de beneficio: 'Seguro médico' con cobertura básica, límite anual de $5,000 y elegible para empleados a tiempo completo.\"",
-        "\"Tipo de beneficio: 'Vale de comida' con monto diario de $100, válido en restaurantes asociados y acumulable hasta 30 días.\""
       ]
     },
     "ORMA_LABORATORIES": {
@@ -2740,11 +1958,6 @@
         "descripción de laboratorio",
         "registro de laboratorios",
         "datos de laboratorios"
-      ],
-      "description_es": "La tabla ORMA_LABORATORIOS almacena información sobre laboratorios, incluyendo sus datos identificativos y características operativas para su gestión y consulta.",
-      "examples": [
-        "\"Laboratorio de Biotecnología Aplicada\" con ubicación en Madrid, especializado en análisis genéticos y con certificación ISO 9001.",
-        "\"Centro de Investigación Química Avanzada\" en Barcelona, con capacidad para 50 técnicos y equipamiento de última generación para síntesis molecular."
       ]
     },
     "ORMA_RESOURCE_TYPES": {
@@ -2755,11 +1968,6 @@
         "clasificación de recursos",
         "recursos del sistema",
         "tipología de recursos"
-      ],
-      "description_es": "Tabla que almacena los tipos de recursos disponibles en el sistema, definiendo categorías y características básicas para su clasificación y gestión.",
-      "examples": [
-        "\"Tipo de recurso: 'Sala de conferencias' - Define características como capacidad máxima, equipamiento disponible y horarios de reserva.\"",
-        "\"Tipo de recurso: 'Vehículo corporativo' - Especifica categoría (sedán, camioneta), combustible y requisitos de conductor autorizado.\""
       ]
     },
     "ORMA_UNITS": {
@@ -2770,11 +1978,6 @@
         "medidas",
         "magnitudes",
         "sistema métrico"
-      ],
-      "description_es": "La tabla 'ORMA_UNITS' almacena información sobre unidades de medida, incluyendo sus identificadores, nombres y posibles conversiones entre ellas. Su propósito es estandarizar y gestionar las unidades utilizadas en el sistema para garantizar consistencia en los datos.",
-      "examples": [
-        "\"ORMA_UNITS\" podría contener registros como 'Kilogramo (kg)' con su ID correspondiente y factores de conversión a gramos o libras.",
-        "La tabla podría incluir una entrada para 'Litro (L)' con conversiones a mililitros o galones, facilitando cálculos en transacciones de líquidos."
       ]
     },
     "PARA_BLOOD_GROUPS": {
@@ -2785,11 +1988,6 @@
         "factor RH",
         "sangre",
         "hematología"
-      ],
-      "description_es": "La tabla 'PARA_BLOOD_GROUPS' almacena los diferentes grupos sanguíneos disponibles como parámetros de referencia, utilizados comúnmente en sistemas de salud o donación.",
-      "examples": [
-        "\"Grupo sanguíneo A+ registrado como parámetro de referencia para donaciones compatibles.\"",
-        "\"Listado de grupos sanguíneos (ej. O-, AB+) utilizados en formularios médicos para historias clínicas.\""
       ]
     },
     "PARA_GENDERS": {
@@ -2800,11 +1998,6 @@
         "identidad de género",
         "clasificación de género",
         "tipos de género"
-      ],
-      "description_es": "La tabla 'PARA_GENDERS' almacena los posibles valores de género disponibles en el sistema, sirviendo como referencia para normalizar esta información en otras tablas.",
-      "examples": [
-        "\"Masculino\" - Valor de género utilizado para identificar perfiles de usuarios hombres en el sistema.",
-        "\"No binario\" - Opción de género disponible para usuarios que no se identifican exclusivamente como hombre o mujer."
       ]
     },
     "PARA_HEALTH_ID_TYPES": {
@@ -2815,11 +2008,6 @@
         "clasificación de identificadores",
         "ID de salud",
         "tipos de ID sanitarios"
-      ],
-      "description_es": "La tabla 'PARA_HEALTH_ID_TYPES' almacena los diferentes tipos de identificadores de salud utilizados en el sistema, como números de seguro médico o códigos de identificación de pacientes.",
-      "examples": [
-        "\"Número de seguro médico nacional (ejemplo: 123-45-6789).\"",
-        "\"Código único de paciente asignado por el hospital (ejemplo: HOSP-2023-ABC123).\""
       ]
     },
     "PARA_IDENTIFICATION_TYPES": {
@@ -2830,11 +2018,6 @@
         "identificación personal",
         "tipos de documento",
         "IDTY"
-      ],
-      "description_es": "La tabla 'PARA_IDENTIFICATION_TYPES' almacena los diferentes tipos de documentos de identificación válidos, como pasaportes o DNI, utilizados en el sistema. Su propósito es estandarizar y gestionar las opciones de identificación disponibles para los usuarios.",
-      "examples": [
-        "\"DNI (Documento Nacional de Identidad) - Documento oficial emitido por el gobierno para identificar a ciudadanos.\"",
-        "\"Pasaporte - Documento de identificación internacional utilizado para viajes al extranjero.\""
       ]
     },
     "PARA_MEASUREMENT_UNITS": {
@@ -2845,11 +2028,6 @@
         "conversión de unidades",
         "tipos de medida",
         "sistema métrico"
-      ],
-      "description_es": "La tabla 'PARA_MEASUREMENT_UNITS' almacena las unidades de medida disponibles en el sistema, incluyendo sus códigos, descripciones y relaciones de conversión. Su propósito es estandarizar y gestionar las unidades utilizadas en mediciones y transacciones.",
-      "examples": [
-        "\"Unidad: 'KG' - Código: '001', Descripción: 'Kilogramos', Factor de conversión a gramos: 1000.\"",
-        "\"Unidad: 'LT' - Código: '002', Descripción: 'Litros', Factor de conversión a mililitros: 1000.\""
       ]
     },
     "PARA_MEASURE_UNIT_TYPES": {
@@ -2860,11 +2038,6 @@
         "medidas",
         "unidades métricas",
         "sistema de medición"
-      ],
-      "description_es": "La tabla 'PARA_MEASURE_UNIT_TYPES' almacena los diferentes tipos de unidades de medida disponibles en el sistema, como unidades de longitud, peso o volumen. Su propósito es estandarizar y categorizar las unidades para su uso consistente en otras tablas.",
-      "examples": [
-        "\"Kilómetros\" como tipo de unidad de medida para longitud, utilizado en tablas de distancias o rutas.",
-        "\"Litros\" como tipo de unidad de medida para volumen, empleado en registros de inventario de líquidos."
       ]
     },
     "PARA_PRIORITY_TYPES": {
@@ -2875,10 +2048,6 @@
         "niveles de urgencia",
         "clasificación de prioridades",
         "códigos de prioridad"
-      ],
-      "description_es": "La tabla 'PARA_PRIORITY_TYPES' almacena los diferentes tipos de prioridades definidos en el sistema, utilizados para clasificar y gestionar la importancia de registros o procesos.",
-      "examples": [
-        "\"Alta\": prioridad para tareas críticas que requieren atención inmediata, como fallos del sistema.\", \"Baja\": prioridad para tareas rutinarias que pueden programarse para más adelante, como actualizaciones menores."
       ]
     },
     "PATI_MERGE_PATIENTS": {
@@ -2889,11 +2058,6 @@
         "historial combinado",
         "paciente origen y destino",
         "consolidación de pacientes"
-      ],
-      "description_es": "Tabla que almacena registros de pacientes fusionados, utilizada para consolidar información duplicada o relacionada de distintos sistemas en un único registro maestro.",
-      "examples": [
-        "Registro de paciente Juan Pérez fusionado después de detectar duplicados en los sistemas de hospitalización y consulta externa.",
-        "Consolidación de historias clínicas de María Gómez al identificarse que sus registros en pediatría y alergología correspondían a la misma persona."
       ]
     },
     "PATI_ORIGIN_PROFESSIONALS": {
@@ -2904,11 +2068,6 @@
         "centros médicos",
         "proveedores de atención",
         "historial médico"
-      ],
-      "description_es": "La tabla PATI_ORIGIN_PROFESSIONALS almacena información sobre el origen profesional de los individuos, incluyendo datos como su formación, especialización y experiencia laboral.",
-      "examples": [
-        "\"Médico especializado en cardiología con 10 años de experiencia en hospitales públicos y formación en la Universidad de Buenos Aires.\"",
-        "\"Ingeniero informático con maestría en inteligencia artificial y 5 años trabajando en desarrollo de software para empresas tecnológicas.\""
       ]
     },
     "PATI_PATIENTS": {
@@ -2919,11 +2078,6 @@
         "datos médicos",
         "registro de pacientes",
         "información de salud"
-      ],
-      "description_es": "La tabla PATI_PATIENTS almacena información básica y demográfica de los pacientes registrados en el sistema, sirviendo como registro central de datos personales y médicos esenciales.",
-      "examples": [
-        "\"Registro de paciente con nombre 'María González', fecha de nacimiento 15/03/1985, género femenino y número de identificación único P-123456.\"",
-        "\"Datos de contacto del paciente 'Juan Pérez', incluyendo dirección 'Calle Principal 123', teléfono '555-1234' y correo electrónico 'juan.perez@example.com'.\""
       ]
     },
     "PATI_PATIENT_ADDRESSES": {
@@ -2934,11 +2088,6 @@
         "información de ubicación de pacientes",
         "datos postales de pacientes",
         "registro de direcciones médicas"
-      ],
-      "description_es": "La tabla PATI_PATIENT_ADDRESSES almacena y gestiona las direcciones asociadas a los pacientes, incluyendo información de ubicación física y datos de contacto relevantes.",
-      "examples": [
-        "Dirección principal del paciente: Calle Falsa 123, Madrid, España, con teléfono de contacto +34 600123456.",
-        "Dirección secundaria del paciente: Avenida Real 45, Barcelona, España, utilizada para envío de medicamentos."
       ]
     },
     "PATI_PATIENT_ALLERGIES": {
@@ -2949,11 +2098,6 @@
         "registro alergias",
         "intolerancias médicas",
         "reacciones alérgicas"
-      ],
-      "description_es": "La tabla PATI_PATIENT_ALLERGIES almacena información sobre las alergias registradas de los pacientes, incluyendo posibles alérgenos y reacciones asociadas. Su propósito es gestionar y consultar los datos clínicos relacionados con alergias para el seguimiento médico.",
-      "examples": [
-        "\"Paciente con alergia a la penicilina registrada, mostrando reacción de urticaria como síntoma principal.\"",
-        "\"Registro de alergia a frutos secos en paciente pediátrico, con anotación de riesgo de anafilaxia.\""
       ]
     },
     "PATI_PATIENT_CONTACTS": {
@@ -2964,11 +2108,6 @@
         "datos de contacto",
         "medios de comunicación",
         "pacientes y contactos"
-      ],
-      "description_es": "La tabla 'PATI_PATIENT_CONTACTS' almacena información de contacto asociada a pacientes, incluyendo posibles datos como teléfonos, correos electrónicos o direcciones para fines de comunicación. Su propósito es centralizar y gestionar los medios de contacto disponibles para cada paciente en el sistema.",
-      "examples": [
-        "\"Registro del teléfono móvil y correo electrónico del paciente Juan Pérez para notificaciones de citas médicas.\"",
-        "\"Dirección residencial y teléfono fijo de la paciente María Gómez registrados para envío de documentación y contacto de emergencia.\""
       ]
     },
     "PATI_PATIENT_CONTACT_PERSONS": {
@@ -2979,11 +2118,6 @@
         "personas de emergencia",
         "familiares de pacientes",
         "referencias de contacto"
-      ],
-      "description_es": "Almacena información sobre las personas de contacto asociadas a pacientes, incluyendo datos de relación y medios para comunicarse en caso de necesidad.",
-      "examples": [
-        "\"María López, madre del paciente Juan Pérez, con teléfono de contacto 555-1234 y relación familiar 'Madre'.\"",
-        "\"Carlos Gómez, vecino del paciente Ana Rodríguez, con email de contacto carlos.gomez@mail.com y relación 'Vecino' para emergencias.\""
       ]
     },
     "PATI_PATIENT_HEALTH_IDS": {
@@ -2994,11 +2128,6 @@
         "seguros médicos",
         "identificación de pacientes",
         "registros de salud"
-      ],
-      "description_es": "Tabla que almacena los identificadores de salud asociados a pacientes, como números de seguro médico o códigos de identificación en sistemas sanitarios.",
-      "examples": [
-        "Número de afiliación a la seguridad social de un paciente en el sistema de salud público.",
-        "Código de identificación único asignado a un paciente en una clínica privada."
       ]
     },
     "PATI_PATIENT_IDENTIFICATIONS": {
@@ -3009,11 +2138,6 @@
         "códigos de identificación",
         "registro de identidades",
         "ID predeterminado"
-      ],
-      "description_es": "La tabla PATI_PATIENT_IDENTIFICATIONS almacena y gestiona los datos de identificación de pacientes, incluyendo información clave para su reconocimiento único en el sistema.",
-      "examples": [
-        "\"Número de identificación único del paciente: 12345678, asociado al nombre 'María González Pérez' para distinguirlo de otros pacientes en el sistema.\"",
-        "\"Tipo de documento de identidad: DNI, con valor '87654321X' y fecha de expedición 15/03/2010, utilizado para verificar la identidad del paciente 'Juan Martínez López'.\""
       ]
     },
     "PATI_PATIENT_PHONES": {
@@ -3024,11 +2148,6 @@
         "números de teléfono",
         "teléfono principal",
         "datos de contacto"
-      ],
-      "description_es": "Almacena los números telefónicos asociados a pacientes, permitiendo gestionar múltiples contactos por persona. Facilita el registro y consulta de información de contacto para fines médicos o administrativos.",
-      "examples": [
-        "Registro del teléfono móvil y fijo del paciente Juan Pérez para contactarlo sobre resultados de laboratorio y recordatorios de citas.",
-        "Almacenamiento del número de emergencia de la paciente María Gómez, incluyendo una nota que indica 'Contactar a este número solo en caso de urgencias médicas'."
       ]
     },
     "PATI_PATIENT_TYPES": {
@@ -3039,11 +2158,6 @@
         "categorías de pacientes",
         "tipología de pacientes",
         "identificación de pacientes"
-      ],
-      "description_es": "La tabla 'PATI_PATIENT_TYPES' almacena los diferentes tipos o categorías de pacientes registrados en el sistema, permitiendo su clasificación y gestión.",
-      "examples": [
-        "\"Paciente ambulatorio\" - Tipo para pacientes que reciben tratamiento sin necesidad de hospitalización.",
-        "\"Paciente crónico\" - Categoría para pacientes con condiciones médicas de larga duración que requieren seguimiento continuo."
       ]
     },
     "PATI_USUAL_MEDICATION": {
@@ -3054,11 +2168,6 @@
         "medicamentos del paciente",
         "fármacos recetados",
         "historial de medicación"
-      ],
-      "description_es": "Tabla que almacena información sobre los medicamentos de uso habitual de los pacientes, incluyendo posibles tratamientos y prescripciones frecuentes.",
-      "examples": [
-        "\"Paciente con hipertensión que toma amlodipino 5mg diarios como tratamiento crónico.\"",
-        "\"Paciente diabético con prescripción habitual de metformina 850mg cada 12 horas.\""
       ]
     },
     "PROC_PROCEDURES": {
@@ -3069,11 +2178,6 @@
         "actos médicos",
         "procesos hospitalarios",
         "registros de procedimientos"
-      ],
-      "description_es": "Tabla que almacena información sobre procedimientos o procesos definidos en el sistema, incluyendo sus características y parámetros asociados.",
-      "examples": [
-        "\"Registro de procedimiento para generación de reportes mensuales, con parámetros como formato de salida y rango de fechas.\"",
-        "\"Definición del proceso de validación de usuarios, incluyendo pasos requeridos y niveles de seguridad asociados.\""
       ]
     },
     "PROC_PROCEDURE_TYPES": {
@@ -3084,11 +2188,6 @@
         "categorías de procesos",
         "tipología de trámites",
         "catálogo de procedimientos"
-      ],
-      "description_es": "Tabla que almacena los diferentes tipos de procedimientos disponibles en el sistema, categorizándolos para su gestión y consulta.",
-      "examples": [
-        "\"Tipo de procedimiento: 'Admisión hospitalaria' - categoriza los procesos de ingreso de pacientes.\"",
-        "\"Tipo de procedimiento: 'Alta médica' - identifica los procesos de finalización de atención y egreso del paciente.\""
       ]
     },
     "PROC_PROCEDURE_VIEW_TYPES": {
@@ -3099,11 +2198,6 @@
         "clasificación de procedimientos",
         "tipos PRVT",
         "descripción de procedimientos"
-      ],
-      "description_es": "Tabla que almacena los tipos de vistas disponibles para los procedimientos, definiendo las diferentes formas de visualización o presentación de los procesos.",
-      "examples": [
-        "\"Vista resumida\": muestra solo información básica del procedimiento como nombre, código y estado.",
-        "\"Vista detallada\": incluye todos los campos del procedimiento, pasos, responsables y documentos asociados."
       ]
     },
     "PROC_RAYS_STUDIO_TYPE": {
@@ -3114,11 +2208,6 @@
         "clasificación de estudios radiológicos",
         "descripción de estudios de imagen",
         "rayos X tipos"
-      ],
-      "description_es": "Almacena los tipos de estudio disponibles en el sistema PROC_RAYS, categorizando las diferentes modalidades o especialidades de estudio ofrecidas.",
-      "examples": [
-        "\"Tipo de estudio: Radiografía de tórax - Modalidad estándar para evaluación pulmonar.\"",
-        "\"Tipo de estudio: Resonancia magnética cerebral - Especialidad en neuroimagen para diagnóstico neurológico.\""
       ]
     },
     "PROC_SURGICAL_DESTINATIONS": {
@@ -3129,11 +2218,6 @@
         "salas de operaciones",
         "centros quirúrgicos",
         "lugares de intervención"
-      ],
-      "description_es": "La tabla PROC_SURGICAL_DESTINATIONS almacena información sobre los destinos o ubicaciones quirúrgicas asociadas a procedimientos médicos, incluyendo posibles relaciones entre procedimientos y salas o áreas designadas.",
-      "examples": [
-        "\"Sala de cirugía cardiovascular 3\" asociada al procedimiento \"Bypass coronario\".",
-        "\"Área de recuperación post-anestésica 1\" vinculada al procedimiento \"Artroscopia de rodilla\"."
       ]
     },
     "PROC_SURGICAL_TIMES": {
@@ -3144,11 +2228,6 @@
         "procedimientos quirúrgicos",
         "horarios de operaciones",
         "registro de intervenciones"
-      ],
-      "description_es": "Tabla que registra los tiempos quirúrgicos de procedimientos médicos, incluyendo duraciones, fechas y posibles datos relacionados con el desempeño de las intervenciones.",
-      "examples": [
-        "Registro del tiempo total de una cirugía de apendicectomía realizada el 15/03/2023, indicando 45 minutos de duración y el cirujano principal.",
-        "Datos de una intervención de reemplazo de cadera el 22/06/2023, con tiempos detallados por fase: 30 minutos para preparación, 120 minutos para el procedimiento principal y 45 minutos para cierre."
       ]
     },
     "PROP_PROPOSAL_REASONS": {
@@ -3159,11 +2238,6 @@
         "códigos de motivo",
         "descripción de motivos",
         "estado de eliminación de motivos"
-      ],
-      "description_es": "La tabla 'PROP_PROPOSAL_REASONS' almacena los motivos o justificaciones asociados a propuestas, registrando las razones específicas para su creación o modificación.",
-      "examples": [
-        "\"Cambio en los requisitos del cliente que justifica la modificación de la propuesta inicial.\"",
-        "\"Necesidad de ajustar el presupuesto debido a incrementos en los costos de materiales.\""
       ]
     },
     "PROP_PROPOSAL_TYPES": {
@@ -3174,11 +2248,6 @@
         "categorías de propuestas",
         "propuestas eliminadas",
         "descripción de propuestas"
-      ],
-      "description_es": "La tabla 'PROP_PROPOSAL_TYPES' almacena los diferentes tipos de propuestas disponibles en el sistema, definiendo sus categorías y características básicas.",
-      "examples": [
-        "\"Tipo de propuesta: Investigación - Para proyectos académicos o científicos que requieren revisión ética y aprobación institucional.\"",
-        "\"Tipo de propuesta: Mejora de procesos - Para sugerencias de optimización de flujos de trabajo internos en una organización.\""
       ]
     },
     "PROP_RADIO_PRESENCE_TYPES": {
@@ -3189,11 +2258,6 @@
         "propiedades de radio",
         "estados de presencia",
         "radio broadcasting"
-      ],
-      "description_es": "La tabla 'PROP_RADIO_PRESENCE_TYPES' almacena los diferentes tipos de presencia radial disponibles, categorizando las modalidades o formatos de participación en emisiones de radio.",
-      "examples": [
-        "\"Entrevista en vivo\" - Tipo de presencia radial donde el participante interactúa directamente con el locutor en tiempo real.",
-        "\"Grabación pregrabada\" - Modalidad donde se reproduce contenido previamente grabado durante la emisión del programa."
       ]
     },
     "PROP_SEDATION_TYPES": {
@@ -3204,11 +2268,6 @@
         "clasificación de sedantes",
         "anestesia",
         "procedimientos con sedación"
-      ],
-      "description_es": "La tabla 'PROP_SEDATION_TYPES' almacena los diferentes tipos de sedación disponibles, incluyendo sus propiedades y características asociadas para su gestión en el sistema.",
-      "examples": [
-        "\"Sedación consciente con midazolam: tipo de sedación moderada que permite al paciente mantener la respiración espontánea y responder a estímulos verbales.\"",
-        "\"Sedación profunda con propofol: induce un estado de disminución de la conciencia donde el paciente no puede ser despertado fácilmente y puede requerir asistencia respiratoria.\""
       ]
     },
     "PROP_TYPE_SAMPLE_TYPES": {
@@ -3219,11 +2278,6 @@
         "categorías de muestras",
         "clasificación de muestras",
         "muestras por tipo de propiedad"
-      ],
-      "description_es": "La tabla 'PROP_TYPE_SAMPLE_TYPES' almacena los tipos de muestras asociados a diferentes propiedades, estableciendo una relación entre categorías de propiedades y los formatos de muestra permitidos.",
-      "examples": [
-        "\"Tipo de propiedad: Suelo agrícola - Muestras permitidas: Análisis de nutrientes, Pruebas de contaminación.\"",
-        "\"Tipo de propiedad: Edificio residencial - Muestras permitidas: Test de humedad, Muestras de materiales de construcción.\""
       ]
     },
     "SCRE_PSA_RESULTS": {
@@ -3234,11 +2288,6 @@
         "pruebas de próstata",
         "análisis PSA",
         "examen prostático"
-      ],
-      "description_es": "Almacena los resultados de pruebas PSA (antígeno prostático específico) realizadas a pacientes, incluyendo valores numéricos y fechas de realización.",
-      "examples": [
-        "\"Resultado de PSA de 4.2 ng/mL para el paciente con ID 12345, realizado el 15/03/2023.\"",
-        "\"Control anual de PSA: valor de 1.8 ng/mL registrado el 10/05/2022 para el paciente con historial de hiperplasia benigna.\""
       ]
     },
     "SCRE_RECTAL_EXAMINATION_ASYMMETRIES": {
@@ -3249,11 +2298,6 @@
         "anomalías rectales",
         "exploración rectal",
         "hallazgos rectales"
-      ],
-      "description_es": "Almacena información sobre asimetrías detectadas en exámenes rectales, incluyendo posibles hallazgos anormales en la estructura o forma del área evaluada.",
-      "examples": [
-        "\"Asimetría detectada en el cuadrante superior derecho del recto durante el examen, con presencia de un nódulo palpable de aproximadamente 2 cm.\"",
-        "\"Hallazgo de irregularidad en la pared rectal izquierda, sugiriendo posible engrosamiento anormal en la zona.\""
       ]
     },
     "SCRE_RECTAL_EXAMINATION_RESULTS": {
@@ -3264,11 +2308,6 @@
         "exploración rectal",
         "diagnóstico rectal",
         "pruebas rectales"
-      ],
-      "description_es": "Almacena los resultados de exámenes rectales realizados a pacientes, incluyendo hallazgos clínicos y observaciones médicas relevantes.",
-      "examples": [
-        "\"Paciente presenta nódulo prostático duro e irregular en lóbulo derecho, sugestivo de neoplasia. Se recomienda biopsia.\"",
-        "\"Examen rectal normal, sin masas palpables ni dolor a la palpación. Esfínter anal con tono conservado.\""
       ]
     },
     "SCRE_SCREENING_EXCLUSION_REASONS": {
@@ -3279,11 +2318,6 @@
         "criterios de screening",
         "exclusiones de selección",
         "códigos de descarte"
-      ],
-      "description_es": "La tabla 'SCRE_SCREENING_EXCLUSION_REASONS' almacena los motivos de exclusión utilizados en procesos de selección o filtrado, registrando las razones por las cuales elementos son descartados.",
-      "examples": [
-        "\"Candidato no cumple con el requisito mínimo de años de experiencia para el puesto.\"",
-        "\"Producto descartado en control de calidad por presentar defectos de fabricación.\""
       ]
     },
     "SCRE_SCREENING_INCLUSION_REASONS": {
@@ -3294,11 +2328,6 @@
         "razones de cribado",
         "inclusión en evaluación",
         "códigos de selección"
-      ],
-      "description_es": "La tabla 'SCRE_SCREENING_INCLUSION_REASONS' almacena los motivos o criterios que determinan la inclusión de participantes en procesos de selección o screening, registrando las justificaciones asociadas a cada caso.",
-      "examples": [
-        "\"El participante cumple con el criterio de edad entre 18-65 años requerido para el estudio clínico.\"",
-        "\"El paciente presenta los síntomas específicos (X, Y, Z) que son el foco de la investigación médica.\""
       ]
     },
     "SURG_ANESTHESIA_RISKS": {
@@ -3309,11 +2338,6 @@
         "peligros quirúrgicos",
         "anestesiología riesgos",
         "efectos adversos anestesia"
-      ],
-      "description_es": "La tabla 'SURG_ANESTHESIA_RISKS' almacena información sobre los riesgos asociados a diferentes tipos de anestesia utilizados en procedimientos quirúrgicos, incluyendo posibles complicaciones y factores de riesgo.",
-      "examples": [
-        "Riesgo de reacción alérgica severa (anafilaxia) en pacientes sometidos a anestesia general con propofol.",
-        "Pacientes con historial de apnea del sueño presentan mayor riesgo de complicaciones respiratorias bajo anestesia epidural."
       ]
     },
     "SURG_ANESTHESIA_TYPES": {
@@ -3324,11 +2348,6 @@
         "clasificación de anestesia",
         "modalidades anestésicas",
         "anestesia en cirugía"
-      ],
-      "description_es": "La tabla 'SURG_ANESTHESIA_TYPES' almacena los diferentes tipos de anestesia utilizados en procedimientos quirúrgicos, incluyendo sus características y clasificaciones. Su propósito es estandarizar y registrar las opciones de anestesia disponibles para su gestión en sistemas médicos.",
-      "examples": [
-        "\"Anestesia general: Pérdida completa de la conciencia y sensibilidad, utilizada en cirugías mayores como bypass cardíaco.\"",
-        "\"Anestesia local: Adormecimiento de un área específica del cuerpo, común en procedimientos menores como extracción de lunares.\""
       ]
     },
     "SURG_ANESTHESIA_VALORATIONS": {
@@ -3339,11 +2358,6 @@
         "procedimientos anestésicos",
         "registros de anestesia",
         "evaluaciones preoperatorias"
-      ],
-      "description_es": "Tabla que almacena valoraciones y evaluaciones relacionadas con procedimientos de anestesia en intervenciones quirúrgicas, incluyendo posibles métricas o calificaciones asociadas.",
-      "examples": [
-        "\"Valoración del nivel de sedación del paciente durante una cirugía de apendicectomía: 4 (en escala de 1-5).\"",
-        "\"Evaluación de complicaciones post-anestésicas en una histerectomía: náuseas leves y presión arterial estable.\""
       ]
     },
     "SURG_INTERVENTION_TYPES": {
@@ -3354,11 +2368,6 @@
         "clasificación de operaciones",
         "códigos de procedimientos",
         "catálogo de cirugías"
-      ],
-      "description_es": "La tabla 'SURG_INTERVENTION_TYPES' almacena los diferentes tipos de intervenciones quirúrgicas disponibles, incluyendo sus características y clasificaciones básicas. Su propósito es servir como catálogo de referencia para los procedimientos médicos quirúrgicos.",
-      "examples": [
-        "\"Cirugía cardíaca: procedimiento invasivo para tratar enfermedades del corazón, clasificado como de alta complejidad.\"",
-        "\"Apicectomía: intervención odontológica menor para extraer el ápice de una raíz dental, clasificada como cirugía ambulatoria.\""
       ]
     },
     "TEST_PROFILES": {
@@ -3369,11 +2378,6 @@
         "perfiles eliminados",
         "registro de modificaciones",
         "descripción de perfiles"
-      ],
-      "description_es": "La tabla 'TEST_PROFILES' almacena información de perfiles asociados a pruebas o evaluaciones, posiblemente incluyendo datos de configuración, resultados o atributos específicos. Su propósito es gestionar y organizar los perfiles necesarios para la ejecución o análisis de tests.",
-      "examples": [
-        "\"Perfil de configuración para prueba de rendimiento: tiempo máximo permitido=30s, umbral de error=0.5%.\"",
-        "\"Perfil de evaluación de seguridad: criterios=[autenticación, cifrado], puntaje mínimo requerido=85/100.\""
       ]
     },
     "TEST_STATES": {
@@ -3384,11 +2388,6 @@
         "categorías de test",
         "estados de evaluación",
         "configuración de pruebas"
-      ],
-      "description_es": "La tabla 'TEST_STATES' almacena los diferentes estados o condiciones posibles asociados a pruebas o evaluaciones, sirviendo como catálogo de referencia para otros sistemas.",
-      "examples": [
-        "\"En proceso\": estado que indica que una prueba está siendo ejecutada pero aún no ha finalizado.",
-        "\"Aprobado\": estado que indica que una prueba ha sido completada satisfactoriamente según los criterios establecidos."
       ]
     },
     "TEST_TESTS": {
@@ -3399,11 +2398,6 @@
         "test",
         "evaluaciones",
         "tipo de prueba"
-      ],
-      "description_es": "Tabla que almacena información sobre pruebas o exámenes realizados, incluyendo posibles resultados y datos asociados a los mismos.",
-      "examples": [
-        "Resultado de prueba de laboratorio médico: glucosa en sangre 90 mg/dL, marcado como 'Normal'.",
-        "Examen de certificación profesional: puntuación 85/100, estado 'Aprobado', fecha 15/03/2023."
       ]
     },
     "TEST_TEST_SUBTYPES": {
@@ -3414,11 +2408,6 @@
         "tipos secundarios de test",
         "clasificación de evaluaciones",
         "jerarquía de pruebas"
-      ],
-      "description_es": "Tabla que almacena los subtipos asociados a pruebas o exámenes, permitiendo su clasificación y organización jerárquica.",
-      "examples": [
-        "\"Subtipo de prueba de laboratorio: 'Hematología' para clasificar exámenes de sangre.\"",
-        "\"Subtipo de examen médico: 'Radiografía' como categoría bajo pruebas de imagenología.\""
       ]
     },
     "TEST_TEST_TYPES": {
@@ -3429,11 +2418,6 @@
         "clasificación de exámenes",
         "tipologías de evaluación",
         "pruebas eliminadas"
-      ],
-      "description_es": "Tabla que almacena los diferentes tipos de pruebas o exámenes disponibles en el sistema, incluyendo sus características y categorizaciones principales.",
-      "examples": [
-        "\"Tipo de prueba: Examen de sangre - Categoría: Laboratorio clínico - Características: Mide niveles de glucosa, colesterol y hemoglobina.\"",
-        "\"Tipo de prueba: Test de aptitud física - Categoría: Evaluación deportiva - Características: Incluye medición de resistencia cardiovascular, flexibilidad y fuerza muscular.\""
       ]
     },
     "TIME_LINE_VIEW_TYPES": {
@@ -3444,11 +2428,6 @@
         "configuración de visualización",
         "formatos de línea de tiempo",
         "tipos de visualización"
-      ],
-      "description_es": "La tabla 'TIME_LINE_VIEW_TYPES' almacena los diferentes tipos de vistas disponibles para líneas de tiempo, definiendo sus características y configuraciones básicas.",
-      "examples": [
-        "\"Vista cronológica simple\": muestra eventos en orden secuencial con fechas básicas y títulos.",
-        "\"Vista detallada con hitos\": incluye eventos clave con descripciones extendidas, imágenes y categorías de clasificación."
       ]
     },
     "TRIA_REASONS": {
@@ -3459,11 +2438,6 @@
         "criterios de selección",
         "descripción de tría",
         "motivos eliminados"
-      ],
-      "description_es": "La tabla 'TRIA_REASONS' almacena los motivos o razones asociados a procesos de clasificación o selección, como podrían ser criterios de triaje en sistemas médicos o de priorización. Su estructura permite registrar y categorizar las distintas justificaciones utilizadas en estos procesos.",
-      "examples": [
-        "\"Prioridad alta por dificultad respiratoria severa\" en un sistema de triaje médico.",
-        "\"Asignación a equipo especializado por complejidad técnica\" en un proceso de priorización de casos."
       ]
     },
     "TRIA_SYMPTOMS": {
@@ -3474,11 +2448,6 @@
         "clasificación médica",
         "jerarquía de síntomas",
         "descripción de síntomas"
-      ],
-      "description_es": "La tabla 'TRIA_SYMPTOMS' almacena información sobre síntomas médicos y su relación con posibles diagnósticos, utilizada comúnmente en sistemas de triaje. Contiene datos como identificadores de síntomas, descripciones y su relevancia en procesos de evaluación clínica.",
-      "examples": [
-        "\"Dolor de cabeza intenso asociado a migraña, con código de síntoma SH-001 y prioridad alta en triaje.\"",
-        "\"Fiebre persistente mayor a 38°C vinculada a posibles infecciones bacterianas, código SF-045, relevancia media en evaluación inicial.\""
       ]
     },
     "VACC_VACCINES": {
@@ -3489,11 +2458,6 @@
         "registro de vacunación",
         "dosis de vacuna",
         "calendario de vacunación"
-      ],
-      "description_es": "La tabla 'VACC_VACCINES' almacena información sobre vacunas disponibles, incluyendo sus características y datos relevantes para su administración y seguimiento.",
-      "examples": [
-        "\"Registro de la vacuna contra la influenza: nombre comercial 'FluShield', tipo 'Inactivada', dosis recomendada '0.5 ml', vía de administración 'Intramuscular'.\"",
-        "\"Detalles de la vacuna COVID-19 'ViraStop': fabricante 'BioGen', temperatura de almacenamiento '-70°C', número de lote 'CVD2023-45', indicación 'Adultos mayores de 18 años'.\""
       ]
     },
     "_METACOLS": {
@@ -3504,11 +2468,6 @@
         "definición de columnas",
         "tipos de datos",
         "permisos de edición"
-      ],
-      "description_es": "Tabla de metadatos que almacena información descriptiva sobre las columnas de otras tablas en la base de datos, incluyendo definiciones, tipos de datos y restricciones.",
-      "examples": [
-        "\"En la tabla '_METACOLS' se registra que la columna 'fecha_nacimiento' en la tabla 'clientes' es de tipo DATE y tiene la descripción 'Almacena la fecha de nacimiento del cliente en formato AAAA-MM-DD'.\"",
-        "\"La tabla '_METACOLS' indica que la columna 'saldo' en la tabla 'cuentas' es de tipo DECIMAL(10,2), tiene una restricción de valor mínimo 0 y la definición 'Representa el saldo actual de la cuenta bancaria'.\""
       ]
     },
     "_DICTIONARIES": {
@@ -3519,11 +2478,6 @@
         "traducción de códigos",
         "tabla de referencia",
         "valores normalizados"
-      ],
-      "description_es": "Tabla que almacena diccionarios de datos, conteniendo definiciones, términos y posiblemente traducciones o equivalencias para uso en sistemas de información.",
-      "examples": [
-        "\"Término: 'Cliente' - Definición: 'Persona o entidad que adquiere productos o servicios de una organización.' - Equivalencia inglés: 'Customer'.\"",
-        "\"Término: 'Factura' - Definición: 'Documento legal que detalla una transacción comercial.' - Sinónimos: 'Recibo', 'Boleta'.\""
       ]
     },
     "ALLE_ALLERGY_CATEGORIES": {
@@ -3534,21 +2488,11 @@
         "clasificación de alergias",
         "alergias categorizadas",
         "catálogo de alergias"
-      ],
-      "description_es": "La tabla 'ALLE_ALLERGY_CATEGORIES' almacena y organiza las diferentes categorías o tipos de alergias para su clasificación y referencia en un sistema de salud.",
-      "examples": [
-        "\"Alergias alimentarias\" como categoría para agrupar reacciones a nueces, mariscos o lácteos.",
-        "\"Alergias ambientales\" como categoría para incluir sensibilidad al polen, ácaros o pelo de mascotas."
       ]
     },
     "MI_TABLA": {
       "common_terms": [
         "- ejemplo"
-      ],
-      "description_es": "Tabla 'MI_TABLA' diseñada para almacenar y gestionar información específica de la aplicación, con estructura adaptable a diversos tipos de datos según requerimientos.",
-      "examples": [
-        "\"Registro de preferencias de usuario, como tema de interfaz y configuración de notificaciones.\"",
-        "\"Inventario de recursos digitales con metadatos como tipo, fecha de creación y tamaño.\""
       ]
     }
   },

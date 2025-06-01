@@ -555,6 +555,25 @@ def extract_json_from_text(text: str) -> str:
     return '{"PATI_PATIENTS": {"columns": [{"name": "PATI_ID", "type": "INTEGER"}]}}'
 
 
+def extract_sql_from_markdown(markdown_text: str) -> Optional[str]:
+    """
+    Extrae una consulta SQL de un bloque de código Markdown.
+
+    Args:
+        markdown_text: Texto en formato Markdown.
+
+    Returns:
+        La consulta SQL extraída o None si no se encuentra.
+    """
+    # Patrón para buscar bloques de código SQL
+    # Admite ```sql ... ``` o ``` ... ``` (asumiendo que es SQL si no se especifica lenguaje)
+    pattern = r"""```(?:sql)?\n(.*?)```"""
+    match = re.search(pattern, markdown_text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
 def load_terms_mapping(file_path: str = TERMS_FILE) -> Dict[str, Any]:
     """
     Carga el diccionario enriquecido desde .bak o .json, soportando múltiples objetos JSON
@@ -843,7 +862,6 @@ def _get_schema_tables(schema):
     if isinstance(schema, dict):
         # Puede ser dict con 'tables' como dict de tablas
         if "tables" in schema and isinstance(schema["tables"], dict):
-            # Convertir a lista de dicts con nombre y columnas
             return [
                 {"table_name": k, **v}
                 for k, v in schema["tables"].items()
@@ -851,6 +869,17 @@ def _get_schema_tables(schema):
         # O dict con 'tables' como lista
         if "tables" in schema and isinstance(schema["tables"], list):
             return schema["tables"]
+        # Nuevo: formato plano schema_simple.json, claves de nivel superior son tablas
+        simple_tables = []
+        all_plain = True
+        for k, v in schema.items():
+            if isinstance(v, dict) and 'columns' in v:
+                simple_tables.append({"table_name": k, **v})
+            else:
+                all_plain = False
+                break
+        if all_plain and simple_tables:
+            return simple_tables
     raise ValueError("Formato de esquema no soportado para extracción de tablas.")
 
 def list_tables(schema_path:str) -> list[str]:
@@ -945,6 +974,12 @@ def search_schema(schema_path:str, keyword:str) -> dict:
         if keyword in t["table_name"].lower() or keyword in (t.get("description") or "").lower():
             result["tables"].append(t["table_name"])
         cols = t.get("columns", [])
+        # Manejar formato de columnas como lista de strings (schema_simple.json)
+        if isinstance(cols, list) and cols and isinstance(cols[0], str):
+            for cname in cols:
+                if keyword in cname.lower():
+                    result["columns"].append({"table": t["table_name"], "column": cname, "description": ""})
+            continue  # Ya procesadas las columnas simples
         if isinstance(cols, dict):
             for cname, cinfo in cols.items():
                 if keyword in cname.lower() or keyword in (cinfo.get("description") or "").lower():

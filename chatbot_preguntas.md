@@ -220,7 +220,7 @@ ORDER BY mes;
 
 **¿Qué pacientes tienen registrada una alergia al polen?  VS CHATGTP**
 
-**¿Qué pacientes han registrado intolerancia a un alérgeno no medicinal concreto ?**
+**¿Qué pacientes han registrado intolerancia a un alérgeno no medicinal concreto**
 
 
 
@@ -245,3 +245,4 @@ ORDER BY mes;
 * **Tipo de consulta:** joins múltiples, cálculos de porcentaje y agrupaciones cruzadas.
 
 ---
+¿Qué vacunas ha recibido un paciente que fue clasificado como "Peatón" en una condición de accidente y presentó síntomas de "Agitación extrema"?

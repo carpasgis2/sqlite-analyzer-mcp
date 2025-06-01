@@ -13,7 +13,7 @@ from typing import Type, Any # Añadido Any
 
 from langchain.tools import Tool # Descomentado
 from langchain_core.tools import BaseTool # Usar BaseTool
-from langchain_core.pydantic_v1 import BaseModel, Field # Para args_schema si es necesario
+from pydantic.v1 import BaseModel, Field # MODIFICADO: Para args_schema si es necesario
 
 from langchain.agents import initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
@@ -24,7 +24,7 @@ from langchain_core.exceptions import OutputParserException
 
 # Gestionar la importación de LLM_MODEL_NAME
 try:
-    from llm_utils import LLM_MODEL_NAME
+    from src.llm_utils import LLM_MODEL_NAME # MODIFICADO: Añadido prefijo src.
 except ImportError:
     # El logger puede no estar completamente configurado aquí si esto está en la parte superior.
     # Se podría registrar una advertencia más tarde o usar print.
@@ -32,11 +32,11 @@ except ImportError:
     LLM_MODEL_NAME = "deepseek-coder" # Valor por defecto
 
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.append(os.path.dirname(os.path.abspath(__file__))) # ELIMINADO: Esta línea se elimina
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from pipeline import chatbot_pipeline
-from db_connector import DBConnector # Importar la clase DBConnector correcta de src.db_connector
+from src.pipeline import chatbot_pipeline_entrypoint as chatbot_pipeline # MODIFICADO: Importar con el nombre correcto y alias si es necesario
+from src.db_connector import DBConnector # MODIFICADO: Añadido prefijo src.
 
 # --- INICIO CONFIGURACIÓN DE LOGGING ---
 # Configurar el logger raíz para capturar logs de este script y otros módulos (ej. pipeline)
@@ -213,13 +213,18 @@ class SQLMedicalChatbot(BaseTool):
                 self.logger.error(f"Pipeline devolvió un tipo inesperado: {type(pipeline_result)}")
                 return f"Error: Resultado con formato inválido. Por favor reporta este error."
             
-            response_message = pipeline_result.get("response", "La consulta se ejecutó pero no pude formatear la respuesta correctamente.")
-            data_results = pipeline_result.get("data")
-            executed_sql_query_info = pipeline_result.get("executed_sql_query_info")
+            response_message = pipeline_result.get("response_message", "La consulta se ejecutó pero no pude formatear la respuesta correctamente.")
+            data_results = pipeline_result.get("data_results")
+            # executed_sql_query_info ahora se obtiene de sql_query_generated y params_used
+            # para simplificar, ya que el pipeline devuelve el SQL final y sus parámetros.
+            executed_sql_query_info = {
+                "final_executed_query": pipeline_result.get("sql_query_generated"),
+                "params_used": pipeline_result.get("params_used")
+            }
 
             self.logger.info(f"Pipeline returned: response_message='{response_message}', data_results_type='{type(data_results)}', data_results_empty={not data_results}, executed_sql_query_info_type='{type(executed_sql_query_info)}'")
 
-            sql_to_check_for_count_raw = query 
+            sql_to_check_for_count_raw = query # Default to original user query for this check
             if isinstance(executed_sql_query_info, dict):
                 final_executed_query_from_info = executed_sql_query_info.get("final_executed_query")
                 if isinstance(final_executed_query_from_info, str) and final_executed_query_from_info.strip():
@@ -324,31 +329,30 @@ class SQLMedicalChatbot(BaseTool):
 
                 # --- INICIO SECCIÓN COMENTADA TEMPORALMENTE ---
                 # La siguiente sección depende de `search_schema` que no está definida.
-                sql_keywords = {'select','from','where','join','on','and','or','distinct','inner','left','right','case','when','then','else','end','as','group','by','order','like','count', 'limit', 'offset', 'having', 'is', 'null', 'not', 'in', 'exists', 'between', 'avg', 'sum', 'min', 'max', 'abs', 'upper', 'lower', 'length', 'date', 'datetime', 'julianday', 'strftime', 'char', 'cast', 'round'}
-                # Usar una expresión regular que capture palabras que puedan ser identificadores SQL (incluyendo '_')
-                palabras = [w for w in re.findall(r"\\b[a-zA-Z_][a-zA-Z0-9_]*\\b", cleaned_query) if w.lower() not in sql_keywords and len(w) >= 3]
-                sugerencias_esquema = []
-                # Tomar hasta 3 palabras clave únicas y relevantes (no demasiado cortas)
-                palabras_unicas_filtradas = sorted(list(set(palabras)), key=len, reverse=True) # Priorizar más largas
+                # sql_keywords = {'select','from','where','join','on','and','or','distinct','inner','left','right','case','when','then','else','end','as','group','by','order','like','count', 'limit', 'offset', 'having', 'is', 'null', 'not', 'in', 'exists', 'between', 'avg', 'sum', 'min', 'max', 'abs', 'upper', 'lower', 'length', 'date', 'datetime', 'julianday', 'strftime', 'char', 'cast', 'round'}
+                # # Usar una expresión regular que capture palabras que puedan ser identificadores SQL (incluyendo '_')
+                # palabras = [w for w in re.findall(r"\\b[a-zA-Z_][a-zA-Z0-9_]*\\b", cleaned_query) if w.lower() not in sql_keywords and len(w) >= 3]
+                # sugerencias_esquema = []
+                # # Tomar hasta 3 palabras clave únicas y relevantes (no demasiado cortas)
+                # palabras_unicas_filtradas = sorted(list(set(palabras)), key=len, reverse=True) # Priorizar más largas
 
-                for kw in palabras_unicas_filtradas[:3]:
-                    self.logger.info(f"Buscando en esquema la palabra clave: {kw} (derivada de la consulta: '{cleaned_query}')")
-                    # La función search_schema se importa de sql_utils
-                    result = search_schema(self.schema_path, kw) 
-                    if result.get('tables') or result.get('columns'):
-                        msg = f"\\nPara la palabra clave '{kw}', se encontró en el esquema:"
-                        if result.get('tables'):
-                            msg += "\\n  Tablas relacionadas: " + ", ".join(result['tables'])
-                        if result.get('columns'):
-                            cols_str = ", ".join([f"{c['table']}.{c['column']}" for c in result['columns']])
-                            msg += "\\n  Columnas relacionadas: " + cols_str
-                        sugerencias_esquema.append(msg)
+                # for kw in palabras_unicas_filtradas[:3]:
+                #     self.logger.info(f"Buscando en esquema la palabra clave: {kw} (derivada de la consulta: '{cleaned_query}')")
+                #     # La función search_schema se importa de sql_utils
+                #     result = search_schema(self.schema_path, kw)
+                #     if result.get('tables') or result.get('columns'):
+                #         sug_parts = []
+                #         if result.get('tables'):
+                #             sug_parts.append(f"tablas: {', '.join(result['tables'])}")
+                #         if result.get('columns'):
+                #             sug_parts.append(f"columnas: {', '.join(result['columns'])}")
+                #         if sug_parts:
+                #             sugerencias_esquema.append(f"- Para el término '{kw}', se encontró en: {'; '.join(sug_parts)}.")
                 
-                if sugerencias_esquema:
-                    response_message += "\\n\\nSugerencias adicionales basadas en tu consulta y el esquema:" + "\\n".join(sugerencias_esquema)
-                    self.logger.info(f"Añadidas sugerencias de esquema al mensaje de respuesta: {' '.join(sugerencias_esquema)}")
-                # Ya no está temporalmente comentada.
-                # --- FIN SECCIÓN COMENTADA TEMPORALMENTE ---
+                # if sugerencias_esquema:
+                #     response_message += "\\n\\nSugerencias adicionales basadas en tu consulta y el esquema:\\n" + "\\n".join(sugerencias_esquema)
+                #     self.logger.info(f"Añadidas sugerencias de esquema al mensaje de respuesta: {' '.join(sugerencias_esquema)}")
+                # Fin de la sección de búsqueda en esquema
 
             self.logger.info(f"Resultado del pipeline procesado: Mensaje='{response_message}', Datos presentes: {data_results is not None}")
 
@@ -449,16 +453,16 @@ Ejemplos de cuándo usarla: 'Hola', '¿Qué es SinaSuite?', '¿Quién eres?', 'A
 )
 
 # --- TOOLS DE ESQUEMA ---
-from src.sql_utils import list_tables, list_columns, search_schema # search_schema ya estaba importado aquí
-SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "data", "dictionary.json")
+from src.sql_utils import list_tables, list_columns, search_schema
+SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "data", "schema_simple.json")  # Usar el esquema real para las herramientas
 
 def tool_list_tables(_:str=None) -> str:
-    """Devuelve la lista de tablas reales del esquema."""
+    """Devuelve la lista de tablas reales del esquema. NO inventar nombres: usar siempre esta herramienta antes de generar SQL."""
     tablas = list_tables(SCHEMA_PATH)
     return "Tablas disponibles:\n" + "\n".join(tablas)
 
 def tool_list_columns(table:str) -> str:
-    """Devuelve las columnas reales de una tabla. Si no se encuentran, da un mensaje informativo y sugiere nombres similares."""
+    """Devuelve las columnas reales de una tabla. NO inventar columnas: usar siempre esta herramienta antes de generar SQL."""
     cols = list_columns(SCHEMA_PATH, table)
     # Log temporal para depuración
     logger.info(f"[DEBUG] tool_list_columns: tabla solicitada='{table}', columnas encontradas={cols}")

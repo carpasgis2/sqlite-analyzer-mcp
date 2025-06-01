@@ -1,17 +1,23 @@
 import json
 import logging
 import os # Añadido para operaciones de archivo
+# import sqlparse # <--- ELIMINADO, sqlglot se usa en su lugar
+from typing import Dict, Set, Optional, Any, Tuple
+import sqlglot
+import sqlglot.optimizer # Necesario para scope
 
 logger = logging.getLogger(__name__)
 
 class WhitelistValidator:
-    def __init__(self, allowed_tables_path=None, allowed_columns_map=None, case_sensitive=True):
+    def __init__(self, db_schema_dict: Optional[Dict[str, Any]] = None, allowed_tables_path=None, allowed_columns_map=None, case_sensitive: bool = True):
         """
         Initializes the WhitelistValidator.
         Can be initialized with a path to a JSON file defining allowed tables and columns,
         or directly with an allowed_columns_map dictionary.
 
         Args:
+            db_schema_dict (dict, optional): A dictionary representing the database schema.
+                                              Expected keys are "tables", each with "name" and optional "columns" (list of {"name": "..."}).
             allowed_tables_path (str, optional): Path to the JSON file.
                                                  The JSON should have a structure like:
                                                  { "allowed_tables": ["table1", "table2"],
@@ -22,58 +28,131 @@ class WhitelistValidator:
             case_sensitive (bool, optional): If True (default), table and column names are case-sensitive.
                                              If False, names are treated as case-insensitive (converted to lower).
         """
+        self.allowed_columns_map: Dict[str, Set[str]] = {}
+        self.allowed_tables: Set[str] = set()
         self.case_sensitive = case_sensitive
-        self.allowed_tables = set()
-        self.allowed_columns_map = {}
+        self.logger = logging.getLogger(__name__)
+        self.current_query_aliases: Dict[str, str] = {}
+        self.current_table_context_for_columns: Dict[str, str] = {}
 
-        def _process_name(name):
-            return name if self.case_sensitive else name.lower()
+        self.logger.info(f"WhitelistValidator initializing. Case sensitive: {self.case_sensitive}")
 
-        def _process_column_list(columns):
-            return columns if self.case_sensitive else [_process_name(col) for col in columns]
+        if db_schema_dict is None and allowed_tables_path is None and allowed_columns_map is None:
+            self.logger.warning(f"WhitelistValidator initialized without any whitelist configuration. Case sensitive: {self.case_sensitive}. All checks will likely fail.")
+            return
 
         if allowed_columns_map:
+            self.logger.info(f"Initializing whitelist from provided allowed_columns_map.")
             processed_map = {}
             for table, columns in allowed_columns_map.items():
-                table_key = _process_name(table)
-                processed_map[table_key] = _process_column_list(columns)
+                table_key = self._process_name(table)
+                processed_map[table_key] = self._process_column_list(columns)
             self.allowed_columns_map = processed_map
             self.allowed_tables = set(self.allowed_columns_map.keys())
-            logger.info(f"WhitelistValidator initialized with provided allowed_columns_map. Case sensitive: {self.case_sensitive}. Tables: {self.allowed_tables}")
+            self.logger.info(f"WhitelistValidator initialized with provided allowed_columns_map. Case sensitive: {self.case_sensitive}. Tables: {self.allowed_tables}")
         elif allowed_tables_path:
+            self.logger.info(f"Initializing whitelist from JSON file: {allowed_tables_path}")
             try:
                 with open(allowed_tables_path, 'r') as f:
                     config = json.load(f)
                 
                 raw_allowed_tables = config.get("allowed_tables", [])
-                self.allowed_tables = {_process_name(t) for t in raw_allowed_tables}
+                self.allowed_tables = {self._process_name(t) for t in raw_allowed_tables}
                 
                 raw_columns_map = config.get("allowed_columns_map", {})
                 processed_map = {}
                 for table, columns in raw_columns_map.items():
-                    table_key = _process_name(table)
-                    processed_map[table_key] = _process_column_list(columns)
+                    table_key = self._process_name(table)
+                    processed_map[table_key] = self._process_column_list(columns)
                 self.allowed_columns_map = processed_map
                 
                 # Ensure all tables in allowed_columns_map are also in allowed_tables
                 for table_key in self.allowed_columns_map.keys(): # keys are already processed
                     self.allowed_tables.add(table_key)
                 
-                logger.info(f"WhitelistValidator initialized from {allowed_tables_path}. Case sensitive: {self.case_sensitive}. Tables: {self.allowed_tables}")
+                self.logger.info(f"WhitelistValidator initialized from {allowed_tables_path}. Case sensitive: {self.case_sensitive}. Tables: {self.allowed_tables}")
             except FileNotFoundError:
-                logger.error(f"Whitelist config file not found: {allowed_tables_path}")
+                self.logger.error(f"Whitelist config file not found: {allowed_tables_path}")
             except json.JSONDecodeError:
-                logger.error(f"Error decoding JSON from whitelist config file: {allowed_tables_path}")
+                self.logger.error(f"Error decoding JSON from whitelist config file: {allowed_tables_path}")
         else:
-            logger.warning(f"WhitelistValidator initialized without any whitelist configuration. Case sensitive: {self.case_sensitive}. All checks will likely fail.")
+            self.logger.warning(f"WhitelistValidator initialized without any whitelist configuration. Case sensitive: {self.case_sensitive}. All checks will likely fail.")
 
-    def is_table_allowed(self, table_name):
-        """Checks if a table is in the whitelist."""
-        table_name_internal = table_name if self.case_sensitive else table_name.lower()
-        allowed = table_name_internal in self.allowed_tables
-        if not allowed:
-            logger.warning(f"Table '{table_name}' (processed as '{table_name_internal}') is not in the allowed list: {self.allowed_tables}")
-        return allowed
+        # Si se proporciona un esquema de base de datos, se carga en la inicialización
+        if db_schema_dict:
+            self.logger.info(f"Processing db_schema_dict for whitelist configuration.")
+            if "tables" not in db_schema_dict:
+                self.logger.error("WhitelistValidator __init__: 'tables' key is missing in db_schema_dict. No whitelist configuration will be loaded.")
+                self.logger.debug(f"db_schema_dict keys: {list(db_schema_dict.keys()) if isinstance(db_schema_dict, dict) else 'Not a dict'}")
+                return
+                
+            if not isinstance(db_schema_dict["tables"], list):
+                self.logger.error(f"WhitelistValidator __init__: db_schema_dict['tables'] is not a list (type: {type(db_schema_dict['tables'])}). No whitelist configuration will be loaded.")
+                return
+
+            if not db_schema_dict["tables"]:
+                self.logger.warning("WhitelistValidator __init__: db_schema_dict['tables'] is an empty list. No tables to load into whitelist.")
+                return
+                
+            self.logger.info(f"WhitelistValidator __init__: Processing {len(db_schema_dict['tables'])} entries from db_schema_dict['tables'].")
+
+            for i, table_info in enumerate(db_schema_dict["tables"]):
+                if not isinstance(table_info, dict):
+                    self.logger.warning(f"Table entry {i} is not a dictionary, skipping: {str(table_info)[:100]}")
+                    continue
+
+                table_name = table_info.get("name")
+                if not table_name:
+                    self.logger.warning(f"Table entry {i} in schema is missing a 'name': {str(table_info)[:100]}, skipping.")
+                    continue
+                
+                processed_table_name = table_name if self.case_sensitive else table_name.lower()
+                self.allowed_tables.add(processed_table_name)
+                self.logger.debug(f"Added table to allowed_tables: '{processed_table_name}' (original: '{table_name}')")
+                
+                allowed_cols_for_table = set()
+                if "columns" in table_info and isinstance(table_info["columns"], list):
+                    for j, col_info in enumerate(table_info["columns"]):
+                        if not isinstance(col_info, dict):
+                            self.logger.warning(f"Column entry {j} for table '{table_name}' is not a dictionary, skipping: {str(col_info)[:100]}")
+                            continue
+                        col_name = col_info.get("name")
+                        if col_name:
+                            processed_col_name = col_name if self.case_sensitive else col_name.lower()
+                            allowed_cols_for_table.add(processed_col_name)
+                        else:
+                            self.logger.warning(f"Column entry {j} for table '{table_name}' is missing a 'name': {str(col_info)[:100]}, skipping.")
+                elif "columns" in table_info:
+                     self.logger.warning(f"Table '{table_name}' has a 'columns' entry but it's not a list (type: {type(table_info['columns'])}), no columns will be loaded for this table.")
+
+                if not allowed_cols_for_table:
+                    self.logger.info(f"Table '{processed_table_name}' added to whitelist without explicit columns being processed or found. Column checks for this table might be restrictive if not intended.")
+                    self.allowed_columns_map[processed_table_name] = set()
+                else:
+                    self.allowed_columns_map[processed_table_name] = allowed_cols_for_table
+                    self.logger.debug(f"Table '{processed_table_name}' added with columns: {allowed_cols_for_table}")
+            
+            if not self.allowed_tables:
+                self.logger.error(
+                    "WhitelistValidator __init__ completed, but NO tables were successfully processed and added to the whitelist. "
+                    "Ensure db_schema_dict['tables'] is a list of dictionaries, and each dictionary has a 'name' key."
+                )
+            else:
+                self.logger.info(f"WhitelistValidator __init__ completed. {len(self.allowed_tables)} tables loaded. Allowed tables (first 50): {list(self.allowed_tables)[:50]}")
+                # self.logger.debug(f"Final allowed_columns_map: {self.allowed_columns_map}") # Can be very verbose
+
+    def _process_name(self, name):
+        return name if self.case_sensitive else name.lower()
+
+    def _process_column_list(self, columns: list[str]) -> Set[str]:
+        return {self._process_name(col) for col in columns}
+
+    def is_table_allowed(self, table_name: str) -> bool:
+        processed_table_name = table_name if self.case_sensitive else table_name.lower()
+        if processed_table_name not in self.allowed_tables:
+            self.logger.warning(f"Table '{table_name}' (processed as '{processed_table_name}') is not in the allowed list. Allowed list (first 50): {list(self.allowed_tables)[:50]}")
+            return False
+        return True
 
     def are_columns_allowed(self, table_name, column_names):
         """Checks if all specified columns for a given table are in the whitelist."""
@@ -83,7 +162,7 @@ class WhitelistValidator:
             return False
         
         if table_name_internal not in self.allowed_columns_map:
-            logger.warning(
+            self.logger.warning(
                 f"Table '{table_name}' (processed as '{table_name_internal}') is allowed, but no specific column whitelist "
                 f"is defined in allowed_columns_map. Allowing all columns for this table by default. "
                 f"To restrict columns, add an entry for '{table_name_internal}' in allowed_columns_map, "
@@ -103,7 +182,7 @@ class WhitelistValidator:
             col_internal = col_original if self.case_sensitive else col_original.lower()
             
             if col_internal not in allowed_cols_for_table:
-                logger.warning(
+                self.logger.warning(
                     f"Column '{col_original}' (processed as '{col_internal}') in table '{table_name}' "
                     f"(processed as '{table_name_internal}') is not in the allowed list: {allowed_cols_for_table}"
                 )
@@ -112,200 +191,326 @@ class WhitelistValidator:
 
     def get_allowed_columns_for_table(self, table_name):
         """Returns the list of allowed columns for a table, or an empty list if table is allowed but has no specific columns, or None if table not allowed."""
+        # table_name is assumed to be the raw name, will be processed by is_table_allowed
         if not self.is_table_allowed(table_name): # is_table_allowed handles casing
             return None
 
-        table_name_internal = table_name if self.case_sensitive else table_name.lower()
+        table_name_internal = self._process_name(table_name)
         
         # Columns in self.allowed_columns_map are already processed for case.
-        # .get() returns the default [] if table_name_internal is not a key.
-        return self.allowed_columns_map.get(table_name_internal, [])
+        return self.allowed_columns_map.get(table_name_internal, set()) # Return a set
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
-    
-    dummy_config_path = "dummy_whitelist_config.json"
-    # Added "*" to PATIENTS for testing the new explicit '*' rule
-    # Added mixed case table "MixedCaseTable" for case-insensitivity testing
-    dummy_config_content = {
-        "allowed_tables": ["PATIENTS", "ALLERGIES", "OBSERVATIONS", "MixedCaseTable"],
-        "allowed_columns_map": {
-            "PATIENTS": ["PATI_ID", "PATI_NAME", "PATI_BIRTH_DATE", "*"], 
-            "ALLERGIES": ["ALLERGY_ID", "PATI_ID", "ALLERGY_TYPE"], # No ALLERGY_DESCRIPTION, no "*"
-            "OBSERVATIONS": ["OBS_ID", "PATI_ID", "OBS_TEXT", "OBS_DATE"],
-            "MixedCaseTable": ["MixID", "MixData"]
-        }
-    }
-    
-    try:
-        with open(dummy_config_path, 'w') as f:
-            json.dump(dummy_config_content, f, indent=4)
-        logger.info(f"Archivo de configuración temporal creado: {dummy_config_path}")
+    def is_column_allowed_for_table(self, table_name: str, column_name: str) -> bool:
+        # table_name: REAL table name, ALREADY PROCESSED for case.
+        # column_name: column name from query, ALREADY PROCESSED for case.
 
-        # --- Test Case-Sensitive Validator (default) ---
-        validator_cs = WhitelistValidator(allowed_tables_path=dummy_config_path) # case_sensitive=True by default
-        print("\\n--- Pruebas con validador SENSIBLE a mayúsculas/minúsculas (por defecto) ---")
-        print(f"Is PATIENTS allowed? {validator_cs.is_table_allowed('PATIENTS')}") # True
-        print(f"Is patients allowed? {validator_cs.is_table_allowed('patients')}") # False
-        print(f"Are PATIENTS columns [PATI_ID, PATI_BIRTH_DATE] allowed? {validator_cs.are_columns_allowed('PATIENTS', ['PATI_ID', 'PATI_BIRTH_DATE'])}") # True
-        print(f"Are PATIENTS columns [pati_id, pati_birth_date] allowed? {validator_cs.are_columns_allowed('PATIENTS', ['pati_id', 'pati_birth_date'])}") # False
-        print(f"Are PATIENTS columns ['*'] allowed? {validator_cs.are_columns_allowed('PATIENTS', ['*'])}") # True, "*" is in list
-        print(f"Are ALLERGIES columns ['*'] allowed? {validator_cs.are_columns_allowed('ALLERGIES', ['*'])}") # False, "*" not in list
-        print(f"Are ALLERGIES columns [ALLERGY_ID, ALLERGY_DESCRIPTION] allowed? {validator_cs.are_columns_allowed('ALLERGIES', ['ALLERGY_ID', 'ALLERGY_DESCRIPTION'])}") # False, ALLERGY_DESCRIPTION not in list
-        print(f"Get allowed columns for PATIENTS: {validator_cs.get_allowed_columns_for_table('PATIENTS')}")
-        print(f"Get allowed columns for patients: {validator_cs.get_allowed_columns_for_table('patients')}") # None
+        if table_name not in self.allowed_columns_map:
+            self.logger.warning(f"Table '{table_name}' is allowed but not in allowed_columns_map, implying no individual columns are whitelisted unless '*' is used globally for it.")
+            # This situation implies an empty set of allowed columns for this table in the map.
+            # If '*' is not in this (empty) set, then the column is not allowed.
+            # An empty set means only '*' could potentially match if '*' means "all columns".
+            # However, our logic for '*' is that it must be *explicitly* in the allowed set.
+            return False
 
+        allowed_cols_for_table = self.allowed_columns_map[table_name]
 
-        # --- Test Case-Insensitive Validator ---
-        validator_ci = WhitelistValidator(allowed_tables_path=dummy_config_path, case_sensitive=False)
-        print("\\n--- Pruebas con validador INSENSIBLE a mayúsculas/minúsculas ---")
-        print(f"Is PATIENTS allowed? {validator_ci.is_table_allowed('PATIENTS')}") # True
-        print(f"Is patients allowed? {validator_ci.is_table_allowed('patients')}") # True
-        print(f"Is PaTiEnTs allowed? {validator_ci.is_table_allowed('PaTiEnTs')}") # True
-        print(f"Are PATIENTS columns [PATI_ID, PATI_BIRTH_DATE] allowed? {validator_ci.are_columns_allowed('PATIENTS', ['PATI_ID', 'PATI_BIRTH_DATE'])}") # True
-        print(f"Are patients columns [pati_id, pati_birth_date] allowed? {validator_ci.are_columns_allowed('patients', ['pati_id', 'pati_birth_date'])}") # True
-        print(f"Are PaTiEnTs columns [PaTi_Id, PATI_birth_date] allowed? {validator_ci.are_columns_allowed('PaTiEnTs', ['PaTi_Id', 'PATI_birth_date'])}") # True
+        if column_name in allowed_cols_for_table:
+            return True
         
-        print(f"Is MixedCaseTable allowed? {validator_ci.is_table_allowed('MixedCaseTable')}") # True
-        print(f"Is mixedcasetable allowed? {validator_ci.is_table_allowed('mixedcasetable')}") # True
-        print(f"Are MixedCaseTable columns [MixID, MixData] allowed? {validator_ci.are_columns_allowed('MixedCaseTable', ['MixID', 'MixData'])}") # True
-        print(f"Are mixedcasetable columns [mixid, mixdata] allowed? {validator_ci.are_columns_allowed('mixedcasetable', ['mixid', 'mixdata'])}") # True
+        # Check if a generic '*' is allowed for this table, which would permit any column.
+        star_representation = self._process_name("*")
+        if star_representation in allowed_cols_for_table:
+            self.logger.debug(f"Column '{column_name}' allowed for table '{table_name}' because '*' is whitelisted for this table.")
+            return True
 
-        print(f"Are PATIENTS columns ['*'] allowed (CI)? {validator_ci.are_columns_allowed('PATIENTS', ['*'])}") # True
-        print(f"Are patients columns ['*'] allowed (CI)? {validator_ci.are_columns_allowed('patients', ['*'])}") # True
-        print(f"Are ALLERGIES columns ['*'] allowed (CI)? {validator_ci.are_columns_allowed('ALLERGIES', ['*'])}") # False
-        print(f"Are allergies columns ['*'] allowed (CI)? {validator_ci.are_columns_allowed('allergies', ['*'])}") # False
-        print(f"Are ALLERGIES columns [ALLERGY_ID, ALLERGY_DESCRIPTION] allowed (CI)? {validator_ci.are_columns_allowed('ALLERGIES', ['ALLERGY_ID', 'ALLERGY_DESCRIPTION'])}") # False
-        print(f"Are allergies columns [allergy_id, allergy_description] allowed (CI)? {validator_ci.are_columns_allowed('allergies', ['allergy_id', 'allergy_description'])}") # False
+        self.logger.warning(
+            f"Column '{column_name}' is not in the allowed columns for table '{table_name}'. "
+            f"Allowed columns: {allowed_cols_for_table}"
+        )
+        return False
+
+    def validate_sql_string(self, sql_string: str) -> Tuple[bool, str, Set[str]]:
+        self.logger.debug(f"Starting SQL validation for: {sql_string[:200]}...")
+        # Reiniciar el estado para la nueva consulta
+        self.current_query_aliases = {}
+        self.current_table_context_for_columns = {}
+        actual_tables_referenced: Set[str] = set()
+
+        try:
+            parsed_expressions = sqlglot.parse(sql_string)
+            if not parsed_expressions:
+                self.logger.error(f"Error al parsear SQL '{sql_string[:100]}...': No se generaron expresiones.")
+                return False, "Error al parsear SQL: No se generaron expresiones.", set()
+            parsed = parsed_expressions[0]
+            self.logger.debug(f"SQL parseado con éxito: {type(parsed)}")
+        except sqlglot.errors.ParseError as e:
+            self.logger.error(f"Error de parseo de SQL con sqlglot para '{sql_string[:100]}...': {e}")
+            return False, f"Error de parseo de SQL: {e}", set()
+
+        # Primero, extraer todos los alias de tabla y de columna SELECT
+        self._extract_aliases_and_table_context(parsed)
         
-        print(f"Get allowed columns for PATIENTS (CI): {validator_ci.get_allowed_columns_for_table('PATIENTS')}")
-        print(f"Get allowed columns for patients (CI): {validator_ci.get_allowed_columns_for_table('patients')}")
-        # Test table defined only in "allowed_tables" (if any, not in this dummy config)
-        # Test table allowed but not in allowed_columns_map (covered by default behavior of are_columns_allowed)
+        # Recopilar todas las tablas reales referenciadas después de procesar alias
+        for table_node in parsed.find_all(sqlglot.exp.Table):
+            real_name = table_node.name
+            if real_name:
+                actual_tables_referenced.add(self._process_name(real_name))
+        
+        self.logger.info(f"Validación de SQL: Tablas referenciadas (reales, procesadas): {actual_tables_referenced}, Alias de columna SELECT: {list(self.current_query_aliases.keys())}, Contexto de tabla para columnas: {self.current_table_context_for_columns}")
 
-        # Ejemplo de inicialización directa con un mapa (para comparación)
-        validator_map_ci = WhitelistValidator(allowed_columns_map={
-            "CUSTOM_TABLE": ["CT_ID", "CT_DATA", "*"],
-            "Another_Table": ["AT_ID", "at_info"]
-        }, case_sensitive=False)
-        print("\\n--- Pruebas con validador INSENSIBLE a mayúsculas/minúsculas, inicializado desde mapa ---")
-        print(f"Is CUSTOM_TABLE allowed? {validator_map_ci.is_table_allowed('CUSTOM_TABLE')}") # True
-        print(f"Is custom_table allowed? {validator_map_ci.is_table_allowed('custom_table')}") # True
-        print(f"Are CUSTOM_TABLE columns [ct_id, CT_DATA] allowed? {validator_map_ci.are_columns_allowed('custom_table', ['ct_id', 'CT_DATA'])}") # True
-        print(f"Are CUSTOM_TABLE columns ['*'] allowed? {validator_map_ci.are_columns_allowed('CUSTOM_TABLE', ['*'])}") # True
-        print(f"Is Another_Table allowed? {validator_map_ci.is_table_allowed('Another_Table')}") # True
-        print(f"Is another_table allowed? {validator_map_ci.is_table_allowed('another_table')}") # True
-        print(f"Are Another_Table columns [AT_ID, at_info] allowed? {validator_map_ci.are_columns_allowed('Another_Table', ['AT_ID', 'at_info'])}") # True
-        print(f"Are Another_Table columns [at_id, AT_INFO] allowed? {validator_map_ci.are_columns_allowed('another_table', ['at_id', 'AT_INFO'])}") # True
-        print(f"Are Another_Table columns ['*'] allowed? {validator_map_ci.are_columns_allowed('Another_Table', ['*'])}") # False
+        if not self.allowed_tables:
+            self.logger.error("VALIDATION ABORTED: self.allowed_tables is empty.")
+            return False, "Error de configuración interna: la lista de tablas permitidas está vacía.", actual_tables_referenced
+        
+        for table_name_to_check in actual_tables_referenced:
+            if not self.is_table_allowed(table_name_to_check): 
+                return False, f"Tabla '{table_name_to_check}' no permitida.", actual_tables_referenced
+        
+        self.logger.debug("Todas las tablas referenciadas están permitidas.")
 
-    except Exception as e:
-        logger.error(f"Error durante las pruebas de WhitelistValidator: {e}", exc_info=True)
-    finally:
-        if os.path.exists(dummy_config_path):
-            os.remove(dummy_config_path)
-            logger.info(f"Archivo de configuración temporal eliminado: {dummy_config_path}")
+        # Validar cláusulas principales
+        # SELECT clause
+        select_expr = parsed.find(sqlglot.exp.Select)
+        if select_expr:
+            valid_select, msg_select = self._validate_select_clause(select_expr)
+            if not valid_select:
+                return False, msg_select, actual_tables_referenced
+        
+        # JOIN ON conditions
+        for join_node in parsed.find_all(sqlglot.exp.Join):
+            on_expression = join_node.args.get('on')
+            table_being_joined_name = join_node.this.sql() if join_node.this else "desconocida"
+            if on_expression:
+                self.logger.debug(f"Validando JOIN ON para {table_being_joined_name}: {on_expression.sql()}")
+                valid_on, msg_on = self._validate_expression_columns(on_expression, f"JOIN ON para {table_being_joined_name}")
+                if not valid_on:
+                    return False, msg_on, actual_tables_referenced
+        
+        # WHERE clause
+        where_expr = parsed.find(sqlglot.exp.Where)
+        if where_expr:
+            valid_where, msg_where = self._validate_where_clause(where_expr)
+            if not valid_where:
+                return False, msg_where, actual_tables_referenced
 
-def validate_structured_info_whitelist(structured_info, allowed_columns_map, terms_dictionary, logger_param=None):
-    logger_instance = logger_param if logger_param else logging.getLogger(__name__)
-    
-    if not isinstance(structured_info, dict):
-        logger_instance.warning("validate_structured_info_whitelist: structured_info no es un diccionario o es None.")
-        return False, "La información estructurada proporcionada no es válida (no es un diccionario)."
+        # GROUP BY clause
+        group_expr = parsed.find(sqlglot.exp.Group)
+        if group_expr:
+            valid_group, msg_group = self._validate_groupby_clause(group_expr)
+            if not valid_group:
+                return False, msg_group, actual_tables_referenced
 
-    # Asumimos que allowed_columns_map ya tiene las claves de tabla y nombres de columna en el caso correcto (MAYÚSCULAS)
-    # y que WhitelistValidator debe operar en modo sensible a mayúsculas/minúsculas.
-    # El valor por defecto de case_sensitive en WhitelistValidator es True.
-    validator = WhitelistValidator(allowed_columns_map=allowed_columns_map)
+        # ORDER BY clause
+        order_expr = parsed.find(sqlglot.exp.Order)
+        if order_expr:
+            valid_order, msg_order = self._validate_orderby_clause(order_expr)
+            if not valid_order:
+                return False, msg_order, actual_tables_referenced
+        
+        self.logger.info(f"Validación de SQL para '{sql_string[:100]}...' completada exitosamente.")
+        return True, "SQL permitido.", actual_tables_referenced
 
-    # 1. Validar 'from_table'
-    from_table_info = structured_info.get("from_table")
-    if isinstance(from_table_info, dict):
-        from_table_name = from_table_info.get("name")
-        if from_table_name:
-            if not validator.is_table_allowed(from_table_name):
-                msg = f"Tabla '{from_table_name}' en la cláusula FROM no está permitida."
-                logger_instance.warning(f"Whitelist validation failed: {msg}")
+    def _extract_aliases_and_table_context(self, parsed_sql: sqlglot.exp.Expression):
+        self.current_query_aliases = {} 
+        self.current_table_context_for_columns = {}
+
+        for table_node in parsed_sql.find_all(sqlglot.exp.Table):
+            real_table_name = table_node.name
+            alias_or_name_used = table_node.alias_or_name
+            if real_table_name:
+                processed_real_name = self._process_name(real_table_name)
+                processed_alias_or_name = self._process_name(alias_or_name_used)
+                self.current_table_context_for_columns[processed_alias_or_name] = processed_real_name
+                if processed_alias_or_name != processed_real_name:
+                    # Podríamos tener un self.current_table_aliases si fuera necesario
+                    self.logger.debug(f"Alias de tabla: {processed_alias_or_name} -> {processed_real_name}")
+
+        select_expression = parsed_sql.find(sqlglot.exp.Select)
+        if select_expression and hasattr(select_expression, 'expressions'):
+            for col_expr_node in select_expression.expressions:
+                if isinstance(col_expr_node, sqlglot.exp.Alias):
+                    alias_name = self._process_name(col_expr_node.alias)
+                    self.current_query_aliases[alias_name] = True # Marcar como alias de columna SELECT
+                    self.logger.debug(f"Alias de columna SELECT detectado: {alias_name} (de {col_expr_node.this.sql()})")
+        
+        self.logger.info(f"Contexto de tabla para columnas: {self.current_table_context_for_columns}")
+        self.logger.info(f"Alias de columna SELECT: {list(self.current_query_aliases.keys())}")
+
+    def _validate_select_clause(self, select_expr: sqlglot.exp.Select) -> tuple[bool, str]:
+        if not select_expr or not hasattr(select_expr, 'expressions') or not select_expr.expressions:
+            return True, "No hay columnas en SELECT para validar."
+
+        for item_expr in select_expr.expressions: # 'expressions' es la lista de elementos en SELECT
+            self.logger.debug(f"Validando item SELECT: {item_expr.sql()} (Tipo: {type(item_expr)})")
+            # Validar todas las columnas dentro de este item (sea un alias, una función, una columna directa, etc.)
+            is_valid, msg = self._validate_expression_columns(item_expr, f"item SELECT '{item_expr.sql()}'")
+            if not is_valid:
                 return False, msg
-        # else: # No 'name' key in from_table_info dict. Could be a subquery, etc.
-            # logger_instance.debug("validate_structured_info_whitelist: 'from_table' no tiene 'name'. Se omite validación de tabla FROM.")
-    elif isinstance(from_table_info, str): # Caso simple donde from_table es solo el nombre
-        if not validator.is_table_allowed(from_table_info):
-            msg = f"Tabla '{from_table_info}' en la cláusula FROM no está permitida."
-            logger_instance.warning(f"Whitelist validation failed: {msg}")
-            return False, msg
-    elif from_table_info: # from_table existe pero no es dict ni str
-        logger_instance.warning(f"validate_structured_info_whitelist: 'from_table' tiene un formato inesperado: {type(from_table_info)}.")
-        return False, "Formato inesperado para 'from_table' en la información estructurada."
+        return True, "Cláusula SELECT validada."
 
-    # 2. Validar 'joins'
-    joins_info = structured_info.get("joins")
-    if isinstance(joins_info, list):
-        for i, join_item in enumerate(joins_info):
-            if isinstance(join_item, dict):
-                target_table_info = join_item.get("target_table")
-                target_table_name = None
-                if isinstance(target_table_info, dict):
-                    target_table_name = target_table_info.get("name")
-                elif isinstance(target_table_info, str): # Si target_table es solo el nombre
-                    target_table_name = target_table_info
+    def _validate_where_clause(self, where_expr) -> Tuple[bool, str]:
+        """
+        Valida todas las columnas de la cláusula WHERE.
+        """
+        return self._validate_expression_columns(where_expr, "WHERE")
+
+    def _validate_groupby_clause(self, group_expr) -> Tuple[bool, str]:
+        """
+        Valida todas las columnas de la cláusula GROUP BY.
+        """
+        return self._validate_expression_columns(group_expr, "GROUP BY")
+
+    def _validate_orderby_clause(self, order_expr) -> Tuple[bool, str]:
+        """
+        Valida todas las columnas de la cláusula ORDER BY.
+        """
+        return self._validate_expression_columns(order_expr, "ORDER BY")
+
+    def _validate_expression_columns(self, expression_node: Optional[sqlglot.exp.Expression], context_name: str) -> Tuple[bool, str]:
+        """
+        Validates all columns found within a single SQL expression node.
+        Iterates over all instances of sqlglot.exp.Column in the expression.
+        """
+        if expression_node is None:
+            self.logger.debug(f"Expresión nula en {context_name}, validación omitida.")
+            return True, f"Expresión nula en {context_name}, validación omitida."
+
+        # Verificar que expression_node es una instancia de sqlglot.exp.Expression
+        if not isinstance(expression_node, sqlglot.exp.Expression):
+            self.logger.error(
+                f"Error de validación interna: Se esperaba un nodo sqlglot.exp.Expression para '{context_name}', "
+                f"pero se recibió un tipo {type(expression_node)}. Valor: {str(expression_node)[:200]}"
+
+            )
+            # Esto cubre el caso donde expression_node es una función, causando el AttributeError.
+            return False, f"Error interno: el objeto para '{context_name}' ('{str(expression_node)[:50]}...') no es un nodo de expresión SQL válido."
+
+        # Ahora es seguro asumir que expression_node es un sqlglot.exp.Expression y tiene .sql() y .find_all()
+        self.logger.debug(f"Validando columnas en la expresión para {context_name}: {expression_node.sql()}")
+
+        try:
+            column_expressions = expression_node.find_all(sqlglot.exp.Column)
+            if column_expressions is None:
+                self.logger.debug(f"expression_node.find_all(sqlglot.exp.Column) devolvió None para {context_name}. Asumiendo que no hay columnas directas para validar en este nodo de expresión de tipo {type(expression_node)}.")
+                return True, f"No se encontraron columnas directas para validar en {context_name}."
+
+            # Iterar sobre todas las expresiones de columna encontradas dentro de este nodo
+            for col_expr in column_expressions:
+                # _validate_single_column se encarga de resolver la tabla y verificar la columna.
+                is_valid, msg = self._validate_single_column(col_expr, f"columna en {context_name}")
+                if not is_valid:
+                    return False, msg # msg de _validate_single_column debería ser específico
+            
+            # La lógica para sqlglot.exp.Star (ej. SELECT *) se maneja principalmente en _validate_select_clause
+            # y para COUNT(*) en _validate_single_column.
+            # Aquí nos centramos en instancias explícitas de sqlglot.exp.Column.
+
+        except Exception as e_find_all:
+            # Esto no debería ocurrir si la comprobación isinstance pasó y sqlglot es consistente.
+            self.logger.error(f"Error inesperado al procesar expresión para {context_name} (tipo: {type(expression_node)}): {e_find_all}. SQL: {expression_node.sql()}")
+            return False, f"Error interno al analizar las columnas de '{context_name}'."
+
+        return True, f"Todas las columnas en la expresión para {context_name} son válidas."
+
+    def _get_real_table_name_for_column(self, column_expr: sqlglot.exp.Column) -> Optional[str]:
+        """
+        Intenta obtener el nombre real de la tabla para una columna, resolviendo alias.
+        Usa self.current_table_context_for_columns que se pobló en validate_sql_string.
+        El nombre de tabla devuelto ya está procesado (ej. lowercased si !case_sensitive).
+        """
+        table_alias_or_name_in_query = column_expr.table # Esto es el prefijo de la columna, ej. 'p' en 'p.ACIN_ID' o 'MEDI_ACTIVE_INGREDIENTS'
+        
+        if not table_alias_or_name_in_query:
+            if len(self.current_table_context_for_columns) == 1:
+                return next(iter(self.current_table_context_for_columns.values()))
+            elif not self.current_table_context_for_columns:
+                 self.logger.debug(f"No table context for column '{column_expr.name}', cannot resolve real table name.")
+                 return None
+            else: # multiple tables in context
+                self.logger.debug(f"Column '{column_expr.name}' has no explicit table, attempting to find unique table in context from real table names: {list(set(self.current_table_context_for_columns.values()))}.")
                 
-                if target_table_name:
-                    if not validator.is_table_allowed(target_table_name):
-                        msg = f"Tabla '{target_table_name}' en JOIN #{i} no está permitida."
-                        logger_instance.warning(f"Whitelist validation failed: {msg}")
-                        return False, msg
-                else:
-                    logger_instance.warning(f"validate_structured_info_whitelist: JOIN #{i} 'target_table' no tiene 'name' o formato no reconocido.")
-                    # Considerar si esto debe ser un fallo o una advertencia. Por ahora, si no hay nombre, no se puede validar.
+                found_in_tables = []
+                # column_expr.name es el nombre de la columna tal como aparece en la consulta, ej. "ACIN_DESCRIPTION_ES"
+                # Necesitamos procesarlo (ej. minúsculas) para la comprobación con la whitelist.
+                processed_col_name_for_check = self._process_name(column_expr.name)
+
+                # Iterar sobre los NOMBRES REALES (ya procesados) de las tablas en el contexto del query actual.
+                # self.current_table_context_for_columns.values() da los nombres reales procesados.
+                # Usamos set() para evitar duplicados si una tabla se referencia varias veces.
+                for real_table_name_in_context in set(self.current_table_context_for_columns.values()):
+                    if self.is_column_allowed_for_table(real_table_name_in_context, processed_col_name_for_check):
+                        found_in_tables.append(real_table_name_in_context)
+                
+                if len(found_in_tables) == 1:
+                    self.logger.info(f"Column '{column_expr.name}' (processed: '{processed_col_name_for_check}') uniquely found and allowed in table '{found_in_tables[0]}' among context tables.")
+                    return found_in_tables[0]
+                elif len(found_in_tables) > 1:
+                    self.logger.warning(f"Column '{column_expr.name}' (processed: '{processed_col_name_for_check}') is ambiguous, found and allowed in multiple tables in context: {found_in_tables}. Query needs to qualify the column.")
+                    return None
+                else: # len(found_in_tables) == 0
+                    self.logger.warning(f"Column '{column_expr.name}' (processed: '{processed_col_name_for_check}') not found or not allowed in any table in context: {list(set(self.current_table_context_for_columns.values()))}.")
+                    return None
+    
+
+        processed_table_alias_or_name = self._process_name(table_alias_or_name_in_query)
+
+        real_table_name = self.current_table_context_for_columns.get(processed_table_alias_or_name)
+        
+        if not real_table_name:
+            self.logger.warning(f"Could not resolve real table name for alias/table prefix '{table_alias_or_name_in_query}' (processed: '{processed_table_alias_or_name}') using context {self.current_table_context_for_columns}.")
+            # Fallback: if the processed_table_alias_or_name is actually a known real table (e.g. no alias was used)
+            # self.allowed_tables contains processed names.
+            if processed_table_alias_or_name in self.allowed_tables:
+                 self.logger.debug(f"Fallback: Resolved '{processed_table_alias_or_name}' as a real table name.")
+                 return processed_table_alias_or_name
+            self.logger.error(f"Failed to resolve real table name for '{table_alias_or_name_in_query}'.")
+            return None # Explicitly return None if no resolution
+
+        return real_table_name
+
+    def _validate_single_column(self, column_expr: sqlglot.exp.Column, clause_name: str) -> Tuple[bool, str]:
+        """
+        Validates a single column expression.
+        Assumes column_expr is sqlglot.exp.Column.
+        """
+        col_name_from_query = column_expr.name
+        
+        if col_name_from_query == '*' and not column_expr.table: # ej. COUNT(*)
+            # This is a "bare" star, often an argument to an aggregate.
+            # It doesn't refer to a specific column to be read from a table in the same way
+            # as "SELECT *" or "SELECT col".
+            # We assume this is generally permissible if the function itself is allowed (not checked here).
+            # Or, if it's part of SELECT *, it's handled by _validate_expression_columns's Star instance check.
+            self.logger.debug(f"Bare '*' (e.g., in COUNT(*)) in {clause_name}, considered valid.")
+            return True, f"Bare '*' in {clause_name} allowed."
+
+        processed_col_name = self._process_name(col_name_from_query)
+        real_table_name = self._get_real_table_name_for_column(column_expr)
+
+        if not real_table_name:
+            if processed_col_name in self.current_query_aliases:
+                self.logger.debug(f"Columna '{col_name_from_query}' (procesada: '{processed_col_name}') en {clause_name} es un alias SELECT. Permitido.")
+                return True, f"Alias SELECT '{processed_col_name}' permitido en {clause_name}."
             else:
-                logger_instance.warning(f"validate_structured_info_whitelist: Elemento JOIN #{i} no es un diccionario.")
-                return False, f"Formato inesperado para el elemento JOIN #{i}."
-    elif joins_info:
-        logger_instance.warning(f"validate_structured_info_whitelist: 'joins' tiene un formato inesperado: {type(joins_info)}.")
-        return False, "Formato inesperado para 'joins' en la información estructurada."
+                self.logger.warning(f"En {clause_name}: No se pudo determinar tabla para '{col_name_from_query}' y no es alias SELECT. SQL: {column_expr.sql()}")
+                return False, f"En {clause_name}: No se pudo determinar tabla para '{col_name_from_query}' y no es alias SELECT."
+        
+        if not self.is_column_allowed_for_table(real_table_name, processed_col_name):
+            return False, f"En {clause_name}: Columna '{processed_col_name}' no permitida para tabla '{real_table_name}'."    
+        
+        self.logger.debug(f"Columna '{processed_col_name}' permitida para tabla '{real_table_name}' en {clause_name}.")
+        return True, f"Columna '{processed_col_name}' permitida para tabla '{real_table_name}'." # Corregido el f-string
 
-    # 3. Validar 'select_columns'
-    select_columns_info = structured_info.get("select_columns")
-    if isinstance(select_columns_info, list):
-        for i, col_item in enumerate(select_columns_info):
-            if isinstance(col_item, dict):
-                table_name = col_item.get("table")
-                column_name = col_item.get("column")
-                
-                if not table_name and column_name == "*": # Manejar SELECT * sin tabla específica (raro aquí, más común en SQL directo)
-                    logger_instance.debug(f"SELECT #{i} es '*' sin tabla específica. Se permite por ahora en validación estructurada.")
-                    continue
-
-                if not table_name and column_name and not col_item.get("is_aggregate_or_expression"):
-                    # Si no hay tabla pero hay columna, y no está marcada como expresión, es ambiguo.
-                    # Podría ser una función global, o un error en la extracción.
-                    # logger_instance.warning(f"SELECT #{i}: Columna '{column_name}' sin tabla asociada y no marcada como expresión. Se omite validación.")
-                    continue
-
-                if table_name: # Solo validar si hay un nombre de tabla
-                    if not validator.is_table_allowed(table_name):
-                        msg = f"Tabla '{table_name}' en SELECT #{i} ('{column_name or '*'}') no está permitida."
-                        logger_instance.warning(f"Whitelist validation failed: {msg}")
-                        return False, msg
-                    
-                    if column_name: # Solo validar columna si hay un nombre de columna
-                        if not validator.are_columns_allowed(table_name, [column_name]):
-                            msg = f"Columna '{column_name}' de la tabla '{table_name}' en SELECT #{i} no está permitida."
-                            logger_instance.warning(f"Whitelist validation failed: {msg}")
-                            return False, msg
-                    # else: No column_name, podría ser table.* que es manejado por is_table_allowed si '*' no está en columnas.
-                        # O podría ser un error en la info estructurada.
-                        # logger_instance.debug(f"SELECT #{i} para tabla '{table_name}' no especifica columna. Se asume table.* o similar.")
-            else: # col_item no es un dict
-                logger_instance.warning(f"validate_structured_info_whitelist: Elemento SELECT #{i} no es un diccionario.")
-                return False, f"Formato inesperado para el elemento SELECT #{i}."
-    elif select_columns_info:
-        logger_instance.warning(f"validate_structured_info_whitelist: 'select_columns' tiene un formato inesperado: {type(select_columns_info)}.")
-        return False, "Formato inesperado para 'select_columns' en la información estructurada."
-
-    # Aquí se podrían añadir validaciones para otras cláusulas como 'where_clause', 'group_by', etc.
-    # Esto requeriría parsear las columnas de las expresiones en esas cláusulas.
-
-    logger_instance.info("validate_structured_info_whitelist: Validación de información estructurada completada exitosamente.")
-    return True, "Validación de whitelist de información estructurada exitosa."
+    def _process_name(self, name: str) -> str:
+        """
+        Processes a name based on the case sensitivity setting.
+        If case_sensitive is False, converts the name to lowercase.
+        """
+        return name if self.case_sensitive else name.lower()
+    
+    def _process_column_list(self, columns: list[str]) -> Set[str]:
+        """ Processes a list of column names based on the case sensitivity setting.     
+        If case_sensitive is False, converts each column name to lowercase.
+        Returns a set of processed column names.
+        """
+        return {self._process_name(col) for col in columns} # Asegurar que esta línea no tenga indentación extra.

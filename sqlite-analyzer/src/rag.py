@@ -5,926 +5,569 @@ import os
 import logging
 import time
 import re
-import requests
+# import requests # No se usa actualmente, se puede quitar si no se planea para llamadas LLM internas en RAG
 from typing import Dict, List, Tuple, Any, Optional, Set
-from dotenv import load_dotenv
+# from dotenv import load_dotenv # No se usa directamente aquí
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from tqdm import tqdm  # Importar tqdm para barra de progreso
+# from tqdm import tqdm # tqdm se usaba en initialize_schema_knowledge, que es para el flujo de BD
 
 class DatabaseSchemaRAG:
     """
     Sistema RAG (Retrieval-Augmented Generation) para consultas a bases de datos.
-    Permite traducir automáticamente términos de lenguaje natural a elementos de SQL.
+    Permite seleccionar dinámicamente partes relevantes del esquema y diccionario de términos.
     """
-    def __init__(self, conn: sqlite3.Connection = None, cache_file: str = "schema_rag_cache.json"):
-        """
-        Inicializa el sistema RAG para esquema de base de datos.
+    def __init__(self, 
+                 db_structure_dict: Optional[Dict] = None, 
+                 terms_dict: Optional[Dict] = None,
+                 embeddings_model_name: Optional[str] = None, # Para futura integración
+                 conn: Optional[sqlite3.Connection] = None, 
+                 cache_file: str = "schema_rag_cache.json",
+                 logger_param: Optional[logging.Logger] = None):
         
-        Args:
-            conn: Conexión SQLite a la base de datos
-            cache_file: Archivo para almacenar/cargar el cache de descripciones
-        """
+        self.logger = logger_param if logger_param else logging.getLogger(__name__)
+        if not logger_param and not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)
+
         self.conn = conn
         self.cache_file = cache_file
-        
-        # Vectorizador para búsqueda semántica
+        self.embeddings_model_name = embeddings_model_name
+
         self.vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
         
-        # Almacenamiento de embeddings
-        self.table_corpus = []
-        self.table_embeddings = None
-        self.table_names = []
+        self.table_corpus: List[str] = []
+        self.table_embeddings: Any = None # Se espera que sea una matriz dispersa de scikit-learn
+        self.table_names: List[str] = []
         
-        self.column_corpus = {}
-        self.column_embeddings = {}
-        self.column_names = {}
-        
-        # Conocimiento del esquema
-        self.schema_knowledge = {
-            'tables': {},        # Información y descripciones de tablas
-            'columns': {},       # Información y descripciones de columnas
-            'relationships': {}, # Relaciones entre tablas
-            'synonyms': {},      # Diccionario de sinónimos
-            'examples': {}       # Ejemplos de uso para referencia
+        self.column_corpus_map: Dict[str, List[str]] = {}
+        self.column_embeddings_map: Dict[str, Any] = {}
+        self.column_names_map: Dict[str, List[str]] = {}
+        # self.column_vectorizers_map: Dict[str, TfidfVectorizer] = {} # Opción para gestionar vectorizadores de columnas
+
+        self.terms_corpus: List[str] = []
+        self.terms_embeddings: Any = None
+        self.terms_keys: List[str] = []
+        self.terms_vectorizer: Optional[TfidfVectorizer] = None
+
+
+        self.schema_knowledge: Dict[str, Any] = {
+            'tables': {},
+            'columns': {}, 
+            # 'terms': {}, # Originalmente para la estructura directa de terms_dict
+            'terms_flat': {}, # Para el mapa aplanado de término: descripción
+            'terms_original_structure': {}, # Para conservar la estructura original si es necesario
+            'relationships': {} # Mantenido por si se carga de caché antiguo o se usa flujo de BD
         }
-        
-        # Cargar conocimiento desde caché si existe
-        self.load_cache()
-        
-        # Si tenemos conexión a la BD, actualizar el conocimiento
-        if conn:
-            self.initialize_schema_knowledge()
-    
-    def load_cache(self):
-        """Carga el conocimiento del esquema desde el archivo de caché"""
-        try:
-            if os.path.exists(self.cache_file):
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    cached_data = json.load(f)
-                
-                self.schema_knowledge = cached_data.get('schema_knowledge', self.schema_knowledge)
-                self.table_corpus = cached_data.get('table_corpus', [])
-                self.table_names = cached_data.get('table_names', [])
-                
-                for table, corpus in cached_data.get('column_corpus', {}).items():
-                    self.column_corpus[table] = corpus
-                    self.column_names[table] = cached_data.get('column_names', {}).get(table, [])
-                
-                # Reconstruir embeddings si tenemos corpus
-                if self.table_corpus:
-                    self._rebuild_embeddings()
-                
-                logging.info(f"RAG cache cargado: {len(self.table_names)} tablas")
-                return True
-        except (json.JSONDecodeError, IOError) as e:
-            logging.error(f"Error al cargar caché RAG: {e}")
-        
-        return False
-    
-    def save_cache(self):
-        """Guarda el conocimiento del esquema en el archivo de caché"""
-        try:
-            cache_data = {
-                'schema_knowledge': self.schema_knowledge,
-                'table_corpus': self.table_corpus,
-                'table_names': self.table_names,
-                'column_corpus': self.column_corpus,
-                'column_names': self.column_names
+
+        if db_structure_dict and terms_dict:
+            self.logger.info("Inicializando DatabaseSchemaRAG desde db_structure_dict y terms_dict.")
+            self._initialize_knowledge_from_dicts(db_structure_dict, terms_dict)
+        elif conn:
+            self.logger.info("Inicializando DatabaseSchemaRAG desde conexión a BD y/o caché.")
+            if not self.load_cache():
+                self.logger.info(f"No se pudo cargar desde caché {self.cache_file} o no existe. Inicializando desde BD si está disponible.")
+                # El método original initialize_schema_knowledge usaba tqdm y LLMs para descripciones.
+                # Esto es un proceso largo. Para el flujo actual, nos centramos en la inicialización desde dicts.
+                # Si se requiere inicialización desde BD, ese método necesitaría ser invocado explícitamente
+                # y posiblemente adaptado. Por ahora, si no hay dicts y el caché falla, estará vacío.
+                # self.initialize_schema_knowledge() # Comentado para evitar ejecución larga no deseada
+                pass # Queda vacío si no hay dicts y el caché falla/no existe
+            elif self.table_corpus or any(self.column_corpus_map.values()) or self.terms_corpus:
+                 self._rebuild_embeddings()
+        else:
+            self.logger.warning("DatabaseSchemaRAG inicializado sin fuente de datos (ni dicts, ni conexión a BD, ni caché válido).")
+
+    def _initialize_knowledge_from_dicts(self, db_structure: Dict, terms: Dict):
+        self.logger.debug(f"Procesando db_structure: {json.dumps(db_structure, indent=2, ensure_ascii=False)[:200]}...")
+        self.logger.debug(f"Procesando terms_dict: {json.dumps(terms, indent=2, ensure_ascii=False)[:200]}...")
+
+        tables_to_process = []
+        # Comprobar el formato de db_structure
+        if 'tables' in db_structure and isinstance(db_structure['tables'], list):
+            self.logger.info("Detectado formato db_structure con clave 'tables' como lista.")
+            # Formato esperado: {'tables': [{'name': 'T1', ...}, {'name': 'T2', ...}]}
+            for table_info_wrapper in db_structure['tables']:
+                if isinstance(table_info_wrapper, dict) and 'name' in table_info_wrapper:
+                    tables_to_process.append((table_info_wrapper['name'], table_info_wrapper))
+                else:
+                    self.logger.warning(f"Elemento en db_structure['tables'] no es un diccionario de tabla válido: {table_info_wrapper}")
+
+        elif isinstance(db_structure, dict) and not any(key == 'tables' for key in db_structure.keys()):
+            # Formato plano: {'TABLE_NAME_1': {'columns': [], ...}, 'TABLE_NAME_2': {...}}
+            # Esto es lo que esperamos de schema_simple.json
+            self.logger.info("Detectado formato db_structure plano (diccionario de tablas).")
+            for table_name, table_data in db_structure.items():
+                if isinstance(table_data, dict):
+                    current_table_info = table_data.copy() # Evitar modificar el original
+                    current_table_info['name'] = table_name # Asegurar que 'name' está para el procesamiento posterior
+                    tables_to_process.append((table_name, current_table_info))
+                else:
+                    self.logger.warning(f"Valor para la tabla '{table_name}' no es un diccionario: {table_data}")
+        else:
+            self.logger.error(f"Formato db_structure_dict no reconocido o inesperado. Contenido: {json.dumps(db_structure, indent=2, ensure_ascii=False)[:500]}...")
+            # No se procesarán tablas si el formato no es reconocido.
+
+        if not tables_to_process:
+            self.logger.warning("No se encontraron tablas para procesar en db_structure.")
+
+        for table_name_key, table_info_dict in tables_to_process:
+            table_name = table_info_dict.get('name', table_name_key)
+            if not table_name:
+                self.logger.warning(f"Tabla sin nombre encontrada (clave: {table_name_key}): {table_info_dict}")
+                continue
+            
+            self.table_names.append(table_name)
+            table_description = table_info_dict.get('description', f"Tabla {table_name}")
+            display_name = table_info_dict.get('displayName', self._simplify_name(table_name))
+
+            self.schema_knowledge['tables'][table_name] = {
+                'name': table_name, 'display_name': display_name,
+                'description': table_description, 'columns_count': len(table_info_dict.get('columns', [])),
+                'raw_info': table_info_dict
             }
             
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            
-            logging.info(f"RAG cache guardado en {self.cache_file}")
-            return True
-        except IOError as e:
-            logging.error(f"Error al guardar caché RAG: {e}")
-            return False
-    
-    def _rebuild_embeddings(self):
-        """Reconstruye los embeddings a partir de los corpus almacenados"""
-        # Reconstruir embeddings de tablas
-        if self.table_corpus:
-            self.table_embeddings = self.vectorizer.fit_transform(self.table_corpus)
-        
-        # Reconstruir embeddings de columnas para cada tabla
-        for table, corpus in self.column_corpus.items():
-            if corpus:
-                table_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
-                self.column_embeddings[table] = table_vectorizer.fit_transform(corpus)
-    
-    def initialize_schema_knowledge(self):
-        """Inicializa el conocimiento del esquema extrayendo información de la BD"""
-        try:
-            # 1. Extraer lista de tablas
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in cursor.fetchall()]
-            self.table_names = tables
-            
-            logging.info(f"Extrayendo información de {len(tables)} tablas...")
-            
-            # 2. Para cada tabla, extraer definiciones y generar descripciones
-            # Usar tqdm para mostrar progreso
-            for i, table in enumerate(tqdm(tables, desc="Procesando tablas", ncols=100)):
-                # Mostrar progreso periódicamente en logs
-                if i % 10 == 0 or i == len(tables) - 1:
-                    logging.debug(f"Progreso: {i+1}/{len(tables)} tablas ({(i+1)/len(tables)*100:.1f}%)")
-                
-                # Comprobar si ya tenemos esta tabla en caché
-                if table in self.schema_knowledge['tables']:
-                    logging.debug(f"Tabla {table} ya en caché, omitiendo...")
-                    continue
-                
-                # Obtener columnas y tipos
-                cursor.execute(f"PRAGMA table_info({table})")
-                columns_info = cursor.fetchall()
-                
-                # Mostrar información de la tabla actual
-                logging.debug(f"Procesando tabla: {table} con {len(columns_info)} columnas")
-                
-                # Extraer información semántica con LLM para la tabla
-                table_description = self._generate_table_description(table, columns_info)
-                
-                # Guardar en conocimiento del esquema
-                self.schema_knowledge['tables'][table] = {
-                    'name': table,
-                    'display_name': self._simplify_name(table),
-                    'columns_count': len(columns_info),
-                    'description': table_description,
-                    'common_uses': self._generate_table_use_cases(table, columns_info)
-                }
-                
-                # Inicializar lista de columnas para esta tabla
-                self.column_names[table] = []
-                
-                # Procesar cada columna
-                for col_info in columns_info:
-                    col_name = col_info[1]
-                    col_type = col_info[2]
-                    is_pk = col_info[5] == 1
+            self.column_names_map[table_name] = []
+            self.schema_knowledge['columns'][table_name] = {}
+
+            columns_list = table_info_dict.get('columns', [])
+            if isinstance(columns_list, list):
+                for item_in_columns_list in columns_list:
+                    col_name = None
+                    col_description = ""
+                    col_type = "UNKNOWN"
+                    col_raw_info = {}
                     
-                    self.column_names[table].append(col_name)
-                    
-                    # Generar descripción para la columna usando LLM
-                    col_description = self._generate_column_description(table, col_name, col_type, is_pk)
-                    
-                    # Generar sinónimos para la columna
-                    synonyms = self._generate_column_synonyms(table, col_name)
-                    
-                    # Guardar metadata de columna
-                    if table not in self.schema_knowledge['columns']:
-                        self.schema_knowledge['columns'][table] = {}
-                    
-                    self.schema_knowledge['columns'][table][col_name] = {
+                    if isinstance(item_in_columns_list, dict):
+                        col_name = item_in_columns_list.get('name')
+                        col_description = item_in_columns_list.get('description', f"Columna {col_name} de {table_name}")
+                        col_type = item_in_columns_list.get('type', 'UNKNOWN')
+                        col_raw_info = item_in_columns_list
+                    elif isinstance(item_in_columns_list, str):
+                        col_name = item_in_columns_list
+                        col_description = f"Columna {col_name} de la tabla {table_name}"
+                        col_raw_info = {'name': col_name, 'type': col_type, 'description': col_description}
+                    else:
+                        self.logger.warning(f"Elemento inesperado en la lista de columnas para la tabla {table_name}: {item_in_columns_list}")
+                        continue
+
+                    if not col_name:
+                        self.logger.warning(f"Columna sin nombre (o tipo no procesable) en tabla {table_name}: {item_in_columns_list}")
+                        continue
+
+                    self.column_names_map[table_name].append(col_name)
+                    self.schema_knowledge['columns'][table_name][col_name] = {
                         'name': col_name,
                         'display_name': self._simplify_name(col_name),
                         'type': col_type,
-                        'is_primary_key': is_pk,
                         'description': col_description,
-                        'synonyms': synonyms
+                        'raw_info': col_raw_info
                     }
-            
-            # 3. Extraer relaciones entre tablas
-            logging.info("Extrayendo relaciones entre tablas...")
-            self._extract_relationships()
-            
-            # 4. Crear corpus para búsqueda de similitud
-            logging.info("Creando corpus para búsqueda semántica...")
-            self._create_search_corpus()
-            
-            # 5. Guardar cache
-            self.save_cache()
-            
-            logging.info(f"Conocimiento de esquema inicializado con {len(tables)} tablas")
-            return True
+            else:
+                self.logger.warning(f"La clave 'columns' para la tabla '{table_name}' no es una lista o no existe. Columnas no procesadas.")
+
+        # --- MODIFIED: Lógica para Procesamiento de Términos ---
+        self.logger.debug(f"Procesando terms_dict original: {json.dumps(terms, indent=2, ensure_ascii=False)[:500]}...")
+        self.schema_knowledge['terms_original_structure'] = terms 
         
-        except sqlite3.Error as e:
-            logging.error(f"Error al extraer esquema de BD: {e}")
-            return False
-    
-    def _create_search_corpus(self):
-        """Crea corpus de texto para búsqueda de similitud"""
-        # Crear corpus para tablas
+        flat_terms_map: Dict[str, str] = {}
+        
+        def _flatten_terms_recursive(current_item: Any, current_path: List[str]):
+            if isinstance(current_item, dict):
+                for key, value in current_item.items():
+                    new_path = current_path + [key]
+                    _flatten_terms_recursive(value, new_path)
+            elif isinstance(current_item, str): # Llegamos a un valor de cadena (descripción)
+                # Usar el último elemento de la ruta como la clave del término si es descriptivo,
+                # o una combinación, o manejarlo según la estructura esperada de 'dictionary.json'.
+                # Para 'dictionary.json', las claves de nivel superior son categorías,
+                # y las claves internas son los términos con sus descripciones como valores.
+                if len(current_path) > 0: # Asegurar que hay un camino
+                    # Ejemplo: si path es ['PATIENT_RELATED_TERMS', 'PATI_FULL_NAME'] y value es "Nombre completo del paciente"
+                    # Queremos que 'PATI_FULL_NAME' sea el término y value la descripción.
+                    term_key = current_path[-1] # El término es la última parte de la ruta
+                    
+                    # Evitar sobrescribir si la misma clave de término aparece en múltiples lugares,
+                    # a menos que se decida una estrategia (ej. concatenar, tomar la primera).
+                    # Por ahora, la última encontrada sobrescribirá.
+                    if term_key not in flat_terms_map:
+                         flat_terms_map[term_key] = current_item
+                    else:
+                        self.logger.debug(f"Término duplicado encontrado al aplanar: '{term_key}'. Se mantiene la primera descripción encontrada.")
+            # Se pueden manejar listas u otros tipos si es necesario
+        
+        if isinstance(terms, dict):
+            _flatten_terms_recursive(terms, [])
+            self.terms_keys = list(flat_terms_map.keys())
+            self.schema_knowledge['terms_flat'] = flat_terms_map
+            self.logger.info(f"Diccionario de términos aplanado. Número de términos individuales: {len(self.terms_keys)}.")
+            if self.terms_keys:
+                self.logger.debug(f"Algunas claves de términos aplanados: {self.terms_keys[:10]}")
+                # Log de ejemplo de un término y su descripción
+                # if 'PATI_FULL_NAME' in flat_terms_map:
+                #    self.logger.debug(f"Ejemplo término aplanado: PATI_FULL_NAME -> {flat_terms_map['PATI_FULL_NAME']}")
+        else:
+            self.logger.warning("El diccionario de términos (terms_dict) no es un diccionario o está vacío. No se procesarán términos para RAG.")
+            self.terms_keys = []
+            self.schema_knowledge['terms_flat'] = {}
+        
+        self._create_corpus_and_embeddings_from_knowledge()
+        self.logger.info(f"Conocimiento desde dicts: {len(self.table_names)} tablas, {sum(len(c) for c in self.column_names_map.values())} columnas procesadas, {len(self.terms_keys)} términos individuales.")
+
+    def _create_corpus_and_embeddings_from_knowledge(self):
+        self.logger.info("Creando corpus y embeddings desde self.schema_knowledge.")
         self.table_corpus = []
-        
-        for table in self.table_names:
-            if table in self.schema_knowledge['tables']:
-                metadata = self.schema_knowledge['tables'][table]
-                
-                # Combinar nombre, nombre simplificado y descripción para mejor búsqueda
-                table_text = f"{table} {metadata['display_name']} {metadata['description']}"
-                
-                # Añadir usos comunes si existen
-                if 'common_uses' in metadata:
-                    table_text += f" {metadata['common_uses']}"
-                
-                self.table_corpus.append(table_text)
-        
-        # Crear embeddings de tablas
+        _table_names_ordered = []
+        for table_name in self.table_names:
+            if table_name in self.schema_knowledge['tables']:
+                meta = self.schema_knowledge['tables'][table_name]
+                self.table_corpus.append(f"{table_name} {meta.get('display_name','')} {meta.get('description','')}")
+                _table_names_ordered.append(table_name)
+        self.table_names = _table_names_ordered
+
         if self.table_corpus:
-            self.table_embeddings = self.vectorizer.fit_transform(self.table_corpus)
-        
-        # Crear corpus para columnas de cada tabla
-        for table in self.table_names:
-            if table not in self.schema_knowledge['columns']:
-                continue
+            try:
+                self.table_embeddings = self.vectorizer.fit_transform(self.table_corpus)
+                self.logger.info(f"Embeddings de tablas creados. Forma: {self.table_embeddings.shape}")
+            except Exception as e: self.logger.error(f"Error creando embeddings de tablas: {e}")
+
+        self.column_corpus_map = {}
+        self.column_embeddings_map = {}
+        # self.column_vectorizers_map = {} # Si se decide almacenar los vectorizadores
+
+        for table_name, col_names_list in self.column_names_map.items():
+            _col_corpus, _col_names_ordered = [], []
+            if table_name in self.schema_knowledge['columns']:
+                for col_name in col_names_list:
+                    if col_name in self.schema_knowledge['columns'][table_name]:
+                        meta = self.schema_knowledge['columns'][table_name][col_name]
+                        _col_corpus.append(f"{col_name} {meta.get('display_name','')} {meta.get('description','')} {meta.get('type','')}")
+                        _col_names_ordered.append(col_name)
             
-            self.column_corpus[table] = []
-            
-            for col_name in self.column_names[table]:
-                if col_name in self.schema_knowledge['columns'][table]:
-                    col_metadata = self.schema_knowledge['columns'][table][col_name]
-                    
-                    # Combinar nombre, nombre simplificado, descripción y sinónimos
-                    col_text = f"{col_name} {col_metadata['display_name']} {col_metadata['description']}"
-                    
-                    # Añadir sinónimos
-                    if 'synonyms' in col_metadata:
-                        col_text += " " + " ".join(col_metadata['synonyms'])
-                    
-                    self.column_corpus[table].append(col_text)
-            
-            # Crear embeddings para columnas de esta tabla
-            if self.column_corpus[table]:
-                table_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
-                self.column_embeddings[table] = table_vectorizer.fit_transform(self.column_corpus[table])
-    
-    def _simplify_name(self, name: str) -> str:
-        """Simplifica un nombre técnico a un término más natural y lo traduce al español si es necesario"""
-        # Quitar prefijos de tabla/columna (ej: PATI_, APPO_)
-        simplified = re.sub(r'^[A-Z]{3,4}_', '', name)
+            self.column_corpus_map[table_name] = _col_corpus
+            self.column_names_map[table_name] = _col_names_ordered # Reordenar por si acaso
+
+            if _col_corpus:
+                try:
+                    # Usar un vectorizador dedicado para las columnas de esta tabla
+                    # Esto es crucial para que `transform` funcione correctamente en `get_relevant_context`
+                    # Si no se almacenan, se recrearán allí. Aquí solo creamos embeddings.
+                    temp_col_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
+                    self.column_embeddings_map[table_name] = temp_col_vectorizer.fit_transform(_col_corpus)
+                    # self.column_vectorizers_map[table_name] = temp_col_vectorizer # Almacenar si se elige esta estrategia
+                    self.logger.info(f"Embeddings de columnas para '{table_name}' creados. Forma: {self.column_embeddings_map[table_name].shape}")
+                except Exception as e: self.logger.error(f"Error creando embeddings de columnas para {table_name}: {e}")
+
+        # --- Lógica de Términos Modificada ---
+        self.terms_corpus = []
+        _terms_keys_ordered = [] # Para mantener el orden consistente con el corpus
         
-        # Convertir snake_case a palabras separadas
-        simplified = simplified.lower().replace('_', ' ')
-        
-        # Traducir términos comunes del inglés al español
-        translations = {
-            'vehicle types': 'tipos de vehículos',
-            'patient': 'paciente',
-            'patients': 'pacientes',
-            'appointment': 'cita',
-            'appointments': 'citas',
-            'doctor': 'médico',
-            'doctors': 'médicos',
-            'name': 'nombre',
-            'date': 'fecha',
-            'time': 'hora',
-            'status': 'estado',
-            'type': 'tipo',
-            'types': 'tipos',
-            'id': 'identificador',
-            'description': 'descripción',
-            'address': 'dirección',
-            'phone': 'teléfono',
-            'email': 'correo',
-        }
-        
-        # Aplicar traducciones
-        for eng, esp in translations.items():
-            if simplified == eng or simplified.startswith(eng + " ") or simplified.endswith(" " + eng) or f" {eng} " in f" {simplified} ":
-                simplified = simplified.replace(eng, esp)
-        
-        return simplified
-    
-    def _extract_relationships(self):
-        """Extrae relaciones entre tablas basadas en claves foráneas"""
-        try:
-            if not self.conn:
-                return
-                
-            cursor = self.conn.cursor()
-            
-            for table in self.table_names:
-                # Consultar claves foráneas
-                cursor.execute(f"PRAGMA foreign_key_list({table})")
-                fks = cursor.fetchall()
-                
-                # Guardar relaciones
-                if table not in self.schema_knowledge['relationships']:
-                    self.schema_knowledge['relationships'][table] = []
-                
-                for fk in fks:
-                    ref_table = fk[2]  # Tabla referenciada
-                    from_col = fk[3]   # Columna en esta tabla
-                    to_col = fk[4]     # Columna en tabla referenciada
-                    
-                    # Generar descripción de la relación
-                    relationship = {
-                        'from_table': table,
-                        'to_table': ref_table,
-                        'from_column': from_col,
-                        'to_column': to_col,
-                        'description': f"La tabla {self._simplify_name(table)} está relacionada con {self._simplify_name(ref_table)} mediante {from_col} -> {to_col}"
-                    }
-                    
-                    self.schema_knowledge['relationships'][table].append(relationship)
-        
-        except sqlite3.Error as e:
-            logging.error(f"Error al extraer relaciones: {e}")
-    
-    def _generate_table_description(self, table_name: str, columns_info: List) -> str:
-        """
-        Genera una descripción en lenguaje natural para una tabla usando LLM.
-        Si falla, genera una descripción básica.
-        """
-        try:
-            # Preparar información para enviar al LLM
-            column_details = []
-            for col in columns_info:
-                col_name = col[1]
-                col_type = col[2]
-                is_pk = "PRIMARY KEY" if col[5] == 1 else ""
-                is_nullable = "NULL" if col[3] == 0 else "NOT NULL"
-                column_details.append(f"{col_name} ({col_type} {is_pk} {is_nullable})")
-            
-            # Llamar al LLM para generar descripción
-            simple_name = self._simplify_name(table_name)
-            prompt = f"""
-            Genera una descripción clara y concisa en español para la tabla de base de datos '{table_name}' con nombre simplificado '{simple_name}'.
-            La tabla tiene estas columnas:
-            {', '.join(column_details)}
-            
-            Describe el propósito de esta tabla en un sistema médico. La descripción debe ser breve (máximo 2 frases)
-            y explicar qué tipo de datos almacena esta tabla.
-            """
-            
-            description = self._call_llm_for_description(prompt)
-            if description:
-                return description
-            
-        except Exception as e:
-            logging.error(f"Error al generar descripción para tabla {table_name}: {e}")
-        
-        # Si falla, generar descripción básica por reglas
-        return self._fallback_table_description(table_name, columns_info)
-    
-    def _fallback_table_description(self, table_name: str, columns_info: List) -> str:
-        """Genera una descripción básica para una tabla basada en reglas"""
-        simple_name = self._simplify_name(table_name)
-        
-        # Detectar el propósito por prefijo
-        purpose = ""
-        if "PATI" in table_name or "PATIENT" in table_name:
-            purpose = "almacena información sobre pacientes"
-        elif "APPO" in table_name or "APPOINTMENT" in table_name:
-            purpose = "registra citas médicas"
-        elif "ONCO" in table_name or "CANCER" in table_name:
-            purpose = "contiene datos sobre casos de cáncer"
-        elif "EPIS" in table_name or "EPISODE" in table_name:
-            purpose = "registra episodios médicos"
-        elif "PARA" in table_name:
-            purpose = "contiene parámetros o catálogos del sistema"
-        elif "HIST" in table_name:
-            purpose = "almacena historial médico"
-        elif "DOC" in table_name:
-            purpose = "guarda documentos o archivos"
-        else:
-            purpose = "almacena registros relacionados con el sistema médico"
-        
-        return f"La tabla {simple_name} {purpose}."
-    
-    def _generate_column_description(self, table: str, column: str, data_type: str, is_pk: bool = False) -> str:
-        """
-        Genera descripción en lenguaje natural para una columna usando LLM.
-        Si falla, genera una descripción básica.
-        """
-        try:
-            # Simplificar nombres
-            simple_table = self._simplify_name(table)
-            simple_column = self._simplify_name(column)
-            
-            # Preparar prompt para LLM
-            prompt = f"""
-            Genera una descripción concisa en español para la columna '{column}' de la tabla '{table}' 
-            con nombre simplificado '{simple_column}' en la tabla '{simple_table}'.
-            
-            La columna es de tipo {data_type}.
-            {' Es clave primaria de la tabla.' if is_pk else ''}
-            
-            Describe en una frase corta qué información almacena esta columna.
-            """
-            
-            description = self._call_llm_for_description(prompt)
-            if description:
-                return description
-                
-        except Exception as e:
-            logging.error(f"Error al generar descripción para columna {table}.{column}: {e}")
-        
-        # Si falla, generar descripción básica
-        return self._fallback_column_description(table, column, data_type, is_pk)
-    
-    def _fallback_column_description(self, table: str, column: str, data_type: str, is_pk: bool) -> str:
-        """Genera descripción básica para una columna basada en reglas"""
-        # Simplificar nombres
-        simple_column = self._simplify_name(column)
-        
-        # Detectar tipo de columna según nombre y tipo de datos
-        column_role = ""
-        if is_pk:
-            column_role = "identificador único de cada registro"
-        elif column.endswith("_ID"):
-            if table.split("_")[0] in column:
-                column_role = "identificador único del registro"
-            else:
-                # Es probablemente una clave foránea
-                ref_table = re.sub(r'_ID$', '', column)
-                column_role = f"referencia a la tabla {ref_table}"
-        elif "NAME" in column or "NOMBRE" in column:
-            column_role = "nombre o título"
-        elif "DESC" in column:
-            column_role = "descripción textual"
-        elif "DATE" in column or "FECHA" in column:
-            column_role = "fecha"
-        elif "TIME" in column or "HORA" in column:
-            column_role = "hora o momento"
-        elif "STATUS" in column or "ESTADO" in column:
-            column_role = "estado o situación"
-        elif "TYPE" in column or "TIPO" in column:
-            column_role = "tipo o categoría"
-        else:
-            # Inferir por tipo de datos
-            if "INT" in data_type:
-                column_role = "valor numérico"
-            elif "CHAR" in data_type or "TEXT" in data_type:
-                column_role = "valor textual"
-            elif "DATE" in data_type:
-                column_role = "fecha"
-            elif "BOOL" in data_type:
-                column_role = "indicador sí/no"
-            else:
-                column_role = "atributo"
-        
-        return f"Almacena el {column_role} en formato {data_type}."
-    
-    def _generate_table_use_cases(self, table: str, columns_info: List) -> str:
-        """Genera casos de uso comunes para una tabla"""
-        try:
-            # Preparar prompt para LLM
-            simple_table = self._simplify_name(table)
-            
-            # Extraer nombres de columnas para enviar al LLM
-            column_names = [col[1] for col in columns_info]
-            
-            prompt = f"""
-            Genera 2-3 ejemplos de consultas en lenguaje natural que alguien podría hacer sobre la tabla '{table}' 
-            (nombre simplificado: '{simple_table}') con columnas: {', '.join(column_names)}.
-            
-            Las consultas deben ser preguntas que un usuario podría hacer en español sobre esta tabla.
-            Sé muy breve, solo lista las preguntas separadas por punto y coma.
-            """
-            
-            use_cases = self._call_llm_for_description(prompt)
-            if use_cases:
-                return use_cases
-                
-        except Exception as e:
-            logging.error(f"Error al generar casos de uso para tabla {table}: {e}")
-        
-        # Fallback básico
-        return f"Consultas sobre {self._simplify_name(table)}"
-    
-    def _generate_column_synonyms(self, table: str, column: str) -> List[str]:
-        """Genera sinónimos para una columna usando LLM"""
-        try:
-            # Simplificar nombres
-            simple_table = self._simplify_name(table)
-            simple_column = self._simplify_name(column)
-            
-            # Preparar prompt para LLM
-            prompt = f"""
-            Genera 3-5 sinónimos o términos alternativos en español que un usuario podría usar para referirse 
-            a la columna '{column}' (nombre simplificado: '{simple_column}') de la tabla '{table}' 
-            (nombre simplificado: '{simple_table}').
-            
-            Devuelve solo los términos separados por comas, sin explicaciones.
-            """
-            
-            synonyms_text = self._call_llm_for_description(prompt)
-            if synonyms_text:
-                # Limpiar y convertir a lista
-                synonyms = [s.strip() for s in synonyms_text.split(',')]
-                return [s for s in synonyms if s]  # Filtrar vacíos
-            
-        except Exception as e:
-            logging.error(f"Error al generar sinónimos para {table}.{column}: {e}")
-        
-        # Fallback: crear sinónimos básicos
-        return self._fallback_column_synonyms(column)
-    
-    def _fallback_column_synonyms(self, column: str) -> List[str]:
-        """Genera sinónimos básicos para una columna basado en reglas"""
-        synonyms = []
-        simple = self._simplify_name(column)
-        synonyms.append(simple)
-        
-        # Añadir variantes
-        if "_ID" in column:
-            synonyms.append(column.replace("_ID", ""))
-            synonyms.append("id " + simple.replace("id", "").strip())
-            
-        if "NAME" in column:
-            synonyms.append(column.replace("NAME", ""))
-            synonyms.append("nombre")
-            
-        if "DATE" in column:
-            synonyms.append("fecha")
-            
-        if "STATUS" in column:
-            synonyms.append("estado")
-        
-        return list(set(synonyms))  # Eliminar duplicados
-    
-    def _guess_referenced_table(self, column_name: str) -> str:
-        """Intenta adivinar la tabla referenciada por una columna que parece FK"""
-        if not column_name.endswith('_ID'):
-            return ""
-            
-        # Extraer el prefijo antes de _ID
-        prefix = column_name[:-3]
-        
-        # Buscar tabla que comience con ese prefijo
-        for table in self.table_names:
-            if table.startswith(prefix):
-                return table
-                
-        return ""
-    
-    def _call_llm_for_description(self, prompt: str) -> str:
-        """
-        Llama al LLM para generar una descripción.
-        Utiliza las credenciales de Deepseek desde variables de entorno.
-        """
-        # Asegurar que las variables de entorno están cargadas
-        load_dotenv()
-        
-        # Obtener credenciales
-        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-        api_url = os.environ.get("DEEPSEEK_API_URL", 
-                  "https://api.deepseek.com/v1/chat/completions")
-        model = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
-        
-        if not api_key:
-            logging.error("No se encontró API key para LLM en variables de entorno")
-            return ""
-        
-        # Preparar request
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "Eres un experto en bases de datos que genera descripciones concisas y claras."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "temperature": 0.3,
-            "max_tokens": 150
-        }
-        
-        try:
-            response = requests.post(api_url, headers=headers, json=payload, timeout=15)
-            response.raise_for_status()
-            
-            result = response.json()
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"]
-                # Limpiar la respuesta
-                return content.strip()
-            
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Error al llamar al LLM: {e}")
-        except Exception as e:
-            logging.error(f"Error inesperado con LLM: {e}")
-            
-        return ""
-            
-    def find_matching_table(self, query: str, top_n: int = 1) -> List[Tuple[str, float]]:
-        """
-        Encuentra las tablas más similares a la consulta en lenguaje natural.
-        
-        Args:
-            query: Consulta en lenguaje natural
-            top_n: Número de resultados a devolver
-            
-        Returns:
-            Lista de tuplas (nombre_tabla, puntuación_similitud)
-        """
-        if not self.table_embeddings is not None or not self.table_corpus:
-            logging.warning("No hay embeddings de tablas disponibles")
-            return []
-            
-        # Vectorizar la consulta
-        query_vector = self.vectorizer.transform([query])
-        
-        # Calcular similitud con todas las tablas
-        similarities = cosine_similarity(query_vector, self.table_embeddings).flatten()
-        
-        # Obtener los índices de las mejores coincidencias
-        top_indices = np.argsort(similarities)[::-1][:top_n]
-        
-        # Crear lista de resultados (tabla, puntuación)
-        results = [(self.table_names[i], float(similarities[i])) for i in top_indices]
-        
-        return results
-    
-    def find_matching_columns(self, query: str, table: str, top_n: int = 3) -> List[Tuple[str, float]]:
-        """
-        Encuentra las columnas más similares a la consulta para una tabla específica.
-        
-        Args:
-            query: Consulta en lenguaje natural
-            table: Nombre de la tabla donde buscar columnas
-            top_n: Número de resultados a devolver
-            
-        Returns:
-            Lista de tuplas (nombre_columna, puntuación_similitud)
-        """
-        if table not in self.column_embeddings or table not in self.column_corpus:
-            logging.warning(f"No hay embeddings de columnas para tabla {table}")
-            return []
-            
-        # Crear vectorizador específico para esta tabla
-        table_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
-        table_vectorizer.fit(self.column_corpus[table])
-        
-        # Vectorizar la consulta
-        query_vector = table_vectorizer.transform([query])
-        
-        # Calcular similitud con todas las columnas
-        similarities = cosine_similarity(query_vector, self.column_embeddings[table]).flatten()
-        
-        # Obtener los índices de las mejores coincidencias
-        top_indices = np.argsort(similarities)[::-1][:top_n]
-        
-        # Crear lista de resultados - convertimos explícitamente a float para evitar arrays numpy
-        results = [(self.column_names[table][i], float(similarities[i])) 
-                    for i in top_indices if i < len(self.column_names[table])]
-        
-        return results
-    
-    def enhance_sql_info(self, keywords: Dict[str, Any], question: str) -> Dict[str, Any]:
-        """
-        Mejora la información extraída para generar SQL usando RAG.
-        
-        Args:
-            keywords: Diccionario con la información estructurada extraída
-            question: Pregunta original en lenguaje natural
-            
-        Returns:
-            Diccionario actualizado con información mejorada
-        """
-        result = keywords.copy()
-        
-        # 1. Si no hay tablas o las tablas no existen, encontrar las más relevantes
-        if not result.get('tables') or not any(t in self.table_names for t in result.get('tables', [])):
-            matching_tables = self.find_matching_table(question, top_n=2)
-            if matching_tables:
-                logging.info(f"RAG encontró tablas relevantes: {matching_tables}")
-                result['tables'] = [t[0] for t in matching_tables]
-        
-        # 2. Si hay tablas válidas pero no hay columnas, encontrar columnas relevantes
-        if result.get('tables') and not result.get('columns'):
-            main_table = result['tables'][0]
-            if main_table in self.table_names:
-                matching_columns = self.find_matching_columns(question, main_table, top_n=3)
-                if matching_columns:
-                    logging.info(f"RAG encontró columnas relevantes: {matching_columns}")
-                    result['columns'] = [c[0] for c in matching_columns]
-        
-        # 3. Si hay condiciones pero los nombres de columnas no coinciden, intentar mapearlos
-        if result.get('conditions'):
-            updated_conditions = []
-            
-            for condition in result['conditions']:
-                if isinstance(condition, str):
-                    # Texto de condición: buscar términos que podrían ser columnas
-                    words = re.findall(r'\b\w+\b', condition)
-                    for word in words:
-                        for table in result.get('tables', []):
-                            if table in self.table_names:
-                                # Buscar si esta palabra es similar a alguna columna
-                                col_matches = self.find_matching_columns(word, table, top_n=1)
-                                if col_matches and col_matches[0][1] > 0.6:  # Umbral de confianza
-                                    mapped_col = col_matches[0][0]
-                                    if mapped_col != word:
-                                        logging.info(f"RAG mapeando columna '{word}' a '{mapped_col}'")
-                                        condition = condition.replace(word, mapped_col)
-                    
-                    updated_conditions.append(condition)
-                
-                elif isinstance(condition, dict) and 'column' in condition:
-                    # Diccionario de condición: mapear el nombre de columna
-                    col_name = condition['column']
-                    for table in result.get('tables', []):
-                        if table in self.table_names:
-                            col_matches = self.find_matching_columns(col_name, table, top_n=1)
-                            if col_matches and col_matches[0][1] > 0.6:
-                                mapped_col = col_matches[0][0]
-                                if mapped_col != col_name:
-                                    logging.info(f"RAG mapeando columna '{col_name}' a '{mapped_col}'")
-                                    condition = condition.copy()  # Evitar modificar el original
-                                    condition['column'] = mapped_col
-                    
-                    updated_conditions.append(condition)
-                
+        # Usar el mapa aplanado de términos
+        flat_terms_dict = self.schema_knowledge.get('terms_flat', {})
+        if flat_terms_dict and self.terms_keys: # self.terms_keys ya debería estar poblado desde _initialize_knowledge_from_dicts
+            temp_corpus = []
+            for term_key in self.terms_keys: # Iterar sobre las claves ya definidas y ordenadas (si es necesario)
+                description = flat_terms_dict.get(term_key, "")
+                if description: # Solo añadir si hay descripción
+                    temp_corpus.append(f"{term_key} {description}")
+                    _terms_keys_ordered.append(term_key) # Mantener el orden de los términos que realmente van al corpus
                 else:
-                    updated_conditions.append(condition)
+                    self.logger.debug(f"Término '{term_key}' omitido del corpus RAG por no tener descripción en terms_flat.")
             
-            result['conditions'] = updated_conditions
-        
-        # Añadir información contextual de RAG
-        self._add_rag_context(result, question)
-        
-        return result
-    
-    def _add_rag_context(self, result: Dict[str, Any], question: str):
-        """Añade información contextual de RAG para ayudar en la generación de SQL"""
-        if 'rag_context' not in result:
-            result['rag_context'] = {}
-        
-        # Añadir descripciones de tablas
-        if result.get('tables'):
-            table_descriptions = {}
-            for table in result['tables']:
-                if table in self.schema_knowledge['tables']:
-                    table_info = self.schema_knowledge['tables'][table]
-                    table_descriptions[table] = {
-                        'description': table_info.get('description', ''),
-                        'display_name': table_info.get('display_name', '')
-                    }
-            
-            result['rag_context']['table_descriptions'] = table_descriptions
-        
-        # Añadir descripciones de columnas si hay tablas
-        if result.get('tables'):
-            column_descriptions = {}
-            for table in result['tables']:
-                if table in self.schema_knowledge['columns']:
-                    column_descriptions[table] = {}
-                    for col, info in self.schema_knowledge['columns'][table].items():
-                        column_descriptions[table][col] = {
-                            'description': info.get('description', ''),
-                            'display_name': info.get('display_name', '')
-                        }
-            
-            result['rag_context']['column_descriptions'] = column_descriptions
-                
-        # Añadir relaciones relevantes
-        if result.get('tables') and len(result['tables']) > 1:
-            relationships = {}
-            for table in result['tables']:
-                if table in self.schema_knowledge['relationships']:
-                    relations = []
-                    for rel in self.schema_knowledge['relationships'][table]:
-                        # Usar .get() para acceder a 'to_table' de forma segura
-                        to_table = rel.get('to_table', '')
-                        if to_table and to_table in result['tables']:
-                            relations.append(rel)
-                    
-                    if relations:
-                        relationships[table] = relations
-            
-            if relationships:
-                result['rag_context']['relationships'] = relationships
-    
-    def get_schema_context(self, tables: List[str] = None) -> str:
-        """
-        Genera un contexto de esquema para incluir en prompts de LLM.
-        
-        Args:
-            tables: Lista de tablas para incluir (None = todas)
-            
-        Returns:
-            Texto con información de esquema para incluir en prompts
-        """
-        context = "Información del esquema de base de datos:\n"
-        
-        # Si no se especifican tablas, usar todas las disponibles (limitadas a 5)
-        if not tables:
-            tables = self.table_names[:5]
-        
-        # Incluir información de cada tabla
-        for table in tables:
-            if table in self.schema_knowledge['tables']:
-                table_info = self.schema_knowledge['tables'][table]
-                context += f"\n- Tabla {table} ({table_info.get('display_name', '')}): {table_info.get('description', '')}\n"
-                
-                # Incluir columnas importantes
-                if table in self.schema_knowledge['columns']:
-                    cols = list(self.schema_knowledge['columns'][table].items())
-                    # Limitar a 8 columnas para no sobrecargar el contexto
-                    for col_name, col_info in cols[:8]:
-                        context += f"  * {col_name}: {col_info.get('description', '')}\n"
-                    
-                    if len(cols) > 8:
-                        context += f"  * ... y {len(cols) - 8} columnas más\n"
-        
-        # Incluir algunas relaciones
-        added_relations = 0
-        context += "\nRelaciones importantes:\n"
-        for table in tables:
-            if table in self.schema_knowledge['relationships']:
-                for rel in self.schema_knowledge['relationships'][table][:2]:  # Limitar a 2 por tabla
-                    if rel['to_table'] in tables:
-                        context += f"- {rel['description']}\n"
-                        added_relations += 1
-                        if added_relations >= 5:  # Máximo 5 relaciones
-                            break
-            if added_relations >= 5:
-                break
-        
-        return context.strip()
+            self.terms_corpus = temp_corpus
+            self.terms_keys = _terms_keys_ordered # Actualizar self.terms_keys para que coincida con el corpus
+        else:
+            self.logger.info("No hay términos aplanados (terms_flat) o claves de términos para crear corpus de términos.")
+            self.terms_corpus = []
+            self.terms_keys = []
 
-# Función para inicializar el RAG desde el pipeline principal
-def initialize_database_rag(conn: sqlite3.Connection) -> DatabaseSchemaRAG:
-    """
-    Inicializa el sistema RAG para la base de datos especificada.
-    
-    Args:
-        conn: Conexión a la base de datos
+        if self.terms_corpus:
+            try:
+                # Asegurarse de que terms_vectorizer se inicializa si no lo está
+                if self.terms_vectorizer is None:
+                    self.terms_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
+                
+                self.terms_embeddings = self.terms_vectorizer.fit_transform(self.terms_corpus)
+                self.logger.info(f"Embeddings de términos creados/actualizados. Forma: {self.terms_embeddings.shape}")
+            except Exception as e:
+                self.logger.error(f"Error creando embeddings de términos: {e}", exc_info=True)
+        else:
+            self.logger.info("Corpus de términos vacío, no se crearon embeddings de términos.")
+            self.terms_embeddings = None # Asegurar que está None si no hay corpus
+
+        self.logger.info("Corpus y embeddings creados/actualizados desde self.schema_knowledge (incluyendo términos aplanados).")
+
+    def _rebuild_embeddings(self):
+        self.logger.info("Reconstruyendo embeddings desde corpus almacenados...")
+        if self.table_corpus: # No es necesario chequear self.vectorizer, se crea en __init__
+            try:
+                self.table_embeddings = self.vectorizer.fit_transform(self.table_corpus)
+                self.logger.info(f"Embeddings de tablas reconstruidos. Forma: {self.table_embeddings.shape if self.table_embeddings is not None else 'None'}")
+            except Exception as e: self.logger.error(f"Error reconstruyendo embeddings de tablas: {e}")
         
-    Returns:
-        Instancia de DatabaseSchemaRAG
-    """
-    start_time = time.time()
-    logging.info("Inicializando sistema RAG de esquema de base de datos...")
+        # self.column_vectorizers_map = {} # Reiniciar si se almacenan
+        for table, corpus in self.column_corpus_map.items():
+            if corpus:
+                try:
+                    temp_col_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
+                    self.column_embeddings_map[table] = temp_col_vectorizer.fit_transform(corpus)
+                    # self.column_vectorizers_map[table] = temp_col_vectorizer # Almacenar
+                    self.logger.info(f"Embeddings de columnas para '{table}' reconstruidos. Forma: {self.column_embeddings_map[table].shape if self.column_embeddings_map.get(table) is not None else 'None'}")
+                except Exception as e: self.logger.error(f"Error reconstruyendo embeddings de columnas para {table}: {e}")
+
+        if self.terms_corpus:
+            try:
+                self.terms_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
+                self.terms_embeddings = self.terms_vectorizer.fit_transform(self.terms_corpus)
+                self.logger.info(f"Embeddings de términos reconstruidos. Forma: {self.terms_embeddings.shape if self.terms_embeddings is not None else 'None'}")
+            except Exception as e: self.logger.error(f"Error reconstruyendo embeddings de términos: {e}")
     
-    # Crear instancia de RAG
-    rag = DatabaseSchemaRAG(conn)
-    
-    # Verificar si se inicializó correctamente
-    if not rag.table_names:
-        logging.warning("No se pudo inicializar RAG con tablas. Verificando conexión...")
+    def load_cache(self):
+        self.logger.info(f"Intentando cargar RAG cache desde: {self.cache_file}")
+        if not os.path.exists(self.cache_file):
+            self.logger.info(f"Archivo de caché {self.cache_file} no encontrado.")
+            return False
         try:
-            # Verificar conexión
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 5")
-            tables = cursor.fetchall()
-            if tables:
-                logging.info(f"Conexión OK, tablas detectadas: {tables}")
-                # Forzar inicialización
-                rag.conn = conn
-                rag.initialize_schema_knowledge()
-            else:
-                logging.error("La base de datos parece estar vacía")
-        except sqlite3.Error as e:
-            logging.error(f"Error en conexión a la BD: {e}")
-    
-    logging.info(f"RAG inicializado en {time.time() - start_time:.2f}s")
-    return rag
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                cached_data = json.load(f)
+            
+            self.schema_knowledge = cached_data.get('schema_knowledge', self.schema_knowledge)
+            self.table_corpus = cached_data.get('table_corpus', [])
+            self.table_names = cached_data.get('table_names', [])
+            self.column_corpus_map = cached_data.get('column_corpus_map', {})
+            self.column_names_map = cached_data.get('column_names_map', {})
+            self.terms_corpus = cached_data.get('terms_corpus', [])
+            self.terms_keys = cached_data.get('terms_keys', [])
+            
+            if self.table_corpus or any(self.column_corpus_map.values()) or self.terms_corpus:
+                self._rebuild_embeddings()
+            
+            self.logger.info(f"RAG cache cargado: {len(self.table_names)} tablas, {len(self.terms_keys)} términos.")
+            return True
+        except (json.JSONDecodeError, IOError) as e:
+            self.logger.error(f"Error al cargar caché RAG desde {self.cache_file}: {e}")
+        return False
 
-if __name__ == "__main__":
-    # Script para probar el RAG de forma independiente
-    from dotenv import load_dotenv
-    import sqlite3
+    def save_cache(self):
+        self.logger.info(f"Guardando RAG cache en: {self.cache_file}")
+        try:
+            cache_data = {
+                'schema_knowledge': self.schema_knowledge,
+                'table_corpus': self.table_corpus, 'table_names': self.table_names,
+                'column_corpus_map': self.column_corpus_map, 'column_names_map': self.column_names_map,
+                'terms_corpus': self.terms_corpus, 'terms_keys': self.terms_keys
+            }
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            self.logger.info(f"RAG cache guardado en {self.cache_file}")
+            return True
+        except IOError as e:
+            self.logger.error(f"Error al guardar caché RAG en {self.cache_file}: {e}")
+        return False
+
+    def get_relevant_context(self, question: str, top_n_tables: int = 5, top_n_columns_per_table: int = 10, top_n_terms: int = 10) -> Tuple[str, str]:
+        self.logger.info(f"Obteniendo contexto para pregunta: \"{question[:50]}...\" (top_n_tables={top_n_tables}, top_n_cols={top_n_columns_per_table}, top_n_terms={top_n_terms})")
+        relevant_tables_data = []
+        relevant_terms_data = {}
+
+        # 1. Encontrar tablas relevantes
+        if self.table_embeddings is not None and self.table_corpus and self.table_names:
+            try:
+                question_embedding = self.vectorizer.transform([question])
+                table_similarities = cosine_similarity(question_embedding, self.table_embeddings).flatten()
+                num_t = min(top_n_tables, len(self.table_names))
+                relevant_table_indices = table_similarities.argsort()[-num_t:][::-1]
+                
+                self.logger.debug(f"Índices de tablas relevantes: {relevant_table_indices}")
+
+                for i in relevant_table_indices:
+                    if i >= len(self.table_names): continue # Salvaguarda
+                    table_name = self.table_names[i]
+                    table_info = self.schema_knowledge['tables'].get(table_name)
+                    if not table_info: continue
+
+                    current_table_data = {"name": table_name, "description": table_info.get('description',''), "columns": []}
+
+                    # 2. Para cada tabla relevante, encontrar columnas relevantes
+                    if table_name in self.column_embeddings_map and \
+                       self.column_embeddings_map[table_name] is not None and \
+                       table_name in self.column_corpus_map and self.column_corpus_map[table_name] and \
+                       table_name in self.column_names_map and self.column_names_map[table_name]:
+                        
+                        # Recrear y ajustar vectorizador para columnas de esta tabla (solución temporal)
+                        # Una mejor solución es almacenar/gestionar estos vectorizadores.
+                        temp_column_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
+                        temp_column_vectorizer.fit(self.column_corpus_map[table_name])
+                        
+                        question_col_embedding = temp_column_vectorizer.transform([question])
+                        col_sim = cosine_similarity(question_col_embedding, self.column_embeddings_map[table_name]).flatten()
+                        
+                        num_c = min(top_n_columns_per_table, len(self.column_names_map[table_name]))
+                        relevant_col_indices = col_sim.argsort()[-num_c:][::-1]
+                        self.logger.debug(f"Tabla '{table_name}', índices de cols relevantes: {relevant_col_indices}")
+
+                        for j in relevant_col_indices:
+                            if j >= len(self.column_names_map[table_name]): continue # Salvaguarda
+                            col_name = self.column_names_map[table_name][j]
+                            col_info = self.schema_knowledge['columns'].get(table_name, {}).get(col_name)
+                            if col_info:
+                                current_table_data["columns"].append({
+                                    "name": col_name, "type": col_info.get('type',''),
+                                    "description": col_info.get('description','')
+                                })
+                    else: # Fallback: incluir todas las columnas de la tabla relevante si no hay embeddings/corpus de columnas
+                        self.logger.debug(f"No hay embeddings/corpus de columnas para '{table_name}'. Incluyendo todas sus columnas.")
+                        if table_name in self.schema_knowledge['columns']:
+                            for col_name_fb, col_info_fb in self.schema_knowledge['columns'][table_name].items():
+                                current_table_data["columns"].append({
+                                    "name": col_name_fb, "type": col_info_fb.get('type',''),
+                                    "description": col_info_fb.get('description','')
+                                })
+                    relevant_tables_data.append(current_table_data)
+            except Exception as e_table_col:
+                self.logger.error(f"Error buscando tablas/columnas relevantes: {e_table_col}", exc_info=True)
+        else: self.logger.warning("No hay embeddings/corpus de tablas para búsqueda de relevancia.")
+
+        # 3. Encontrar términos relevantes
+        if self.terms_embeddings is not None and self.terms_corpus and self.terms_keys and self.terms_vectorizer:
+            try:
+                question_terms_embedding = self.terms_vectorizer.transform([question])
+                terms_similarities = cosine_similarity(question_terms_embedding, self.terms_embeddings).flatten()
+                
+                # Asegurar que top_n_terms no excede el número de términos disponibles
+                num_k = min(top_n_terms, len(self.terms_keys))
+                if num_k > 0:
+                    relevant_terms_indices = terms_similarities.argsort()[-num_k:][::-1]
+                    self.logger.debug(f"Índices de términos relevantes (aplanados): {relevant_terms_indices}")
+
+                    flat_terms_map = self.schema_knowledge.get('terms_flat', {})
+                    # Limpiar relevant_terms_data antes de poblarlo
+                    relevant_terms_data = {} 
+                    for k_idx in relevant_terms_indices:
+                        if k_idx >= len(self.terms_keys): 
+                            self.logger.warning(f"Índice de término {k_idx} fuera de rango para terms_keys (longitud {len(self.terms_keys)}). Omitiendo.")
+                            continue 
+                        term_key = self.terms_keys[k_idx] # Clave de término individual del mapa aplanado
+                        description = flat_terms_map.get(term_key, '')
+                        if description: # Solo añadir si hay descripción
+                             relevant_terms_data[term_key] = description
+                        else:
+                            self.logger.debug(f"Término '{term_key}' (índice {k_idx}) omitido del contexto RAG por no tener descripción en flat_terms_map.")
+                else:
+                    self.logger.info("No se seleccionarán términos relevantes (num_k=0 o no hay términos).")
+
+            except Exception as e_terms:
+                self.logger.error(f"Error buscando términos relevantes (aplanados): {e_terms}", exc_info=True)
+        else:
+            self.logger.warning("No hay embeddings/corpus de términos o vectorizador para búsqueda de relevancia de términos.")
+
+        relevant_schema_for_prompt = {"tables": relevant_tables_data}
+        self.logger.info(f"Contexto RAG final: {len(relevant_tables_data)} tablas, {len(relevant_terms_data)} términos individuales.")
+        # Aumentar la longitud del log para el esquema
+        self.logger.debug(f"Schema RAG (JSON): {json.dumps(relevant_schema_for_prompt, ensure_ascii=False, indent=2)[:500]}...")
+
+        # Nuevos logs para depurar relevant_terms_data
+        self.logger.debug(f"DEBUG: Tipo de relevant_terms_data antes de dumps: {type(relevant_terms_data)}")
+        self.logger.debug(f"DEBUG: Longitud de relevant_terms_data antes de dumps: {len(relevant_terms_data)}")
+        self.logger.debug(f"DEBUG: Contenido de relevant_terms_data (dict, primeros 500 chars): {str(relevant_terms_data)[:500]}")
+        
+        # Aumentar la longitud del log existente para los términos
+        self.logger.debug(f"Términos RAG (JSON): {json.dumps(relevant_terms_data, ensure_ascii=False, indent=2)[:500]}...")
+
+        return json.dumps(relevant_schema_for_prompt, ensure_ascii=False), json.dumps(relevant_terms_data, ensure_ascii=False)
+
+    def _simplify_name(self, name: str) -> str:
+        # Esta función es un placeholder, la original es más compleja y usa traducciones.
+        # Se mantiene para compatibilidad si se llama internamente.
+        simplified = re.sub(r'^[A-Z]{3,4}_', '', name)
+        simplified = simplified.lower().replace('_', ' ')
+        return simplified.strip()
+
+    # Los métodos initialize_schema_knowledge, _generate_*, _fallback_*, _extract_relationships, _create_search_corpus
+    # que dependen de una conexión a BD y/o llamadas a LLM para generar descripciones
+    # se omiten en esta actualización ya que el flujo principal se centra en la inicialización desde dicts.
+    # Si se necesitaran, deberían ser revisados y posiblemente adaptados.
+    # Por ejemplo, initialize_schema_knowledge era muy extenso.
+
+# Ejemplo de uso (opcional, para pruebas)
+if __name__ == '__main__':
+    # Configurar logger básico para pruebas
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger_main = logging.getLogger(__name__)
+
+    # Datos de ejemplo
+    sample_db_structure = {
+        "database_name": "HospitalDB",
+        "tables": [
+            {
+                "name": "PATI_PATIENTS",
+                "description": "Almacena información sobre los pacientes del hospital.",
+                "columns": [
+                    {"name": "PATI_ID", "type": "INTEGER", "description": "Identificador único del paciente."},
+                    {"name": "PATI_FULL_NAME", "type": "TEXT", "description": "Nombre completo del paciente."},
+                    {"name": "PATI_BIRTH_DATE", "type": "DATE", "description": "Fecha de nacimiento del paciente."}
+                ]
+            },
+            {
+                "name": "APPO_APPOINTMENTS",
+                "description": "Registra las citas médicas programadas.",
+                "columns": [
+                    {"name": "APPO_ID", "type": "INTEGER", "description": "Identificador único de la cita."},
+                    {"name": "APPO_PATI_ID", "type": "INTEGER", "description": "ID del paciente asociado a la cita (FK a PATI_PATIENTS)."},
+                    {"name": "APPO_DATE", "type": "DATETIME", "description": "Fecha y hora de la cita."},
+                    {"name": "APPO_REASON", "type": "TEXT", "description": "Motivo de la cita."}
+                ]
+            }
+        ]
+    }
+    sample_terms_dict = {
+        "paciente": "Persona que recibe atención médica.",
+        "cita": "Reserva de hora para una consulta médica.",
+        "nombre completo": "Nombre y apellidos de una persona.",
+        "fecha de nacimiento": "Día en que nació una persona."
+    }
+
+    logger_main.info("Creando instancia de DatabaseSchemaRAG con datos de ejemplo...")
+    rag_system = DatabaseSchemaRAG(db_structure_dict=sample_db_structure, 
+                                   terms_dict=sample_terms_dict, 
+                                   logger_param=logger_main)
+
+    test_question = "Quiero ver el nombre de los pacientes y la razón de sus citas"
+    logger_main.info(f"Obteniendo contexto relevante para la pregunta: \"{test_question}\"")
     
-    # Configurar logging para mostrar también DEBUG
-    logging.basicConfig(level=logging.DEBUG, 
-                       format="%(asctime)s [%(levelname)s] %(message)s")
+    relevant_schema, relevant_terms = rag_system.get_relevant_context(test_question)
     
-    # Cargar variables de entorno
-    load_dotenv()
+    logger_main.info("--- Esquema Relevante ---")
+    logger_main.info(json.dumps(json.loads(relevant_schema), indent=2, ensure_ascii=False)) # Cargar y volcar para pretty print
+    logger_main.info("--- Términos Relevantes ---")
+    logger_main.info(json.dumps(json.loads(relevant_terms), indent=2, ensure_ascii=False))
+
+    test_question_2 = "fecha de nacimiento de un paciente"
+    logger_main.info(f"Obteniendo contexto relevante para la pregunta: \"{test_question_2}\"")
+    relevant_schema_2, relevant_terms_2 = rag_system.get_relevant_context(test_question_2)
+    logger_main.info("--- Esquema Relevante 2 ---")
+    logger_main.info(json.dumps(json.loads(relevant_schema_2), indent=2, ensure_ascii=False))
+    logger_main.info("--- Términos Relevantes 2 ---")
+    logger_main.info(json.dumps(json.loads(relevant_terms_2), indent=2, ensure_ascii=False))
+
+    # Prueba de guardado y carga de caché
+    cache_file_test = "test_rag_cache.json"
+    rag_system_for_cache = DatabaseSchemaRAG(db_structure_dict=sample_db_structure, 
+                                             terms_dict=sample_terms_dict, 
+                                             cache_file=cache_file_test,
+                                             logger_param=logger_main)
+    rag_system_for_cache.save_cache()
     
-    # Conectar a la base de datos
-    try:
-        db_path = "sqlite-analyzer/src/db/database.sqlite3.db"  # Ajustar según corresponda
-        conn = sqlite3.connect(db_path)
-        
-        # Crear y probar RAG
-        rag = DatabaseSchemaRAG(conn)
-        
-        # Mostrar las tablas detectadas
-        print(f"Tablas detectadas: {rag.table_names}")
-        
-        # Prueba de búsqueda
-        test_query = "pacientes que tienen citas programadas"
-        matching_tables = rag.find_matching_table(test_query, top_n=2)
-        print(f"\nPara la consulta '{test_query}':")
-        print(f"Tablas más relevantes: {matching_tables}")
-        
-        if matching_tables:
-            main_table = matching_tables[0][0]
-            columns = rag.find_matching_columns(test_query, main_table, top_n=3)
-            print(f"Columnas relevantes en {main_table}: {columns}")
-        
-        # Mostrar ejemplo de contexto para LLM
-        print("\nEjemplo de contexto para LLM:")
-        print(rag.get_schema_context())
-        
-        conn.close()
-        
-    except sqlite3.Error as e:
-        print(f"Error de base de datos: {e}")
-    except Exception as e:
-        print(f"Error: {e}")
+    rag_system_loaded = DatabaseSchemaRAG(cache_file=cache_file_test, logger_param=logger_main)
+    logger_main.info(f"Sistema cargado desde caché. Tablas: {len(rag_system_loaded.table_names)}, Términos: {len(rag_system_loaded.terms_keys)}")
+    relevant_schema_3, relevant_terms_3 = rag_system_loaded.get_relevant_context(test_question)
+    logger_main.info("--- Esquema Relevante 3 (desde caché) ---")
+    logger_main.info(json.dumps(json.loads(relevant_schema_3), indent=2, ensure_ascii=False))
+    logger_main.info("--- Términos Relevantes 3 (desde caché) ---")
+    logger_main.info(json.dumps(json.loads(relevant_terms_3), indent=2, ensure_ascii=False))
+    if os.path.exists(cache_file_test):
+        os.remove(cache_file_test)
+        logger_main.info(f"Archivo de caché de prueba {cache_file_test} eliminado.")
