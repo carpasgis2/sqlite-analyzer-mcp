@@ -357,7 +357,7 @@ Respuesta (Consulta SQL SQLite o explicación de información faltante):
                 HumanMessage(content=prompt_text)
             ]
 
-            # Se asume que llm_client es una instancia de ChatOpenAI (o compatible con Langchain)
+            #(o compatible con Langchain)
             # El modelo (ej. LLM_MODEL_NAME) se configura al instanciar llm_client.
             response_from_llm = llm_client.invoke(messages_for_llm)
             

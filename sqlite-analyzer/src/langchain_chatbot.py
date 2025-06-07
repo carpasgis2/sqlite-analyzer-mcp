@@ -10,6 +10,7 @@ import json # Añadir importación de json
 # import difflib # No parece usarse directamente, se puede quitar si no es necesario
 import concurrent.futures
 from typing import Type, Any # Añadido Any
+from pydantic import PrivateAttr  # Añadir esta importación para atributos privados
 
 from langchain.tools import Tool # Descomentado
 from langchain_core.tools import BaseTool # Usar BaseTool
@@ -134,6 +135,8 @@ class SQLMedicalChatbot(BaseTool):
     schema_path: str
     llm: BaseLanguageModel # Usar BaseLanguageModel o ChatOpenAI o Any
 
+    _mcp_context: dict = PrivateAttr(default_factory=dict)  # Contexto MCP: entidades relevantes
+
     # Si la herramienta toma argumentos específicos, puedes definir un args_schema:
     # class SQLMedicalChatbotArgs(BaseModel):
     #     query: str = Field(description="La pregunta o consulta a procesar")
@@ -142,6 +145,39 @@ class SQLMedicalChatbot(BaseTool):
     # Pydantic v2 (usado por Langchain con BaseTool) se encargará de la inicialización
     # de los campos anotados si se pasan como argumentos de palabra clave al crear la instancia.
     # No se necesita un __init__ explícito a menos que haya lógica adicional.
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # El contexto MCP ahora es un atributo privado
+        # self._mcp_context ya se inicializa por PrivateAttr
+        pass
+
+    def _update_mcp_context(self, response_message: str):
+        # Busca tablas y columnas mencionadas en la respuesta y actualiza el contexto
+        tablas = re.findall(r"tabla[s]? ([A-Z0-9_]+)", response_message, re.IGNORECASE)
+        if tablas:
+            self._mcp_context['last_tables'] = tablas
+        columnas = re.findall(r"columna[s]? ([A-Z0-9_]+)", response_message, re.IGNORECASE)
+        if columnas:
+            self._mcp_context['last_columns'] = columnas
+        # Puedes añadir aquí más lógica para conceptos médicos, ids, etc.
+
+    def _resolve_ambiguous_reference(self, query: str):
+        # Busca referencias ambiguas y resuelve usando el contexto
+        if re.search(r"esa tabla|dicha tabla|la tabla mencionada", query, re.IGNORECASE):
+            tablas = self._mcp_context.get('last_tables')
+            if tablas:
+                return tool_list_columns(tablas[-1])
+            else:
+                return "No se ha mencionado ninguna tabla previamente en la conversación."
+        if re.search(r"esa columna|dicha columna|el campo mencionado", query, re.IGNORECASE):
+            columnas = self._mcp_context.get('last_columns')
+            if columnas:
+                return f"Última columna mencionada: {columnas[-1]}"
+            else:
+                return "No se ha mencionado ninguna columna previamente en la conversación."
+        # Puedes añadir más patrones para conceptos médicos, ids, etc.
+        return None
 
     def _run(self, query: str) -> str:
         """Procesa la consulta de manera segura. Este es el método que Langchain llama."""
@@ -404,6 +440,14 @@ class SQLMedicalChatbot(BaseTool):
                 self.logger.warning(f"La observación final excede los {MAX_OBSERVATION_LENGTH} caracteres ({len(final_response_str)}). Truncando...")
                 final_response_str = final_response_str[:MAX_OBSERVATION_LENGTH] + "... (Observación truncada)"
 
+            # Si la pregunta es de seguimiento sobre "esa tabla", usar el contexto MCP
+            if re.search(r"esa tabla|dicha tabla|la tabla mencionada", query, re.IGNORECASE):
+                if hasattr(self, 'last_table_mentioned') and self.last_table_mentioned:
+                    columnas = tool_list_columns(self.last_table_mentioned)
+                    return f"Columnas de la tabla {self.last_table_mentioned}:\n{columnas}"
+                else:
+                    return "No se ha mencionado ninguna tabla previamente en la conversación."
+            
             return final_response_str
         except Exception as e_outer:
             self.logger.error(f"Error general en _run de SQLMedicalChatbot: {e_outer}", exc_info=True)

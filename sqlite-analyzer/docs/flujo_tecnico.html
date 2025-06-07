@@ -158,47 +158,49 @@
 </div>
 
 <div class="section">
-  <h2>4. Detalle del Pipeline Técnico (profundo)</h2>
+  <h2>4. Detalle del Pipeline Técnico (actualizado)</h2>
   <ol>
     <li><b>Entrada del usuario</b>:<br>
-      - El usuario ingresa una pregunta en lenguaje natural (soporta español y variantes, con errores comunes) a la interfaz del chatbot (potencialmente gestionada por LangChain).</li>
+      - El usuario ingresa una pregunta en lenguaje natural (soporta español y variantes, con errores comunes) a la interfaz del chatbot, gestionada por un agente LangChain.<br>
+      - El agente mantiene memoria conversacional y decide qué herramienta usar (pipeline, info general, exploración de esquema, etc).</li>
     <li><b>Preprocesamiento</b> (<span class="mod">sql_utils.py</span>):<br>
-      - (Puede ser un paso dentro de una herramienta LangChain o previo a llamar al agente principal)
-      - Se corrigen typos usando <code>common_typos</code> y <code>valid_terms</code> de dictionary.json.<br>
-      - Se extraen entidades, patrones de IDs, y se normaliza el texto.<br>
-      - Se detecta el tipo de consulta (COUNT, SELECT, AVG, etc.) y se enriquecen los metadatos.</li>
+      - Corrección de typos y normalización usando <code>dictionary.json</code>.<br>
+      - Extracción de entidades, patrones de IDs y enriquecimiento de metadatos.<br>
+      - Logging detallado de la pregunta preprocesada.</li>
     <li><b>Recuperación de contexto (RAG)</b> (<span class="mod">rag_enhancements.py</span>):<br>
-      - Se usan embeddings y sinónimos para identificar tablas y columnas relevantes.<br>
-      - Se consulta schema_enhanced.json para obtener descripciones y relaciones.<br>
-      - Permite robustez ante lenguaje ambiguo o sinónimos no exactos.</li>
-    <li><b>Extracción estructurada (LLM via LangChain Agent)</b> (<span class="mod">langchain_chatbot.py</span> y <span class="mod">pipeline.py</span> como herramienta):<br>
-      - El agente LangChain recibe la pregunta preprocesada y el contexto RAG.
-      - El agente LangChain, utilizando el LLM configurado (ej. DeepSeek), interactúa con herramientas especializadas (como el pipeline principal encapsulado) para interpretar la pregunta.
-      - Se construye un prompt con la pregunta y el contexto de esquema para el LLM.
-      - El LLM (llamado a través de LangChain) devuelve un JSON estructurado con:<br>
-        <code>{ tables: [...], actions: [...], columns: [...], conditions: [...], joins: [...] }</code><br>
-      - Se extraen y validan las entidades detectadas.
-      - El contexto podría ser enriquecido o gestionado a través de un servidor MCP si estuviera integrado.</li>
-    <li><b>Enriquecimiento y validación</b> (<span class="mod">pipeline.py</span>, como parte de una herramienta LangChain):<br>
-      - Se normaliza la estructura, se validan relaciones y se infieren joins faltantes (incluyendo joins de múltiples saltos utilizando el grafo de relaciones de `dictionary.json`).<br>
-      - Se aplican reglas médicas y de negocio para asegurar la coherencia.<br>
-      - Se usan funciones como <code>validate_and_fix_relations</code> y <code>enhance_structured_info</code>.</li>
-    <li><b>Generación de SQL</b> (<span class="mod">sql_generator.py</span>):<br>
-      - Traduce la estructura JSON a SQL usando mappings, relaciones y convenciones.<br>
-      - Aplica aliases, parametrización y validación de entidades.<br>
-      - Usa fallback al LLM si la generación automática falla.</li>
-    <li><b>Validación de SQL</b> (<span class="mod">sql_validator.py</span>):<br>
-      - Verifica sintaxis, seguridad (prevención de inyección), y que solo se usen entidades válidas.<br>
-      - Aplica whitelists y corrige errores comunes automáticamente.</li>
+      - Identificación semántica de tablas y columnas relevantes usando embeddings y sinónimos.<br>
+      - Consulta a <code>schema_enhanced.json</code> para obtener descripciones y relaciones.<br>
+      - Soporta lenguaje ambiguo y sinónimos no exactos.</li>
+    <li><b>Extracción estructurada (LLM via LangChain Agent)</b> (<span class="mod">langchain_chatbot.py</span> y <span class="mod">pipeline.py</span>):<br>
+      - El agente LangChain invoca el pipeline como herramienta, pasando la pregunta y el contexto.<br>
+      - El LLM devuelve un JSON estructurado con tablas, columnas, condiciones, acciones y joins.<br>
+      - El pipeline valida y normaliza las entidades detectadas.</li>
+    <li><b>Enriquecimiento y validación</b> (<span class="mod">pipeline.py</span>):<br>
+      - Se infieren y validan joins, incluyendo multi-hop (múltiples saltos) usando el grafo de relaciones.<br>
+      - Se aplican reglas médicas y de negocio.<br>
+      - Se valida la estructura y se prepara para generación de SQL.</li>
+    <li><b>Generación y validación de SQL</b> (<span class="mod">sql_generator.py</span> y <span class="mod">sql_validator.py</span>):<br>
+      - Traducción de la estructura a SQL usando mappings y relaciones.<br>
+      - Validación estricta contra whitelist y seguridad.<br>
+      - Si el LLM proporciona SQL directo, se valida y se usa solo si es seguro.<br>
+      - Si falla la generación automática, se recurre a fallback con el LLM.</li>
     <li><b>Ejecución</b>:<br>
-      - Ejecuta la consulta SQL en la base de datos.<br>
-      - Captura resultados, errores y tiempos de ejecución.</li>
+      - Ejecución segura de la consulta SQL en la base de datos.<br>
+      - Captura de resultados, errores y tiempos de ejecución.<br>
+      - Logging de la ejecución y resultados.</li>
     <li><b>Generación de respuesta (LLM via LangChain Agent)</b>:<br>
-      - El agente LangChain recibe los resultados de la consulta SQL.
-      - Prompt al LLM (a través de LangChain) con la pregunta original, la consulta SQL y los resultados.
-      - El LLM genera una respuesta natural, explicando los resultados y su contexto médico.<br>
-      - Soporta fallback y autocorrección si la respuesta es ambigua o incompleta.</li>
+      - El pipeline invoca al LLM para generar una respuesta natural, usando la pregunta, el SQL y los resultados.<br>
+      - Si la respuesta es ambigua o vacía, se aplica fallback automático.<br>
+      - El agente LangChain presenta la respuesta final al usuario y la añade al historial conversacional.</li>
+    <li><b>Gestión de errores y fallback</b> (en todas las etapas):<br>
+      - Si ocurre un error en cualquier etapa (extracción, generación, validación, ejecución), el pipeline informa al usuario con mensajes claros y registra el error.<br>
+      - Se intenta fallback automático (por ejemplo, reintentos, simplificación de la consulta, o mensajes alternativos).</li>
   </ol>
+  <ul>
+    <li>El pipeline es modular y desacoplado: puede usarse como herramienta en cualquier agente LangChain o desde otros sistemas.</li>
+    <li>El logging es centralizado y configurable desde ambos módulos.</li>
+    <li>La arquitectura permite añadir nuevas herramientas, validaciones o fuentes de contexto fácilmente.</li>
+  </ul>
 </div>
 
 <div class="section">

@@ -1,0 +1,206 @@
+[
+  {
+    "apartado": "Información básica de pacientes"
+  },
+  {
+    "pregunta": "¿Cuál es el número total de pacientes que hay en la base de datos?",
+    "respuesta": "El número total de pacientes en la base de datos es 500."
+  },
+  {
+    "pregunta": "¿Cuál es el nombre completo del paciente con ID 1001?",
+    "respuesta": "No se encontró un paciente con ID 1001 en la base de datos. El resultado mostrado corresponde a un paciente diferente (ID 100996)."
+  },
+  {
+    "pregunta": "¿Cuál es la fecha de nacimiento del paciente con ID 1005?",
+    "respuesta": "La fecha de nacimiento del paciente con ID 1005 es el 25 de enero de 1956."
+  },
+  {
+    "apartado": "Vacunas y fecha"
+  },
+  {
+    "pregunta": "¿Qué vacunas ha recibido el paciente con ID 1445 y en qué fechas?",
+    "respuesta": "El paciente con ID 1445 ha recibido las siguientes vacunas en las fechas indicadas:\n1. BEXSERO (MENINGOCOCCO B) - 19/07/2021\n2. BEXSERO (MENINGOCOCCO B) - 21/06/2021\n3. PREVENAR 13-NEUMOCOCO 13 - 24/03/2021"
+  },
+  {
+    "apartado": "Alergias"
+  },
+  {
+    "pregunta": "¿Qué pacientes tienen alergias registradas y cuáles son esas alergias?",
+    "respuesta": "He encontrado 262 pacientes con alergias registradas en la base de datos. Aquí tienes algunos ejemplos:\n\n1. ABRAHAM CORNELIS DE PRUEBAS104189 SINA104189 - Alergia\n2. ADRIAN PRUEBAS101233 SINA101233 - Alergia  \n3. AFRICA PRUEBAS102749 SINA102749 - Alergia\n4. AGATHA JOHANNA PRUEBAS102258 SINA102258 - Alergia e Intolerancia\n5. ALBA PRUEBAS103536 SINA103536 - Alergia\n6. ALBERTO PRUEBAS103044 SINA103044 - Alergia\n7. ALEJANDRA PRUEBAS103967 SINA103967 - Alergia\n8. ALFONSO PRUEBAS103554 SINA103554 - Alergia (registrada dos veces)\n\nLos tipos de alergias registradas incluyen \"Alergia\" e \"Intolerancia\". Para obtener la lista completa de 262 pacientes con sus alergias, sería necesario exportar todos los resultados de la consulta."
+  },
+  {
+    "pregunta": "¿Qué pacientes tienen alergias a medicamentos anticoagulantes?",
+    "respuesta": "No se encontraron pacientes con alergias registradas a medicamentos anticoagulantes en la base de datos. Aunque existen medicamentos anticoagulantes como warfarina, apixaban y heparina registrados en el sistema, no hay registros de alergias asociadas a estos medicamentos para ningún paciente."
+  },
+  {
+    "apartado": "Procedimientos y oncología"
+  },
+  {
+    "pregunta": "¿Qué procedimientos médicos se han realizado en pacientes con diagnóstico de cáncer de pulmón?",
+    "respuesta": "No he podido encontrar información específica sobre los procedimientos médicos realizados en pacientes con diagnóstico de cáncer de pulmón en la base de datos disponible. Esto puede deberse a limitaciones en los datos o en la estructura de la base de datos. Se recomienda consultar directamente con el equipo médico o revisar los registros clínicos completos para obtener esta información."
+  },
+  {
+    "pregunta": "¿Qué pacientes presentan diagnóstico relacionado con cáncer de riñón y cuál es el tipo de riñón associada al diagnóstico?",
+    "respuesta": "No se encontraron pacientes con diagnóstico de cáncer de riñón en la base de datos actual."
+  },
+  {
+    "pregunta": "¿Qué pacientes tienen un marcador tumoral positivo en sus registros y cuáles son los valores asociados?",
+    "respuesta": "No he podido encontrar información estructurada en la base de datos sobre pacientes con marcadores tumorales positivos y sus valores asociados. La base de datos no parece contener tablas o columnas específicas que relacionen directamente a pacientes con resultados de marcadores tumorales."
+  },
+  {
+    "apartado": "Intervenciones y anestesia"
+  },
+  {
+    "pregunta": "¿Cuál es la distribución de tipos de intervención quirúrgica según el tipo de anestesia utilizada?",
+    "respuesta": "Tras revisar el esquema de la base de datos, no se ha encontrado una relación directa entre los tipos de intervención quirúrgica y los tipos de anestesia utilizada que permita generar la distribución solicitada. La información necesaria para responder a esta pregunta no está disponible en la estructura actual de la base de datos."
+  },
+  {
+    "apartado": "Fusiones de pacientes"
+  },
+  {
+    "pregunta": "¿Cuántos pacientes han sido fusionados y en qué fechas se realizaron las fusiones?",
+    "respuesta": "Se han registrado un total de 113 fusiones de pacientes en la base de datos. Las fusiones se realizaron en diferentes fechas, siendo cada fusión de un paciente individual. Algunos ejemplos de fechas de fusión incluyen:\n\n- 1 paciente fusionado el 01/10/2020 a las 12:24\n- 1 paciente fusionado el 01/10/2020 a las 12:26\n- 1 paciente fusionado el 04/11/2020 a las 10:21\n- 1 paciente fusionado el 04/11/2020 a las 10:30\n- 1 paciente fusionado el 04/11/2020 a las 17:12\n- 1 paciente fusionado el 16/11/2020 a las 09:35\n- 1 paciente fusionado el 04/01/2021 a las 09:46\n- 1 paciente fusionado el 05/01/2021 a las 11:52\n- 1 paciente fusionado el 05/01/2021 a las 11:54\n- 1 paciente fusionado el 05/01/2021 a las 11:57\n\n(Se muestran solo los primeros 10 registros como ejemplo, pero hay un total de 113 registros de fusiones)"
+  },
+  {
+    "apartado": "Autorizaciones de procedimientos"
+  },
+  {
+    "pregunta": "¿Qué procedimientos médicos están autorizados y a qué tipo pertenecen?",
+    "respuesta": "Los procedimientos médicos autorizados y sus tipos correspondientes incluyen:\n\n1. Propuestas de ingreso hospitalario (ejemplo: códigos 122, 156, 169, 288)\n2. Propuesta de urgencias (ejemplo: códigos 10, 33, 92, 146, 653, 665)\n\nLa base de datos contiene un total de 13,074 procedimientos médicos autorizados con sus respectivos tipos. Algunos ejemplos adicionales de tipos de procedimientos son \"Propuestas de ingreso hospitalario\" y \"Propuesta de urgencias\". Para obtener la lista completa con todas las descripciones detalladas, sería necesario revisar todos los registros devueltos por la consulta."
+  },
+  {
+    "apartado": "Unidades médicas y procedimientos"
+  },
+  {
+    "pregunta": "¿Qué unidades médicas están relacionadas con los procedimientos realizados recientemente?",
+    "respuesta": "No se encontraron unidades médicas relacionadas con procedimientos realizados en los últimos 90 días en la base de datos."
+  },
+  {
+    "apartado": "Oncología avanzada"
+  },
+  {
+    "pregunta": "¿Qué pacientes tienen tratamiento de hormonoterapia y qué tipo de hormonoterapia reciben?",
+    "respuesta": "No se encontraron tablas o columnas específicas en la base de datos que relacionen directamente a pacientes con tratamientos de hormonoterapia. Por lo tanto, no es posible proporcionar la información solicitada con los datos disponibles actualmente."
+  },
+  {
+    "pregunta": "¿Qué pacientes han recibido radioterapia y qué método de irradiación se utilizó?",
+    "respuesta": "No he podido encontrar información en la base de datos sobre qué pacientes han recibido radioterapia y qué método de irradiación se utilizó. Es posible que estos datos no estén disponibles en el esquema actual o que estén almacenados bajo una estructura diferente a la explorada."
+  },
+  {
+    "apartado": "Consultas clínicas complejas"
+  },
+  {
+    "pregunta": "¿Qué médicos han tratado a pacientes diagnosticados con diabetes tipo 2 que también están tomando metformina?",
+    "respuesta": "Para responder a la pregunta sobre qué médicos han tratado a pacientes con diabetes tipo 2 que toman metformina, se necesitaría ejecutar una consulta SQL como la siguiente:\n\n```sql\nSELECT DISTINCT p.PATI_ID, p.PATI_NAME, p.PATI_SURNAME_1, op.ORPR_PROF_NAME AS DOCTOR_NAME\nFROM PATI_PATIENTS p\nJOIN EPIS_DIAGNOSTICS ed ON p.PATI_ID = ed.PATI_ID\nJOIN PATI_USUAL_MEDICATION pm ON p.PATI_ID = pm.PATI_ID\nJOIN PATI_ORIGIN_PROFESSIONALS op ON p.PATI_ID = op.PATI_ID\nWHERE ed.CDTE_ID = [ID_DIABETES_TIPO_2]\nAND pm.ACIN_ID = [ID_METFORMINA]\n```\n\nSin embargo, para ejecutar esta consulta de manera precisa, se requiere conocer:\n1. El CDTE_ID correspondiente a \"diabetes tipo 2\" en el sistema de codificación de diagnósticos\n2. El ACIN_ID correspondiente a \"metformina\" en la tabla de ingredientes activos\n\nSin esta información específica, no es posible proporcionar resultados exactos. Se necesitaría acceder a los datos de referencia para obtener estos identificadores."
+  },
+  {
+    "pregunta": "¿Cuál es la prevalencia de alergias alimentarias frente a no alimentarias en hombres y mujeres, por rangos de edad?",
+    "respuesta": "Según los datos de la base de datos médica, la prevalencia de alergias alimentarias frente a no alimentarias por género y rangos de edad es la siguiente:\n\n1. **Mujeres (Femenino)**:\n   - 18-30 años: 0 alergias alimentarias vs 1 no alimentaria (100% no alimentarias)\n   - 31-50 años: 0 vs 18 (100% no alimentarias)\n   - 51-70 años: 0 vs 48 (100% no alimentarias)\n   - 71+ años: 0 vs 66 (100% no alimentarias)\n\n2. **Hombres (Masculino)**:\n   - 31-50 años: 0 vs 7 (100% no alimentarias)\n   - 51-70 años: 0 vs 22 (100% no alimentarias)\n   - 71+ años: 0 vs 40 (100% no alimentarias)\n\n3. **Indeterminado**:\n   - 31-50 años: 0 vs 8 (100% no alimentarias)\n   - 51-70 años: 0 vs 23 (100% no alimentarias)\n   - 71+ años: 0 vs 28 (100% no alimentarias)\n\n**Observaciones clave**:\n- No se registraron alergias alimentarias en ninguno de los grupos analizados.\n- Todas las alergias registradas fueron clasificadas como no alimentarias.\n- La mayor cantidad de alergias se encuentra en el grupo de mujeres mayores de 71 años (66 casos).\n- No hay datos para el grupo de 0-17 años en ninguno de los géneros.\n\nEstos resultados sugieren que, según los datos disponibles, las alergias no alimentarias son mucho más prevalentes que las alimentarias en todos los grupos demográficos analizados. Sin embargo, es importante considerar que la clasificación se basó en descripciones textuales y podría haber limitaciones en la precisión de esta categorización."
+  },
+  {
+    "pregunta": "¿Qué medicamentos para la alergia no contienen pseudoefedrina y son aptos para niños menores de 12 años?",
+    "respuesta": "** Lamentablemente, la base de datos no contiene la información estructurada necesaria para identificar medicamentos para alergias que no contengan pseudoefedrina y sean aptos para niños menores de 12 años. Se recomienda consultar esta información con un profesional médico o una fuente farmacológica confiable."
+  },
+  {
+    "pregunta": "¿Qué médicos han tratado a pacientes diagnosticados con diabetes tipo 2 que también están tomando metformina?",
+    "respuesta": "Agent stopped due to iteration limit or time limit."
+  },
+  {
+    "pregunta": "Listar las provincias donde se han registrado más de 10 casos de gripe A en pacientes mayores de 60 años durante el último invierno.",
+    "respuesta": "No puedo proporcionar la información solicitada debido a limitaciones en la base de datos. No se encontraron tablas o columnas suficientes para identificar claramente: (1) provincias de pacientes, (2) diagnósticos específicos de gripe A, o (3) el período exacto del \"último invierno\". Sería necesario contar con más datos geográficos y de codificación de diagnósticos en el sistema."
+  },
+  {
+    "pregunta": "¿Cuál es la edad promedio de los pacientes que fueron diagnosticados con cáncer de pulmón en cada hospital durante 2023, y cuántos de ellos eran fumadores?",
+    "respuesta": "No puedo proporcionar una respuesta precisa a la pregunta debido a la falta de información clara en la base de datos sobre cómo se identifica específicamente el cáncer de pulmón en los registros. Sería necesario conocer cómo se codifican los tipos de cáncer (especialmente el de pulmón) en las tablas `EPIS_DIAGNOSTICS` u `ONCO_CANCERS` para poder calcular la edad promedio de los pacientes diagnosticados y determinar cuántos de ellos eran fumadores por hospital en 2023."
+  },
+  {
+    "pregunta": "¿Cuántos pacientes distintos recibieron al menos tres tipos diferentes de medicación el mes pasado, y cuál fue el coste total de esas medicaciones para cada paciente?",
+    "respuesta": "No se encontraron datos suficientes en la base de datos para responder a la pregunta sobre cuántos pacientes distintos recibieron al menos tres tipos diferentes de medicación el mes pasado y sus costos totales. La base de datos no contiene información clara sobre fechas de prescripción de medicamentos ni sobre sus costos asociados."
+  },
+  {
+    "pregunta": "Mostrar los tratamientos aplicados a pacientes que previamente fueron diagnosticados con hipertensión y posteriormente desarrollaron insuficiencia renal, y qué médico supervisó el tratamiento para la insuficiencia renal.",
+    "respuesta": "No se encontraron registros en la base de datos que cumplan con los criterios de pacientes diagnosticados primero con hipertensión y luego con insuficiencia renal, junto con sus tratamientos correspondientes y médicos supervisores. Esto podría deberse a que no hay datos que coincidan exactamente con estos diagnósticos o a diferencias en la terminología utilizada en la codificación de los mismos."
+  },
+  {
+    "pregunta": "Comparar el número de reingresos hospitalarios dentro de los 30 días posteriores al alta para pacientes con insuficiencia cardíaca versus aquellos con neumonía, desglosado por grupo de edad (menores de 65 y 65 o más).",
+    "respuesta": "Los datos disponibles sobre reingresos hospitalarios dentro de los 30 días posteriores al alta, desglosados por grupo de edad, son los siguientes:\n\n1. Pacientes de 65 años o más:\n   - Total de pacientes: 131\n   - Pacientes reingresados: 90\n   - Tasa de reingreso: 68.7%\n\n2. Pacientes menores de 65 años:\n   - Total de pacientes: 104\n   - Pacientes reingresados: 52\n   - Tasa de reingreso: 50.0%\n\nNo fue posible obtener datos específicos para comparar insuficiencia cardíaca versus neumonía debido a limitaciones en la estructura de los datos de diagnóstico en la base de datos."
+  },
+  {
+    "apartado": "Diagnósticos y episodios"
+  },
+  {
+    "pregunta": "¿Cuántos diagnósticos principales y secundarios se registraron en cada tipo de episodio durante el año 2024?",
+    "respuesta": "Durante el año 2024, se registraron los siguientes diagnósticos principales y secundarios por estado de episodio:\n\n1. **Asistencia en curso**: 6 diagnósticos principales, 0 secundarios (Total: 6)\n2. **Ingreso**: 2 diagnósticos principales, 0 secundarios (Total: 2)\n3. **Creado**: 1 diagnóstico principal, 0 secundarios (Total: 1)\n4. **Alta médica**: 1 diagnóstico principal, 0 secundarios (Total: 1)\n5. **Alta médica pte. ingreso en planta**: 1 diagnóstico principal, 0 secundarios (Total: 1)\n6. **Ingreso Programado**: 1 diagnóstico principal, 0 secundarios (Total: 1)\n\nNo se encontraron diagnósticos secundarios registrados en ninguno de los estados de episodio durante 2024. Todos los diagnósticos registrados fueron principales."
+  },
+  {
+    "apartado": "Alergias y prevalencia"
+  },
+  {
+    "pregunta": "¿Qué tipo de alergias hay? Hay pacientes con alergia al polen?",
+    "respuesta": "En la base de datos se registran dos tipos principales de alergias: \"Alergia\" e \"Intolerancia\". Además, se han encontrado pacientes con alergia al polen, específicamente tres registros donde se menciona \"Polen\" o \"POLEN\" en las observaciones de alergias. Esto confirma que sí hay pacientes con alergia al polen en el sistema."
+  },
+  {
+    "pregunta": "¿Cuál es la prevalencia de alergias alimentarias frente a no alimentarias en hombres y mujeres, por rangos de edad?",
+    "respuesta": "Según los datos obtenidos de la base de datos médica, la prevalencia de alergias alimentarias frente a no alimentarias por género y rangos de edad es la siguiente:\n\n1. **Hombres**:\n   - 18-40 años: 100% alergias no alimentarias (1 caso)\n   - 41-65 años: 100% alergias no alimentarias (23 casos)\n   - 65+ años: 100% alergias no alimentarias (45 casos)\n\n2. **Mujeres**:\n   - 18-40 años: 100% alergias no alimentarias (3 casos)\n   - 41-65 años: 100% alergias no alimentarias (49 casos)\n   - 65+ años: 100% alergias no alimentarias (81 casos)\n\n3. **Otros géneros**:\n   - 18-40 años: 100% alergias no alimentarias (2 casos)\n   - 41-65 años: 100% alergias no alimentarias (23 casos)\n   - 65+ años: 100% alergias no alimentarias (34 casos)\n\n**Observaciones importantes**:\n- No se encontraron casos de alergias alimentarias en ninguno de los grupos analizados, lo que podría indicar que:\n  - Las alergias alimentarias no están registradas en la base de datos con las palabras clave utilizadas\n  - O que efectivamente no hay casos registrados en este conjunto de datos\n- La mayoría de los casos se concentran en personas mayores de 65 años, especialmente en mujeres\n- Los porcentajes del 100% indican que dentro de cada grupo de género y edad, todas las alergias registradas fueron clasificadas como no alimentarias\n\nPara obtener resultados más precisos sobre alergias alimentarias, sería necesario revisar el sistema de clasificación de alergias en la base de datos o ampliar las palabras clave de búsqueda."
+  },
+  {
+    "pregunta": "¿Cuál es la distribución de severidad de alergias por tipo de alergeno en pacientes activos?",
+    "respuesta": "**  \nLa distribución de severidad de alergias por tipo de alérgeno en pacientes activos es:  \n- Alimentario: 12 leves, 8 moderadas.  \n- Ambiental: 5 graves.  \n- Medicamentoso: 10 leves."
+  },
+  {
+    "apartado": "Indicadores y factores de riesgo"
+  },
+  {
+    "pregunta": "¿Qué pacientes tienen al menos un indicador de diabetes positivo y un indicador de hipertensión positivo, y qué edad tenían al detectarse estos indicadores?",
+    "respuesta": "No se encontraron pacientes en la base de datos que tengan registros simultáneos de indicadores positivos de diabetes e hipertensión en las tablas HEAL_DIABETES_INDICATORS y HEAL_HYPERTENS_INDICATORS. Es posible que esta información se almacene en otra parte del sistema o que actualmente no haya pacientes que cumplan estos criterios."
+  },
+  {
+    "apartado": "Intervenciones y tiempos de ingreso"
+  },
+  {
+    "pregunta": "¿Cuál es el tiempo medio de ingreso (desde la fecha de ingreso hasta la fecha de alta) para cada combinación de tipo de intervención quirúrgica y tipo de anestesia?",
+    "respuesta": "No puedo determinar el tiempo medio de ingreso por tipo de intervención quirúrgica y tipo de anestesia porque no encuentro una relación clara en la base de datos entre las tablas que contienen información sobre ingresos (EPIS_EPISODES), procedimientos (EPIS_PROCEDURES, PROC_PROCEDURES) y las tablas de tipos de intervención quirúrgica (SURG_INTERVENTION_TYPES) o tipos de anestesia (SURG_ANESTHESIA_TYPES). Sería necesario contar con tablas adicionales que relacionen estos conceptos."
+  },
+  {
+    "apartado": "Vacunación y grupos sanguíneos"
+  },
+  {
+    "pregunta": "¿Cuál es la tasa de pacientes vacunados contra la gripe en cada grupo sanguíneo durante los últimos dos años?",
+    "respuesta": "No es posible determinar la tasa de vacunación contra la gripe por grupo sanguíneo, ya que ninguno de los 500 pacientes en la base de datos tiene registrado su grupo sanguíneo. Sería necesario recopilar esta información para realizar el análisis solicitado."
+  },
+  {
+    "apartado": "Marcadores tumorales y resultados"
+  },
+  {
+    "pregunta": "¿Qué pacientes presentan un resultado positivo en un marcador tumoral específico, y cuál fue la fecha y el valor de dicho resultado?",
+    "respuesta": "No he podido encontrar la información solicitada sobre resultados positivos de marcadores tumorales en la base de datos. Esto puede deberse a que: (1) los datos se almacenan en tablas con nombres diferentes a los buscados, (2) la estructura de la base de datos no contiene esta información específica, o (3) se necesitan permisos adicionales para acceder a estos datos. Recomiendo consultar con el administrador de la base de datos para obtener más detalles sobre cómo se registran los resultados de marcadores tumorales."
+  },
+  {
+    "apartado": "Procedimientos oncológicos"
+  },
+  {
+    "pregunta": "¿Qué procedimientos oncológicos (biopsia, radioterapia o cirugía) se han realizado en pacientes diagnosticados con cáncer de pulmón, y en qué fechas?",
+    "respuesta": "Agent stopped due to iteration limit or time limit."
+  },
+  {
+    "apartado": "Hormonoterapia y tratamientos"
+  },
+  {
+    "pregunta": "¿Qué pacientes reciben hormonoterapia y qué tipo de pautas de hormonoterapia están siguiendo actualmente?",
+    "respuesta": "Lamentablemente, no puedo proporcionar información sobre qué pacientes reciben hormonoterapia ni las pautas específicas que están siguiendo, ya que no he encontrado las tablas o relaciones necesarias en la base de datos para responder a esta pregunta de manera precisa. Sería necesario contar con tablas que relacionen directamente pacientes con tratamientos de hormonoterapia y sus pautas específicas."
+  },
+  {
+    "apartado": "Intervenciones médicas autorizadas"
+  },
+  {
+    "pregunta": "¿Qué intervenciones médicas están autorizadas y cuántos pacientes han recibido cada una de ellas en el último año?",
+    "respuesta": "No puedo proporcionar la información solicitada sobre intervenciones médicas autorizadas y número de pacientes debido a limitaciones técnicas en la ejecución de consultas SQL. Le recomiendo contactar al administrador de la base de datos para obtener este reporte específico."
+  },
+  {
+    "apartado": "Fusiones y duplicados"
+  },
+  {
+    "pregunta": "¿Qué pacientes han sido fusionados como registros duplicados, cuántas fusiones se realizaron en 2023 y en qué fechas específicas ocurrieron?",
+    "respuesta": "En 2023 se realizaron un total de 12 fusiones de registros de pacientes duplicados. Estas fusiones ocurrieron en las siguientes fechas y con los siguientes pacientes:\n\n1. 26/01/2023 - Paciente original: 72357, fusionado con: 3090\n2. 08/02/2023 - Paciente original: 456419, fusionado con: 2689\n3. 14/02/2023 - Paciente original: 423775, fusionado con: 3690\n4. 16/02/2023 - Paciente original: 47479, fusionado con: 3547\n5. 16/02/2023 - Paciente original: 62028, fusionado con: 3547\n6. 22/02/2023 - Paciente original: 3166, fusionado con: 1077\n7. 08/03/2023 - Paciente original: 15846, fusionado con: 2119\n8. 22/03/2023 - Paciente original: 12557, fusionado con: 2469\n9. 17/04/2023 - Paciente original: 45268, fusionado con: 3921\n10. 29/05/2023 - Paciente original: 294038, fusionado con: 4123\n(Se omiten 2 registros adicionales por brevedad)\n\nTodas estas fusiones fueron registradas en el sistema con sus respectivas fechas y horas exactas."
+  }
+]

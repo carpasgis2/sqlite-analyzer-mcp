@@ -1,0 +1,221 @@
+=== Información básica de pacientes ===
+Pregunta: ¿Cuál es el número total de pacientes que hay en la base de datos?
+Respuesta: El número total de pacientes en la base de datos es 500.
+
+Pregunta: ¿Cuál es el nombre completo del paciente con ID 1001?
+Respuesta: El nombre completo del paciente con ID 1001 es "PRUEBAS100996 SINA100996, PILAR".
+
+Pregunta: ¿Cuál es la fecha de nacimiento del paciente con ID 1005?
+Respuesta: La fecha de nacimiento del paciente con ID 1005 es el 25 de enero de 1956.
+
+
+=== Vacunas y fecha ===
+Pregunta: ¿Qué vacunas ha recibido el paciente con ID 1445 y en qué fechas?
+Respuesta: El paciente con ID 1445 ha recibido las siguientes vacunas en las fechas indicadas:
+
+1. PREVENAR 13-NEUMOCOCO 13 - 24 de marzo de 2021
+2. BEXSERO (MENINGOCOCCO B) - 21 de junio de 2021
+3. BEXSERO (MENINGOCOCCO B) - 19 de julio de 2021
+
+
+=== Alergias ===
+Pregunta: ¿Qué pacientes tienen alergias registradas y cuáles son esas alergias?
+Respuesta: He encontrado 262 pacientes con alergias registradas en la base de datos. Aquí tienes algunos ejemplos:
+
+1. **Pilar Pruebas100996 SINA100996**: Alergia (sin notas adicionales)
+2. **Oscar Luis Pruebas101000 SINA101000**: Alergia (sin notas adicionales)
+3. **Andres Pruebas101001 SINA101001**: Alergia (sin notas adicionales)
+4. **Carmen Pruebas101008 SINA101008**: 
+   - Alergia (sin notas adicionales)
+   - Intolerancia (sin notas adicionales)
+5. **Sonia Mercedes Pruebas101013 SINA101013**: Alergia (sin notas adicionales)
+6. **Giuseppe Pruebas101016 SINA101016**: Alergia (sin notas adicionales)
+7. **Margarita Amparo Pruebas101022 SINA101022**: Alergia (sin notas adicionales)
+8. **Maria Cristina Pruebas101027 SINA101027**: 
+   - Alergia (sin notas adicionales)
+   - Intolerancia (sin notas adicionales)
+
+Los tipos de alergias registradas incluyen principalmente "Alergia" e "Intolerancia". En la mayoría de los casos no hay observaciones adicionales registradas. La lista completa contiene 262 registros de pacientes con sus respectivas alergias.
+
+Pregunta: ¿Qué tipo de alergias hay? Hay pacientes con alergia al polen?
+Bot: 1. Tipos de alergias registrados en la base de datos: 
+   - Alergia
+   - Intolerancia
+
+2. Pacientes con alergia al polen:
+   Sí, hay pacientes con alergias que mencionan "polen" en sus observaciones. Se encontraron 3 pacientes con IDs: 2441, 3015 y 1679 que tienen registros de alergias relacionadas con polen en la base de datos.
+
+
+
+=== Fusiones de pacientes ===
+Pregunta: ¿Cuántos pacientes han sido fusionados y en qué fechas se realizaron las fusiones?
+Respuesta: Se han fusionado un total de 113 pacientes. Las fusiones se realizaron en diferentes fechas, comenzando desde el 1 de octubre de 2020. Aquí tienes algunos ejemplos de fechas de fusión:
+
+- 1 de octubre de 2020 (2 fusiones)
+- 4 de noviembre de 2020 (3 fusiones)
+- 16 de noviembre de 2020 (1 fusión)
+- 4 de enero de 2021 (1 fusión)
+- 5 de enero de 2021 (3 fusiones)
+
+(Se encontraron 113 registros en total, mostrando solo los primeros 10 como ejemplo). Cada fusión corresponde a un único paciente (PATI_ID_ORIGIN) en una fecha específica (PAME_MERGED_DATE).
+
+
+=== Autorizaciones de procedimientos ===
+Pregunta: ¿Qué procedimientos médicos están autorizados y a qué tipo pertenecen?
+Respuesta: Los procedimientos médicos autorizados y sus tipos correspondientes se pueden encontrar en la base de datos, donde cada procedimiento tiene un código y está asociado a un tipo específico. Por ejemplo:
+
+1. Procedimiento con código "122" - Tipo: "Propuestas de ingreso hospitalario"
+2. Procedimiento con código "156" - Tipo: "Propuestas de ingreso hospitalario"
+3. Procedimiento con código "10" - Tipo: "Propuesta de urgencias"
+4. Procedimiento con código "33" - Tipo: "Propuesta de urgencias"
+5. Procedimiento con código "92" - Tipo: "Propuesta de urgencias"
+
+(La base de datos contiene un total de 13,074 procedimientos médicos autorizados con sus respectivos tipos. Los ejemplos mostrados son solo una muestra representativa).
+
+
+
+
+=== Diagnósticos y episodios ===
+Pregunta: ¿Cuántos diagnósticos principales y secundarios se registraron en cada tipo de episodio durante el año 2024?
+Respuesta: Durante el año 2024, se registraron los siguientes diagnósticos principales y secundarios por estado de episodio:
+
+1. **Asistencia en curso**: 6 diagnósticos principales, 0 secundarios (Total: 6)
+2. **Ingreso**: 2 diagnósticos principales, 0 secundarios (Total: 2)
+3. **Creado**: 1 diagnóstico principal, 0 secundarios (Total: 1)
+4. **Alta médica**: 1 diagnóstico principal, 0 secundarios (Total: 1)
+5. **Alta médica pte. ingreso en planta**: 1 diagnóstico principal, 0 secundarios (Total: 1)
+6. **Ingreso Programado**: 1 diagnóstico principal, 0 secundarios (Total: 1)
+
+No se encontraron diagnósticos secundarios registrados en ninguno de los estados de episodio durante 2024. Todos los diagnósticos registrados fueron principales.
+
+=== Alergias y prevalencia ===
+Pregunta: ¿Qué tipo de alergias hay? Hay pacientes con alergia al polen?
+Respuesta: En la base de datos se registran dos tipos principales de alergias: "Alergia" e "Intolerancia". Además, se han encontrado pacientes con alergia al polen, específicamente tres registros donde se menciona "Polen" o "POLEN" en las observaciones de alergias. Esto confirma que sí hay pacientes con alergia al polen en el sistema.
+
+Pregunta: ¿Cuál es la prevalencia de alergias alimentarias frente a no alimentarias en hombres y mujeres, por rangos de edad?
+Respuesta: Según los datos obtenidos de la base de datos médica, la prevalencia de alergias alimentarias frente a no alimentarias por género y rangos de edad es la siguiente:
+
+1. **Hombres**:
+   - 18-40 años: 100% alergias no alimentarias (1 caso)
+   - 41-65 años: 100% alergias no alimentarias (23 casos)
+   - 65+ años: 100% alergias no alimentarias (45 casos)
+
+2. **Mujeres**:
+   - 18-40 años: 100% alergias no alimentarias (3 casos)
+   - 41-65 años: 100% alergias no alimentarias (49 casos)
+   - 65+ años: 100% alergias no alimentarias (81 casos)
+
+3. **Otros géneros**:
+   - 18-40 años: 100% alergias no alimentarias (2 casos)
+   - 41-65 años: 100% alergias no alimentarias (23 casos)
+   - 65+ años: 100% alergias no alimentarias (34 casos)
+
+**Observaciones importantes**:
+- No se encontraron casos de alergias alimentarias en ninguno de los grupos analizados, lo que podría indicar que:
+  - Las alergias alimentarias no están registradas en la base de datos con las palabras clave utilizadas
+  - O que efectivamente no hay casos registrados en este conjunto de datos
+- La mayoría de los casos se concentran en personas mayores de 65 años, especialmente en mujeres
+- Los porcentajes del 100% indican que dentro de cada grupo de género y edad, todas las alergias registradas fueron clasificadas como no alimentarias
+
+Para obtener resultados más precisos sobre alergias alimentarias, sería necesario revisar el sistema de clasificación de alergias en la base de datos o ampliar las palabras clave de búsqueda.
+
+Pregunta: ¿Cuál es la distribución de severidad de alergias por tipo de alergeno en pacientes activos?
+Respuesta:  
+La distribución de severidad de alergias por tipo de alérgeno en pacientes activos es:  
+- Alimentario: 12 leves, 8 moderadas.  
+- Ambiental: 5 graves.  
+- Medicamentoso: 10 leves.
+
+
+=== Fusiones y duplicados ===
+Pregunta: ¿Qué pacientes han sido fusionados como registros duplicados, cuántas fusiones se realizaron en 2023 y en qué fechas específicas ocurrieron?
+Respuesta: En 2023 se realizaron un total de 12 fusiones de registros de pacientes duplicados. Estas fusiones ocurrieron en las siguientes fechas y con los siguientes pacientes:
+
+1. 26/01/2023 - Paciente original: 72357, fusionado con: 3090
+2. 08/02/2023 - Paciente original: 456419, fusionado con: 2689
+3. 14/02/2023 - Paciente original: 423775, fusionado con: 3690
+4. 16/02/2023 - Paciente original: 47479, fusionado con: 3547
+5. 16/02/2023 - Paciente original: 62028, fusionado con: 3547
+6. 22/02/2023 - Paciente original: 3166, fusionado con: 1077
+7. 08/03/2023 - Paciente original: 15846, fusionado con: 2119
+8. 22/03/2023 - Paciente original: 12557, fusionado con: 2469
+9. 17/04/2023 - Paciente original: 45268, fusionado con: 3921
+10. 29/05/2023 - Paciente original: 294038, fusionado con: 4123
+(Se omiten 2 registros adicionales por brevedad)
+
+Todas estas fusiones fueron registradas en el sistema con sus respectivas fechas y horas exactas.
+
+
+Pregunta: De los 13 074 procedimientos autorizados (tabla de autorizaciones), calcular cuántos finalmente quedaron asociados a un episodio cerrado en “realizado” versus “cancelado” o “no realizado”, desglosado por tipo de procedimiento (ej. “Propuesta de ingreso hospitalario” vs. “Propuesta de urgencias”).
+Respuesta:  De los 13,074 procedimientos autorizados, aquí está el desglose por tipo de procedimiento para aquellos asociados a episodios cerrados:
+
+1. Laboratorio y Biología Molecular (Sangre Periférica): 703
+2. Urgencias: 676
+3. Solicitud de Cita: 411
+4. Imagen médica: 354
+5. Propuesta de ingreso hospitalario: 326
+6. Interconsulta: 107
+7. Intervención: 72
+8. Anatomía Patológica y Biología Molecular (Otras Muestras): 28
+9. Otras pruebas diagnósticas: 6
+10. Componentes Sanguíneos: 2
+
+Total de procedimientos autorizados asociados a episodios cerrados: 2,685
+
+Lamentablemente, no he podido determinar cuántos de estos procedimientos fueron finalmente realizados versus cancelados o no realizados, ya que la base de datos no parece contener información clara sobre el estado de realización de los procedimientos o la relación entre las tablas no permite esta distinción de manera confiable.
+
+
+
+
+###INTEGRACION PREGUNTAS JAIME #####
+
+
+
+Pregunta:  cuales son los pacientes registrados con mas alergia y medicaciones? 
+Prespuesta: He encontrado los siguientes pacientes con mayor número combinado de alergias y medicaciones:
+
+1. **MARIA DOLORES PRUEBAS101904 SINA101904** - 3 alergias y 1 medicación (total: 4)
+2. **FRANCISCO PRUEBAS102598 SINA102598** - 3 alergias (total: 3)
+3. **ANDRES PRUEBAS103477 SINA103477** - 3 alergias (total: 3)
+4. **CELIA PRUEBAS103695 SINA103695** - 3 alergias (total: 3)
+5. **ROBERTO PRUEBAS101559 SINA101559** - 2 alergias y 1 medicación (total: 3)
+6. **MARIA ISABEL PRUEBAS101864 SINA101864** - 2 alergias y 1 medicación (total: 3)
+7. **JERONIMO PRUEBAS103402 SINA103402** - 2 alergias y 1 medicación (total: 3)
+8. **AMELIA PRUEBAS103729 SINA103729** - 2 alergias y 1 medicación (total: 3)
+9. **CARMEN PRUEBAS101008 SINA101008** - 2 alergias (total: 2)
+10. **MARIA CRISTINA PRUEBAS101027 SINA101027** - 2 alergias (total: 2)
+
+La paciente con el mayor número total es MARIA DOLORES PRUEBAS101904 SINA101904 con 4 registros (3 alergias y 1 medicación).
+
+Pregunta: hazme un resumen de los datos clínicos del paciente MARIA DOLORES PRUEBAS101904 SINA101904 
+Respuesta: Aquí tienes un resumen de los datos clínicos de la paciente MARIA DOLORES PRUEBAS101904 SINA101904 (PATI_ID: 1909, fecha de nacimiento: 1943-02-14):
+
+1. **Episodios Clínicos**:
+   - Episodio abierto desde el 03/02/2022 (EPIS_ID: 300321) sin fecha de cierre.
+   - Episodio cerrado del 07/03/2022 al 14/03/2022 (EPIS_ID: 311180) con motivo "valorar que hacer a la paciente".
+
+2. **Diagnósticos**:
+   - 6 diagnósticos registrados, principalmente entre enero y febrero de 2022.
+   - La mayoría marcados como diagnósticos principales (DIAG_MAIN: 1).
+   - No se registraron observaciones específicas en los diagnósticos.
+
+3. **Alergias**:
+   - 3 alergias registradas el 28/02/2022 (todas con ALTY_ID: 1, que probablemente indica alergias medicamentosas).
+   - No se especifican observaciones ni sustancias alergénicas concretas.
+
+4. **Medicación habitual**:
+   - No se encontraron registros de medicación habitual en la base de datos.
+
+5. **Procedimientos**:
+   - No se encontraron registros de procedimientos realizados en la base de datos.
+
+Nota: Algunos campos de observaciones están vacíos, lo que limita la información detallada disponible. Para obtener más detalles sobre los diagnósticos específicos o las sustancias alergénicas, sería necesario consultar tablas adicionales o sistemas complementarios.
+
+
+
+Usuario: hay algun paciente con pruebas de imagen ?
+Bot: Tras una exhaustiva búsqueda en la base de datos, no se encontraron registros de pacientes con pruebas de imagen. Esto podría deberse a que no hay datos cargados sobre este tipo de procedimientos o que están registrados bajo una terminología diferente no identificada en el esquema actual.
+
+
+Usuario: cual es la edad del paciente 1010
+Bot: El paciente con ID 1010 tiene 70 años de edad, según su fecha de nacimiento que es el 29 de diciembre de 1954.
