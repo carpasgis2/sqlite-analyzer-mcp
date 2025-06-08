@@ -6,3 +6,17 @@ streamlit
 langchain
 langchain-openai
 scikit-learn
+sqlparse
+pandas
+numpy
+matplotlib
+pydantic
+streamlit
+langchain
+langchain-openai
+scikit-learn
+sqlparse
+openai
+tqdm
+requests
+python-dotenv
