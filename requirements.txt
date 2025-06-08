@@ -2,3 +2,6 @@ pandas
 numpy
 matplotlib
 pydantic
+streamlit
+langchain
+langchain-openai
