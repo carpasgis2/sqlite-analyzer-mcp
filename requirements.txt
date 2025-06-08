@@ -5,3 +5,4 @@ pydantic
 streamlit
 langchain
 langchain-openai
+scikit-learn
