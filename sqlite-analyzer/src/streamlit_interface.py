@@ -6,6 +6,9 @@ import re # Añadido para análisis de logs
 import json # Para analizar la salida JSON de las herramientas
 from datetime import datetime # Para marcas de tiempo
 
+# --- DISCLAIMER PARA USUARIOS MÓVILES ---
+st.info("ℹ️ Si usas la versión móvil, expande la barra lateral (menú ☰) para ver todas las opciones y resultados correctamente.")
+
 def limpiar_respuesta_final(texto):
     # Ensure 'import re' is present at the top of your Python file.
     if not texto:
@@ -398,7 +401,7 @@ if user_input:
                         if intermediate_log_line is not None:
                             print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) intermediate_log_line='{intermediate_log_line.strip()}'")
                         if new_content_from_llm_chunk is not None:
-                            print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) new_content_from_llm_chunk='{new_content_from_llm_chunk}'")
+                            print(f"DEBUG streamlit_interface: (Chunk {chunk_index) new_content_from_llm_chunk='{new_content_from_llm_chunk}'")
                         # --- FIN DEBUGGING INTERNO ---
 
                         if intermediate_log_line:
