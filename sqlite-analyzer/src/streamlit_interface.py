@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(page_title="SinaSuite LangChain Chatbot", layout="wide")
 
 # --- DISCLAIMER PARA USUARIOS MÓVILES ---
 st.info("ℹ️ Si usas la versión móvil, expande la barra lateral (menú ☰) para ver todas las opciones y resultados correctamente.")
@@ -81,7 +82,7 @@ except ImportError as e:
         st.stop()
 
 # --- Configuración de la página de Streamlit ---
-st.set_page_config(page_title="SinaSuite LangChain Chatbot", layout="wide")
+# st.set_page_config(page_title="SinaSuite LangChain Chatbot", layout="wide")
 
 st.title("⚕️ SinaSuite LangChain Chatbot 💬")
 st.caption("Interactúa con el sistema de consulta médica inteligente.")
