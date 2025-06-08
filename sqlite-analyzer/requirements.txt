@@ -1,5 +1,14 @@
-sqlite3
 pandas
 numpy
 matplotlib
 pydantic
+streamlit
+langchain
+langchain-openai
+scikit-learn
+sqlparse
+sqlglot
+openai
+tqdm
+requests
+python-dotenv

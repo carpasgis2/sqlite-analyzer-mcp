@@ -134,7 +134,7 @@ st.sidebar.markdown("""
 
 ### <span style="color:#ffe066;">🔄 Preguntas de Seguimiento</span>
 <ul style="color:#fff;">
-  <li><i>Después de consultar un paciente: "¿Cuáles son sus tratamientos farmacológicos actuales del paicente XX?"</i></li>
+  <li><i>Después de consultar un paciente: "¿Cuáles son sus tratamientos farmacológicos actuales del paicente 2994?"</i></li>
   <li><i>Después de listar tablas: "Muéstrame las columnas de la primera tabla."</i></li>
 </ul>
 

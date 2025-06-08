@@ -39,7 +39,7 @@ if "NCBI_API_KEY" not in os.environ:
 
 # Configuración de API Key para OpenAI (usada por Langchain)
 # Tomada de la configuración de BiomedicalAssistant en el archivo original
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "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"
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 fetch = PubMedFetcher()
