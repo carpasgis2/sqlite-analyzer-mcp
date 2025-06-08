@@ -129,31 +129,6 @@ _SCRIPT_DIR_LC = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_DB_PATH_LC = os.path.join(_SCRIPT_DIR_LC, "db", "database_new.sqlite3.db")
 _DEFAULT_SCHEMA_PATH_LC = os.path.join(_SCRIPT_DIR_LC, "data", "schema_simple.json") # o schema_enhanced.json según necesidad
 
-# DEBUGGING FOR STREAMLIT CLOUD (ahora también en la respuesta)
-debug_info = []
-debug_info.append(f"DEBUG: Attempting to locate DB at: {_DEFAULT_DB_PATH_LC}")
-if os.path.exists(_DEFAULT_DB_PATH_LC):
-    debug_info.append(f"DEBUG: Database file FOUND at {_DEFAULT_DB_PATH_LC}")
-else:
-    debug_info.append(f"DEBUG: Database file NOT FOUND at {_DEFAULT_DB_PATH_LC}")
-    db_dir = os.path.dirname(_DEFAULT_DB_PATH_LC)
-    if os.path.exists(db_dir):
-        debug_info.append(f"DEBUG: Contents of {db_dir}: {os.listdir(db_dir)}")
-    else:
-        debug_info.append(f"DEBUG: Directory {db_dir} does not exist.")
-
-debug_info.append(f"DEBUG: Attempting to locate Schema at: {_DEFAULT_SCHEMA_PATH_LC}")
-if os.path.exists(_DEFAULT_SCHEMA_PATH_LC):
-    debug_info.append(f"DEBUG: Schema file FOUND at {_DEFAULT_SCHEMA_PATH_LC}")
-else:
-    debug_info.append(f"DEBUG: Schema file NOT FOUND at {_DEFAULT_SCHEMA_PATH_LC}")
-    data_dir = os.path.dirname(_DEFAULT_SCHEMA_PATH_LC)
-    if os.path.exists(data_dir):
-        debug_info.append(f"DEBUG: Contents of {data_dir}: {os.listdir(data_dir)}")
-    else:
-        debug_info.append(f"DEBUG: Directory {data_dir} does not exist.")
-# FIN DEBUGGING
-
 # Crear la instancia del DBConnector correcto
 # Esta instancia será usada por SQLMedicalChatbot
 db_connector_instance = DBConnector(
@@ -305,6 +280,27 @@ class SQLMedicalChatbot(BaseTool):
 
         try:
             # --- INICIO DEBUG INFO EN RESPUESTA ---
+            debug_info = []
+            debug_info.append(f"DEBUG: Attempting to locate DB at: {_DEFAULT_DB_PATH_LC}")
+            if os.path.exists(_DEFAULT_DB_PATH_LC):
+                debug_info.append(f"DEBUG: Database file FOUND at {_DEFAULT_DB_PATH_LC}")
+            else:
+                debug_info.append(f"DEBUG: Database file NOT FOUND at {_DEFAULT_DB_PATH_LC}")
+                db_dir = os.path.dirname(_DEFAULT_DB_PATH_LC)
+                if os.path.exists(db_dir):
+                    debug_info.append(f"DEBUG: Contents of {db_dir}: {os.listdir(db_dir)}")
+                else:
+                    debug_info.append(f"DEBUG: Directory {db_dir} does not exist.")
+            debug_info.append(f"DEBUG: Attempting to locate Schema at: {_DEFAULT_SCHEMA_PATH_LC}")
+            if os.path.exists(_DEFAULT_SCHEMA_PATH_LC):
+                debug_info.append(f"DEBUG: Schema file FOUND at {_DEFAULT_SCHEMA_PATH_LC}")
+            else:
+                debug_info.append(f"DEBUG: Schema file NOT FOUND at {_DEFAULT_SCHEMA_PATH_LC}")
+                data_dir = os.path.dirname(_DEFAULT_SCHEMA_PATH_LC)
+                if os.path.exists(data_dir):
+                    debug_info.append(f"DEBUG: Contents of {data_dir}: {os.listdir(data_dir)}")
+                else:
+                    debug_info.append(f"DEBUG: Directory {data_dir} does not exist.")
             debug_text = "\n".join(debug_info)
             # --- FIN DEBUG INFO EN RESPUESTA ---
             # original_query_for_log ahora se refiere a la query después de la posible resolución de ambigüedad
