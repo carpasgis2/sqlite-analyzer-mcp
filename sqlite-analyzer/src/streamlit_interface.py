@@ -401,7 +401,7 @@ if user_input:
                         if intermediate_log_line is not None:
                             print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) intermediate_log_line='{intermediate_log_line.strip()}'")
                         if new_content_from_llm_chunk is not None:
-                            print(f"DEBUG streamlit_interface: (Chunk {chunk_index) new_content_from_llm_chunk='{new_content_from_llm_chunk}'")
+                            print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) new_content_from_llm_chunk='{new_content_from_llm_chunk}'")
                         # --- FIN DEBUGGING INTERNO ---
 
                         if intermediate_log_line:
