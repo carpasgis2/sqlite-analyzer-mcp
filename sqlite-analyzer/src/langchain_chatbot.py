@@ -32,6 +32,26 @@ except ImportError:
     print("Advertencia: llm_utils.py no encontrado o LLM_MODEL_NAME no definido. Usando un valor por defecto para LLM_MODEL_NAME.")
     LLM_MODEL_NAME = "deepseek-coder" # Valor por defecto
 
+# Importación para la nueva herramienta BioChat
+# Asumiendo que biochat.py está en el directorio raíz del proyecto 'sina_mcp'
+# y este archivo (langchain_chatbot.py) está en 'sina_mcp/sqlite-analyzer/src/'
+import sys
+import os
+# Añadir el directorio raíz del proyecto (sina_mcp) al sys.path
+# Esto permite importaciones absolutas desde la raíz del proyecto
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')) # CORREGIDO: Se quitaron los '..' extra
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+try:
+    from biochat import full_pipeline # Importación absoluta
+except ImportError as e:
+    print(f"Error crítico: No se pudo importar full_pipeline desde biochat.py. Detalles: {e}. La herramienta BioChat no estará disponible.")
+    full_pipeline = None
+except Exception as e:
+    print(f"Error inesperado al importar full_pipeline: {e}")
+    full_pipeline = None
+
 
 # sys.path.append(os.path.dirname(os.path.abspath(__file__))) # ELIMINADO: Esta línea se elimina
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -121,12 +141,9 @@ logger.info(f"Instancia de src.db_connector.DBConnector creada con db_path: {_DE
 class SQLMedicalChatbot(BaseTool):
     name: str = "SQLMedicalChatbot"
     description: str = (
-        "Útil para responder preguntas sobre información médica de pacientes, alergias, medicamentos, diagnósticos, etc., "
-        "contenida en una base de datos SQLite. La herramienta intentará primero generar y ejecutar una consulta SQL. "
-        "Si la pregunta es ambigua, podría pedir clarificación. Si la generación SQL falla o no produce resultados, "
-        "intentará una búsqueda semántica (vectorial) sobre metadatos y descripciones de la base de datos como fallback. "
-        "Proporciona la pregunta completa y clara. La herramienta puede manejar preguntas complejas que requieran joins o subconsultas. "
-        "NO uses esta herramienta para preguntas generales no relacionadas con la base de datos médica."
+        "Útil para responder preguntas sobre información médica específica de pacientes, sus alergias, medicamentos, diagnósticos, etc., que están almacenados en una base de datos SQLite. "
+        "Esta herramienta genera y ejecuta consultas SQL. Proporciona la pregunta completa y clara si buscas datos concretos de la base de datos. "
+        "NO uses esta herramienta para preguntas médicas generales que no requieran buscar registros específicos en la base de datos (para eso, usa BioChatMedicalInquiry) ni para saludos o preguntas sobre SinaSuite."
     )
     
     db_connector: DBConnector
@@ -152,40 +169,109 @@ class SQLMedicalChatbot(BaseTool):
         # self._mcp_context ya se inicializa por PrivateAttr
         pass
 
-    def _update_mcp_context(self, response_message: str):
+    def _update_mcp_context(self, response_message: str, original_query: str = None, executed_sql_query: str = None, data_results: list = None):
         # Busca tablas y columnas mencionadas en la respuesta y actualiza el contexto
         tablas = re.findall(r"tabla[s]? ([A-Z0-9_]+)", response_message, re.IGNORECASE)
         if tablas:
             self._mcp_context['last_tables'] = tablas
+            self.logger.info(f"Contexto MCP actualizado con last_tables: {tablas}")
         columnas = re.findall(r"columna[s]? ([A-Z0-9_]+)", response_message, re.IGNORECASE)
         if columnas:
             self._mcp_context['last_columns'] = columnas
-        # Puedes añadir aquí más lógica para conceptos médicos, ids, etc.
+            self.logger.info(f"Contexto MCP actualizado con last_columns: {columnas}")
 
-    def _resolve_ambiguous_reference(self, query: str):
-        # Busca referencias ambiguas y resuelve usando el contexto
+        # Extraer PATI_ID
+        found_patient_id = None
+        # 1. De la query original del usuario
+        if original_query:
+            match_user_query = re.search(
+                r"paciente\s+(?:con\s+ID\s+|ID\s+)?(\d+)|(?:patient|patient_id)\s*(?:=|is\s+)?\s*(\d+)|PATI_ID\s*=\s*(\d+)",
+                original_query,
+                re.IGNORECASE
+            )
+            if match_user_query:
+                found_patient_id = next((g for g in match_user_query.groups() if g is not None), None)
+                if found_patient_id:
+                     self.logger.info(f"PATI_ID '{found_patient_id}' extraído de la query original del usuario: '{original_query}'")
+
+        # 2. De la query SQL ejecutada (si no se encontró antes)
+        if not found_patient_id and executed_sql_query:
+            match_sql = re.search(r"PATI_ID\s*=\s*'?(\d+)'?", executed_sql_query, re.IGNORECASE)
+            if match_sql:
+                found_patient_id = match_sql.group(1)
+                if found_patient_id:
+                    self.logger.info(f"PATI_ID '{found_patient_id}' extraído de la query SQL ejecutada: '{executed_sql_query}'")
+        
+        if found_patient_id:
+            self._mcp_context['last_patient_id'] = found_patient_id
+            self.logger.info(f"Contexto MCP actualizado con last_patient_id: {found_patient_id}")
+        # Si no se encuentra un nuevo ID, el anterior persiste, lo que es generalmente el comportamiento deseado
+        # para preguntas de seguimiento que no re-especifican un ID.
+
+    def _resolve_ambiguous_reference(self, query: str) -> tuple[str, str | None]:
+        """
+        Busca referencias ambiguas y resuelve usando el contexto.
+        Devuelve un tuple: (tipo_resolucion, valor)
+        tipo_resolucion puede ser:
+            - "no_ambiguity": no se encontró ambigüedad o no se pudo resolver. La query original se usa.
+            - "resolved_query": la query fue modificada. 'valor' es la nueva query.
+            - "direct_response": se debe devolver una respuesta directamente. 'valor' es la respuesta.
+        """
+        # Resolver referencias a tablas
         if re.search(r"esa tabla|dicha tabla|la tabla mencionada", query, re.IGNORECASE):
             tablas = self._mcp_context.get('last_tables')
             if tablas:
-                return tool_list_columns(tablas[-1])
+                last_table = tablas[-1]
+                self.logger.info(f"Referencia ambigua a 'esa tabla' resuelta a: {last_table}.")
+                return "direct_response", f"La consulta se refiere a la tabla '{last_table}' (mencionada anteriormente). Para ver sus columnas, puedes usar la herramienta correspondiente para listar columnas de '{last_table}'."
             else:
-                return "No se ha mencionado ninguna tabla previamente en la conversación."
+                return "direct_response", "No se ha mencionado ninguna tabla previamente en la conversación."
+
+        # Resolver referencias a columnas
         if re.search(r"esa columna|dicha columna|el campo mencionado", query, re.IGNORECASE):
             columnas = self._mcp_context.get('last_columns')
             if columnas:
-                return f"Última columna mencionada: {columnas[-1]}"
+                last_column = columnas[-1]
+                self.logger.info(f"Referencia ambigua a 'esa columna' resuelta a: {last_column}")
+                return "direct_response", f"Última columna mencionada: {last_column}"
             else:
-                return "No se ha mencionado ninguna columna previamente en la conversación."
-        # Puedes añadir más patrones para conceptos médicos, ids, etc.
-        return None
+                return "direct_response", "No se ha mencionado ninguna columna previamente en la conversación."
+
+        # Resolver referencias a pacientes
+        patient_ref_pattern = r"\b(este|ese|dicho|el|del|al|para el|para la)\s+paciente\b|\b(sus)\s+(pruebas|datos|informes|alergias|medicamentos|historia|diagnósticos|tratamientos)\b"
+        if re.search(patient_ref_pattern, query, re.IGNORECASE):
+            patient_id = self._mcp_context.get('last_patient_id')
+            if patient_id:
+                resolved_query = f"{query} (para el paciente con ID {patient_id})"
+                # Casos especiales para queries muy cortas que son solo posesivos
+                match_short_query = re.match(r"^\s*(sus)\s+(pruebas|datos|informes|alergias|medicamentos|historia|diagnósticos|tratamientos)\s*$", query, re.IGNORECASE)
+                if match_short_query:
+                    term = match_short_query.group(2) # El sustantivo (pruebas, datos, etc.)
+                    resolved_query = f"{term} para el paciente con ID {patient_id}"
+
+                self.logger.info(f"Referencia ambigua a paciente resuelta. Query original: '{query}'. Query modificada: '{resolved_query}'")
+                return "resolved_query", resolved_query
+            else:
+                return "direct_response", "Se hizo referencia a 'este paciente' (o similar), pero no hay un paciente identificado en el contexto de la conversación. Por favor, especifica el ID del paciente."
+
+        return "no_ambiguity", query
 
     def _run(self, query: str) -> str:
         """Procesa la consulta de manera segura. Este es el método que Langchain llama."""
-        # La lógica de la anterior función/método safe_process_results va aquí.
-        # Asegúrate de usar self.logger, self.db_connector, self.terms_dict_path, self.schema_path
+        original_user_query = query 
+
+        resolution_type, resolved_value = self._resolve_ambiguous_reference(original_user_query)
+
+        if resolution_type == "direct_response":
+            self.logger.info(f"Resolución ambigua resultó en respuesta directa: {resolved_value}")
+            return resolved_value
+        elif resolution_type == "resolved_query":
+            self.logger.info(f"Query original '{original_user_query}' resuelta a '{resolved_value}' por _resolve_ambiguous_reference.")
+            query = resolved_value 
         
-        # Verificar que self.db_connector es del tipo correcto (src.db_connector.DBConnector)
-        # Esto es más para depuración, se puede quitar después.
+        # query ahora es la original o la resuelta. Proceder con la limpieza.
+        self.logger.info(f"Query a procesar después de resolución de ambigüedades: '{query}'")
+        
         if not hasattr(self.db_connector, 'get_db_structure_dict'):
             self.logger.error(f"CRITICAL: self.db_connector (tipo: {type(self.db_connector)}) en SQLMedicalChatbot NO tiene get_db_structure_dict. Esto causará un error en el pipeline.")
             return "Error de configuración interna: el conector de base de datos es incorrecto."
@@ -193,7 +279,8 @@ class SQLMedicalChatbot(BaseTool):
             self.logger.info(f"SQLMedicalChatbot._run usando db_connector de tipo: {type(self.db_connector)} que SÍ tiene get_db_structure_dict.")
 
         try:
-            original_query_for_log = query 
+            # original_query_for_log ahora se refiere a la query después de la posible resolución de ambigüedad
+            original_query_for_log_after_resolution = query 
             stripped_input = query.strip()
             cleaned_query = stripped_input
             
@@ -202,18 +289,18 @@ class SQLMedicalChatbot(BaseTool):
             
             if match:
                 extracted_sql = match.group(1).strip()
-                if original_query_for_log != extracted_sql:
-                    self.logger.info(f"Markdown detectado y extraído. Query original: '{original_query_for_log}'")
+                if original_query_for_log_after_resolution != extracted_sql:
+                    self.logger.info(f"Markdown detectado y extraído. Query (post-resolución) antes: '{original_query_for_log_after_resolution}'")
                     self.logger.info(f"Query después de extraer de Markdown y strip(): '{extracted_sql}'")
                 else:
-                    self.logger.info(f"Markdown detectado. Query extraída (sin cambios internos): '{extracted_sql}'")
+                    self.logger.info(f"Markdown detectado. Query extraída (sin cambios internos, post-resolución): '{extracted_sql}'")
                 cleaned_query = extracted_sql
             else:
-                if original_query_for_log != stripped_input:
-                    self.logger.info(f"No se detectó patrón de Markdown. Query original: '{original_query_for_log}'")
-                    self.logger.info(f"Query después de strip() inicial (usada como está): '{cleaned_query}'")
+                if original_query_for_log_after_resolution != stripped_input:
+                    self.logger.info(f"No se detectó patrón de Markdown. Query (post-resolución) antes: '{original_query_for_log_after_resolution}'")
+                    self.logger.info(f"Query después de strip() inicial (usada como está, post-resolución): '{cleaned_query}'")
                 else:
-                    self.logger.info(f"No se detectó patrón de Markdown. Query procesada como está (sin cambios por strip inicial): '{cleaned_query}'")
+                    self.logger.info(f"No se detectó patrón de Markdown. Query (post-resolución) procesada como está: '{cleaned_query}'")
             
             sql_incompat_warnings = []
             if re.search(r"DATEDIFF\s*\(", cleaned_query, re.IGNORECASE):
@@ -435,18 +522,29 @@ class SQLMedicalChatbot(BaseTool):
                     self.logger.error(f"Error al convertir final_response_str a string: {e_str_conv}")
                     return "Error al procesar la respuesta final."
             
-            MAX_OBSERVATION_LENGTH = 10000
-            if len(final_response_str) > MAX_OBSERVATION_LENGTH:
-                self.logger.warning(f"La observación final excede los {MAX_OBSERVATION_LENGTH} caracteres ({len(final_response_str)}). Truncando...")
-                final_response_str = final_response_str[:MAX_OBSERVATION_LENGTH] + "... (Observación truncada)"
+            # MAX_OBSERVATION_LENGTH = 10000
+            # if len(final_response_str) > MAX_OBSERVATION_LENGTH:
+            #     self.logger.warning(f"La observación final excede los {MAX_OBSERVATION_LENGTH} caracteres ({len(final_response_str)}). Truncando...")
+            #     final_response_str = final_response_str[:MAX_OBSERVATION_LENGTH] + "... (Observación truncada)"
 
-            # Si la pregunta es de seguimiento sobre "esa tabla", usar el contexto MCP
-            if re.search(r"esa tabla|dicha tabla|la tabla mencionada", query, re.IGNORECASE):
-                if hasattr(self, 'last_table_mentioned') and self.last_table_mentioned:
-                    columnas = tool_list_columns(self.last_table_mentioned)
-                    return f"Columnas de la tabla {self.last_table_mentioned}:\n{columnas}"
-                else:
-                    return "No se ha mencionado ninguna tabla previamente en la conversación."
+            # Actualizar contexto MCP al final, antes de devolver la respuesta.
+            # Usar original_user_query (la que entró a _run antes de cualquier modificación)
+            # y la SQL final ejecutada.
+            final_executed_sql = None
+            if isinstance(executed_sql_query_info, dict):
+                final_executed_sql = executed_sql_query_info.get("final_executed_query")
+            elif isinstance(executed_sql_query_info, str):
+                final_executed_sql = executed_sql_query_info
+
+            self._update_mcp_context(
+                response_message=response_message,
+                original_query=original_user_query, 
+                executed_sql_query=final_executed_sql,
+                data_results=data_results
+            )
+            
+            # El bloque que manejaba "esa tabla" aquí ha sido movido a _resolve_ambiguous_reference
+            # y ya no es necesario aquí.
             
             return final_response_str
         except Exception as e_outer:
@@ -459,6 +557,44 @@ sql_medical_chatbot_tool = SQLMedicalChatbot(
     terms_dict_path=os.path.join(os.path.dirname(__file__), "data", "dictionary.json"),
     schema_path=os.path.join(os.path.dirname(__file__), "data", "schema_simple.json"), # O schema_enhanced.json
     llm=llm_instance # Pasar la instancia de LLM creada
+)
+
+# --- Herramienta BioChat para consultas médicas generales ---
+def invoke_biochat_pipeline(question: str) -> str:
+    """
+    Invoca el pipeline de BioChat para responder preguntas médicas generales o de investigación.
+    """
+    if full_pipeline is None:
+        # El logger ya debería estar inicializado en este punto del flujo del programa
+        # Asegurarse de que logger está disponible globalmente o pasarlo como argumento si es necesario
+        # Para este ejemplo, asumimos que 'logger' es el logger global configurado antes.
+        logger.error("full_pipeline no está disponible. No se puede procesar la pregunta con BioChat.")
+        return "Error: El componente BioChat para consultas médicas generales no está disponible en este momento."
+
+    logger.info(f"Invocando BioChat pipeline con la pregunta: '{question}'")
+    try:
+        # La SequentialChain (full_pipeline) espera un diccionario como entrada
+        pipeline_outputs = full_pipeline({"objective": question})
+        final_report_text = pipeline_outputs.get("final_report", "No se pudo generar un informe final desde BioChat.")
+
+        # Añadir una frase para señalar completitud y potencialmente detener el refinamiento del agente
+        final_report_text += "\n\nEste informe resume la información encontrada para su consulta. Si necesita más detalles o una búsqueda diferente, por favor especifíquela."
+        
+        logger.info("Informe final de BioChat generado exitosamente.")
+        return final_report_text
+    except Exception as e:
+        logger.error(f"Error durante la ejecución del BioChat pipeline para la pregunta '{question}': {e}", exc_info=True)
+        return f"Se produjo un error al procesar tu consulta con el sistema BioChat: {str(e)}. Por favor, intenta reformular tu pregunta o inténtalo más tarde."
+
+biochat_medical_tool = Tool(
+    name="BioChatMedicalInquiry",
+    func=invoke_biochat_pipeline,
+    description=(
+        "Responde a preguntas médicas generales, biomédicas o de investigación que NO requieren consultar directamente la base de datos de pacientes con SQL. "
+        "Útil para obtener explicaciones detalladas, resúmenes de investigaciones, información sobre enfermedades, tratamientos, o cuando la pregunta es compleja y requiere un análisis por múltiples agentes especializados. "
+        "Ejemplos: '¿Cuáles son los últimos avances en el tratamiento del cáncer de pulmón?', 'Explícame la CRISPR-Cas9', 'Busca información sobre la metformina y sus efectos secundarios'. "
+        "NO uses esta herramienta si la pregunta puede responderse con una consulta SQL a la base de datos de pacientes (para eso, usa SQLMedicalChatbot)."
+    )
 )
 
 # --- Herramienta para información general y SinaSuite ---
@@ -491,8 +627,8 @@ def fetch_sinasuite_info(question: str) -> str:
 sinasuite_tool = Tool(
     name="SinaSuiteAndGeneralInformation",  # Nombre sin espacios
     func=fetch_sinasuite_info,
-    description="""Útil para responder a saludos, preguntas generales sobre la función del chatbot, o consultas sobre SinaSuite.
-No uses esta herramienta para consultas que requieran acceder o buscar datos en la base de datos médica.
+    description="""Útil para responder a saludos, preguntas generales sobre la función de este chatbot, o consultas sobre 'SinaSuite'.
+No uses esta herramienta para consultas que requieran acceder a datos médicos (ni de la base de datos ni información médica general).
 Ejemplos de cuándo usarla: 'Hola', '¿Qué es SinaSuite?', '¿Quién eres?', 'Ayuda'."""
 )
 
@@ -660,8 +796,24 @@ def custom_handle_parsing_errors(error: OutputParserException) -> str:
     )
 
 def get_langchain_agent():
-    """Inicializa y devuelve el agente LangChain configurado."""
-    # Memoria conversacional
+    """
+    Inicializa y devuelve un agente LangChain con las herramientas configuradas.
+    """
+    if llm_instance is None:
+        logger.error("La instancia de LLM (llm_instance) no está disponible. No se puede crear el agente.")
+        # Podrías lanzar una excepción aquí o manejarlo de otra forma si es crítico
+        return None 
+
+    # Lista de todas las herramientas disponibles para el agente
+    # sql_medical_chatbot_tool para consultas a la BD
+    # sinasuite_tool para saludos y preguntas generales sobre el chatbot/SinaSuite
+    # biochat_medical_tool para preguntas médicas generales que no son SQL
+    # TOOLS_SCHEMA para introspección del esquema de la BD
+    all_tools = [sql_medical_chatbot_tool, sinasuite_tool, biochat_medical_tool] + TOOLS_SCHEMA
+    
+    logger.info(f"Herramientas disponibles para el agente: {[tool.name for tool in all_tools]}")
+
+    # Configuración de la memoria conversacional
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
     # LLM configurado (DeepSeek o el proveedor definido por las variables globales)
@@ -678,7 +830,7 @@ def get_langchain_agent():
 
     # Inicializa el agente con todas las herramientas, incluyendo las de esquema
     agent = initialize_agent(
-        tools=[sql_medical_chatbot_tool, sinasuite_tool] + TOOLS_SCHEMA,
+        tools=all_tools,
         llm=llm,
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
         memory=memory,
