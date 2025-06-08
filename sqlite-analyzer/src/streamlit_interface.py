@@ -1,13 +1,14 @@
 import streamlit as st
+
+# --- DISCLAIMER PARA USUARIOS MÓVILES ---
+st.info("ℹ️ Si usas la versión móvil, expande la barra lateral (menú ☰) para ver todas las opciones y resultados correctamente.")
+
 import sys
 import os
 import time # Añadido para el contador de tiempo
 import re # Añadido para análisis de logs
 import json # Para analizar la salida JSON de las herramientas
 from datetime import datetime # Para marcas de tiempo
-
-# --- DISCLAIMER PARA USUARIOS MÓVILES ---
-st.info("ℹ️ Si usas la versión móvil, expande la barra lateral (menú ☰) para ver todas las opciones y resultados correctamente.")
 
 def limpiar_respuesta_final(texto):
     # Ensure 'import re' is present at the top of your Python file.
