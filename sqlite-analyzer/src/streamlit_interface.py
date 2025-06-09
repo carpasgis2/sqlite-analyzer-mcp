@@ -235,17 +235,29 @@ for message in st.session_state.history:
         st.markdown(message["content"])
 
 import gspread
-from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
+import json
 
+# Configuración de credenciales y acceso a Google Sheets (compatible con Streamlit Cloud)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = ServiceAccountCredentials.from_json_keyfile_name("credenciales_google.json", scope)
-gc = gspread.authorize(credentials)
-sheet = gc.open("RegistroPreguntas").sheet1
+try:
+    secrets = st.secrets["gspread"]
+    credentials = ServiceAccountCredentials.from_json_keyfile_dict(dict(secrets), scope)
+    gc = gspread.authorize(credentials)
+    sheet = gc.open("RegistroPreguntas").sheet1
+except Exception as e:
+    sheet = None
+    print(f"[Google Sheets] Error al inicializar conexión: {e}")
 
 def log_pregunta_google(pregunta):
-    sheet.append_row([datetime.now().isoformat(), pregunta])
-
+    if sheet is not None:
+        try:
+            sheet.append_row([datetime.now().isoformat(), pregunta])
+        except Exception as e:
+            print(f"[Google Sheets] Error al registrar pregunta: {e}")
+            st.warning("No se pudo registrar la pregunta en Google Sheets. Consulta al administrador si el problema persiste.")
+    else:
+        print("[Google Sheets] Hoja no inicializada, no se puede registrar la pregunta.")
 
 # --- Entrada del usuario ---
 user_input = st.chat_input("Escribe tu pregunta aquí...")
