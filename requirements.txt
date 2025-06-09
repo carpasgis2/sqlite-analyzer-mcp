@@ -12,3 +12,5 @@ openai
 tqdm
 requests
 python-dotenv
+gspread
+oauth2client
