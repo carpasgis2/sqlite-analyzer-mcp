@@ -511,6 +511,15 @@ if user_input:
             finally: # Asegurar que el historial se actualice siempre
                 st.session_state.history.append({"role": "assistant", "content": final_cleaned_response_for_history})
 
+# --- Entrada alternativa con botón "Enviar" para usuarios que prefieren no usar chat_input ---
+pregunta = st.text_input("Pregunta rápida (opcional, usa el chat abajo para experiencia completa):")
+if st.button("Enviar"):
+    if pregunta:
+        log_pregunta_google(pregunta)  # <-- ¡Esta línea es clave!
+        # Aquí puedes usar la misma lógica de respuesta que en el chat principal, o una función simplificada
+        respuesta = "(Respuesta simulada: aquí iría la respuesta real del agente)"
+        st.write(respuesta)
+
 # --- Instrucciones para ejecutar ---
 # st.sidebar.info("""
 # **Para ejecutar esta aplicación:**
