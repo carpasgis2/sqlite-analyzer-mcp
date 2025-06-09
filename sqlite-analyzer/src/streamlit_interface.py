@@ -234,66 +234,40 @@ for message in st.session_state.history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- Entrada del usuario ---
-user_input = st.chat_input("Escribe tu pregunta aquí...")
-
-# --- INTEGRACIÓN CON GOOGLE SHEETS PARA LOG DE PREGUNTAS ---
 import gspread
+from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
-import json
 
-# Configuración de credenciales y acceso a Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-try:
-    secrets = st.secrets["gspread"]
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(dict(secrets), scope)
-    gc = gspread.authorize(credentials)
-    sheet = gc.open("RegistroPreguntas").sheet1
-except Exception as e:
-    sheet = None
-    print(f"[Google Sheets] Error al inicializar conexión: {e}")
+credentials = ServiceAccountCredentials.from_json_keyfile_name("credenciales_google.json", scope)
+gc = gspread.authorize(credentials)
+sheet = gc.open("RegistroPreguntas").sheet1
 
 def log_pregunta_google(pregunta):
-    """Registra la pregunta del usuario en Google Sheets con timestamp ISO."""
-    if sheet is not None:
-        try:
-            sheet.append_row([datetime.now().isoformat(), pregunta])
-        except Exception as e:
-            print(f"[Google Sheets] Error al registrar pregunta: {e}")
-            st.warning("No se pudo registrar la pregunta en Google Sheets. Consulta al administrador si el problema persiste.")
-    else:
-        print("[Google Sheets] Hoja no inicializada, no se puede registrar la pregunta.")
+    sheet.append_row([datetime.now().isoformat(), pregunta])
 
+
+# --- Entrada del usuario ---
+user_input = st.chat_input("Escribe tu pregunta aquí...")
 if user_input:
     log_pregunta_google(user_input)
     if st.session_state.agent is None:
         st.error("El agente no está inicializado. No se puede procesar la pregunta.")
     else:
-        # Añadir pregunta del usuario al historial y mostrarla
         st.session_state.history.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
-
-        # Procesar la pregunta con el agente y mostrar la respuesta en streaming
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            full_llm_output = ""  # Acumula toda la salida textual del LLM
-            intermediate_action_logs = ""  # Acumula pensamientos/acciones/logs de herramientas formateados
-            agent_has_finished = False # Bandera para controlar el estado del agente
-            
-            final_cleaned_response_for_history = "No se pudo generar una respuesta." # Default para el historial
-
+            full_llm_output = ""
+            intermediate_action_logs = ""
+            agent_has_finished = False
+            final_cleaned_response_for_history = "No se pudo generar una respuesta."
             try:
                 start_time = time.time()
-                message_placeholder.markdown("▌") 
-                print("DEBUG streamlit_interface: Iniciando bloque with st.spinner...")
+                message_placeholder.markdown("▌")
                 with st.spinner("Pensando... 🤔"):
-                    print("DEBUG streamlit_interface: Antes de llamar a agent.stream()")
-                    response_stream = st.session_state.agent.stream({
-                        "input": user_input,
-                    })
-                    print(f"DEBUG streamlit_interface: agent.stream() llamado. response_stream object: {type(response_stream)}")
-
+                    response_stream = st.session_state.agent.stream({"input": user_input})
                     stream_did_iterate = False
                     for chunk_index, chunk in enumerate(response_stream):
                         stream_did_iterate = True
@@ -508,17 +482,8 @@ if user_input:
                 error_message = f"Error catastrófico al procesar la pregunta: {e}"
                 message_placeholder.error(error_message)
                 final_cleaned_response_for_history = error_message
-            finally: # Asegurar que el historial se actualice siempre
+            finally:
                 st.session_state.history.append({"role": "assistant", "content": final_cleaned_response_for_history})
-
-# --- Entrada alternativa con botón "Enviar" para usuarios que prefieren no usar chat_input ---
-pregunta = st.text_input("Pregunta rápida (opcional, usa el chat abajo para experiencia completa):")
-if st.button("Enviar"):
-    if pregunta:
-        log_pregunta_google(pregunta)  # <-- ¡Esta línea es clave!
-        # Aquí puedes usar la misma lógica de respuesta que en el chat principal, o una función simplificada
-        respuesta = "(Respuesta simulada: aquí iría la respuesta real del agente)"
-        st.write(respuesta)
 
 # --- Instrucciones para ejecutar ---
 # st.sidebar.info("""
