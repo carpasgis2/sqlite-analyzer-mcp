@@ -162,6 +162,7 @@ tempCodeRunnerFile.py
 test_cache_eutils_client.sqlite
 
 # --- EXCEPCIÓN PARA LA BASE DE DATOS PRINCIPAL DEL CHATBOT ---
-# Permitir el seguimiento de este archivo específico aunque coincida con patrones globales
+# Permitir el seguimiento de estos archivos específicos aunque coincidan con patrones globales
+!sqlite-analyzer/src/db/database_new.sqlite3.db
 !sqlite-analyzer/src/db/database.sqlite3.db
 # --- FIN EXCEPCIÓN ---
