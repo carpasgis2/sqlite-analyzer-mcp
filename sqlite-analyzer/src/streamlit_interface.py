@@ -1,8 +1,13 @@
 import streamlit as st
+import sys
 st.set_page_config(page_title="SinaSuite LangChain Chatbot", layout="wide")
 
+st.write("🛠️ App cargando correctamente")
+print("✅ Log visible en consola")
+print(f"Versión de Python: {sys.version}")
+
 # --- DISCLAIMER PARA USUARIOS MÓVILES ---
-st.info("ℹ️ Si usas la versión móvil, expande la barra lateral (menú ☰) para ver todas las opciones y resultados correctamente.")
+st.info("ℹ️ Si usas la versión móvil, expande la barra lateral (menú >) para ver todas las opciones y resultados correctamente.")
 
 import sys
 import os
