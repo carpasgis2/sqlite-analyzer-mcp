@@ -250,19 +250,25 @@ except Exception as e:
     print(f"[Google Sheets] Error al inicializar conexión: {e}")
 
 def log_pregunta_google(pregunta):
+    print(f"[Google Sheets] Intentando registrar: {pregunta}")
     if sheet is not None:
         try:
             sheet.append_row([datetime.now().isoformat(), pregunta])
+            print("[Google Sheets] ✅ Registro exitoso.")
         except Exception as e:
-            print(f"[Google Sheets] Error al registrar pregunta: {e}")
-            st.warning("No se pudo registrar la pregunta en Google Sheets. Consulta al administrador si el problema persiste.")
+            print(f"[Google Sheets] ❌ Error al registrar: {e}")
+            st.warning("No se pudo registrar la pregunta en Google Sheets.")
     else:
-        print("[Google Sheets] Hoja no inicializada, no se puede registrar la pregunta.")
+        print("[Google Sheets] ❌ Hoja no inicializada.")
 
 # --- Entrada del usuario ---
 user_input = st.chat_input("Escribe tu pregunta aquí...")
 if user_input:
-    log_pregunta_google(user_input)
+    try:
+        log_pregunta_google(user_input)
+        # st.success("✅ Pregunta registrada en Google Sheets.")  # Eliminado para que no aparezca en la interfaz
+    except Exception as e:
+        st.error(f"❌ Error al registrar: {e}")
     if st.session_state.agent is None:
         st.error("El agente no está inicializado. No se puede procesar la pregunta.")
     else:
