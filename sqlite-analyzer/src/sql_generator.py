@@ -396,7 +396,6 @@ class SQLGenerator:
                 # This should not happen if main_table is added to already_joined_tables at start
                 self.logger.error(f"{TABLE_MEDI_MEDICATIONS} is main table but not in already_joined_tables. This is a bug.") # MODIFICADO: Usar self.logger
                 # We can try to add it, but it's symptomatic of a deeper issue.
-                # For robustness, let's assume it should be there.
             else:
                 # If MEDI_MEDICATIONS is not the main table and not joined, we might need to join it first.
                 # This specific helper assumes MEDI_MEDICATIONS is the 'from' side of this particular join.
@@ -561,10 +560,58 @@ class SQLGenerator:
         if not select_cols_input:
             select_cols_input = ["*"]
         
-        # Inicializar already_joined_tables con la tabla principal
-        # Esto es importante ANTES de procesar SELECT o WHERE que puedan añadir JOINs.
+        # --- INICIO: USO DE JOINs DINÁMICOS ---
+        # Si structured_info['joins'] está presente y es una lista, usarla para los JOINs
+        join_clauses_sql = []
         already_joined_tables = {main_table.upper()}
-        join_clauses_sql = [] # Mover inicialización aquí, antes de ser usada por _ensure_paths
+        if isinstance(structured_info.get('joins'), list) and structured_info['joins']:
+            for join_def in structured_info['joins']:
+                t1 = join_def.get('table')
+                t2 = join_def.get('foreign_table')
+                c1 = join_def.get('column')
+                c2 = join_def.get('foreign_column')
+                if t1 and t2 and c1 and c2:
+                    join_sql = f" INNER JOIN {t2} ON {t1}.{c1} = {t2}.{c2}"
+                    join_clauses_sql.append(join_sql)
+                    already_joined_tables.add(t2.upper())
+        # Si no hay joins explícitos, intentar inferirlos como antes (lógica previa)
+        else:
+            # Path: EPISODES -> EPIS_DIAGNOSTICS -> CODR_DIAGNOSTIC_GROUPS
+            if TABLE_CODR_DIAGNOSTIC_GROUPS.upper() in already_joined_tables:
+                self.logger.info(f"[SQLGenerator] {TABLE_CODR_DIAGNOSTIC_GROUPS} ya está unida.")
+            else:
+                if not self._add_specific_join_if_needed(TABLE_EPISODES.upper(), TABLE_EPIS_DIAGNOSTICS.upper(),
+                                                        already_joined_tables, join_clauses_sql, relations_map, all_known_tables_original_case):
+                    self.logger.warning(f"Fallo al unir {TABLE_EPISODES} con {TABLE_EPIS_DIAGNOSTICS} para la ruta de diagnóstico.") # MODIFICADO: Usar self.logger
+                
+                if not self._add_specific_join_if_needed(TABLE_EPIS_DIAGNOSTICS.upper(), TABLE_CODR_DIAGNOSTIC_GROUPS.upper(),
+                                                        already_joined_tables, join_clauses_sql, relations_map, all_known_tables_original_case):
+                    self.logger.warning(f"Fallo al unir {TABLE_EPIS_DIAGNOSTICS} con {TABLE_CODR_DIAGNOSTIC_GROUPS} para la ruta de diagnóstico.") # MODIFICADO: Usar self.logger
+            
+            # Path: EPISODES -> EPIS_PROCEDURES -> PROC_PROCEDURES -> PROC_PROCEDURE_TYPES
+            if TABLE_PROC_PROCEDURE_TYPES.upper() in already_joined_tables:
+                self.logger.info(f"[SQLGenerator] {TABLE_PROC_PROCEDURE_TYPES} ya está unida.")
+            else:
+                if not self._add_specific_join_if_needed(TABLE_EPISODES.upper(), TABLE_EPIS_PROCEDURES.upper(),
+                                                        already_joined_tables, join_clauses_sql, relations_map, all_known_tables_original_case):
+                    self.logger.warning(f"Fallo al unir {TABLE_EPISODES} con {TABLE_EPIS_PROCEDURES} para la ruta de procedimiento.") # MODIFICADO: Usar self.logger
+                
+                if not self._add_specific_join_if_needed(TABLE_EPIS_PROCEDURES.upper(), TABLE_PROC_PROCEDURES.upper(),
+                                                        already_joined_tables, join_clauses_sql, relations_map, all_known_tables_original_case):
+                    self.logger.warning(f"Fallo al unir {TABLE_EPIS_PROCEDURES} con {TABLE_PROC_PROCEDURES} para la ruta de procedimiento.") # MODIFICADO: Usar self.logger
+                
+                if not self._add_specific_join_if_needed(TABLE_PROC_PROCEDURES.upper(), TABLE_PROC_PROCEDURE_TYPES.upper(),
+                                                        already_joined_tables, join_clauses_sql, relations_map, all_known_tables_original_case):
+                    self.logger.warning(f"Fallo al unir {TABLE_PROC_PROCEDURES} con {TABLE_PROC_PROCEDURE_TYPES} para la ruta de procedimiento.") # MODIFICADO: Usar self.logger
+            
+            # Path: MEDI_MEDICATIONS -> MEDI_PHARMA_THERAPEUTIC_GROUPS
+            if TABLE_MEDI_PHARMA_THERAPEUTIC_GROUPS.upper() in already_joined_tables:
+                self.logger.info(f"[SQLGenerator] {TABLE_MEDI_PHARMA_THERAPEUTIC_GROUPS} ya está unida.")
+            else:
+                if not self._add_specific_join_if_needed(TABLE_MEDI_MEDICATIONS.upper(), TABLE_MEDI_PHARMA_THERAPEUTIC_GROUPS.upper(),
+                                                        already_joined_tables, join_clauses_sql, relations_map, all_known_tables_original_case):
+                    self.logger.warning(f"Fallo al unir {TABLE_MEDI_MEDICATIONS} con {TABLE_MEDI_PHARMA_THERAPEUTIC_GROUPS} para la ruta de grupo terapéutico.") # MODIFICADO: Usar self.logger
+        # --- FIN: USO DE JOINs DINÁMICOS ---
 
         processed_select_cols = []
         if isinstance(select_cols_input, list):
@@ -934,6 +981,20 @@ class SQLGenerator:
         self.logger.info("[SQLGenerator] Procesamiento de JOINs (LLM + inferidos) completado.")
         self.logger.debug(f"[SQLGenerator] SQL después de JOINs: {sql}")
         # --- FIN LÓGICA JOIN MEJORADA ---
+
+        # --- INICIO: CONDICIONES WHERE ---
+        where_clauses = []
+        # Si diagnosis_variants está presente, construir condiciones OR para diagnóstico
+        diagnosis_variants = structured_info.get('diagnosis_variants')
+        if diagnosis_variants:
+            # Asumimos que diagnosis_variants ya contiene todos los sinónimos y variantes relevantes
+            table_prefix = 'ED' if 'ED' in all_known_tables_original_case else main_table
+            all_conds = []
+            for variant in diagnosis_variants:
+                # Construir condición LIKE para cada variante
+                all_conds.append(f"{table_prefix}.DIAG_DESCRIPTION_ES LIKE '%{variant}%'")
+            where_clauses.append('(' + ' OR '.join(all_conds) + ')')
+        # --- FIN: CONDICIONES WHERE ---
 
         # Procesar condiciones WHERE
         conditions = structured_info.get("conditions", [])

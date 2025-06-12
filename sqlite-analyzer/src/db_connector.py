@@ -1,12 +1,19 @@
-\
-import sqlite3
-import json
-import logging
 import os
+import math
+import sqlite3
+import logging
 import threading
-import math # Importar math para sqrt
+import time # Añadido para el ejemplo de STDEV, si se mantiene
+from typing import List, Tuple, Any, Dict, Optional # Asegurar Optional
 
 logger = logging.getLogger(__name__)
+
+# Nueva excepción personalizada
+class DBQueryExecutionError(sqlite3.Error):
+    """Excepción personalizada para errores durante la ejecución de consultas SQL."""
+    def __init__(self, message, original_exception=None):
+        super().__init__(message)
+        self.original_exception = original_exception
 
 # Ruta absoluta al directorio que contiene este script
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -46,12 +53,11 @@ class StdevFunc:
         return math.sqrt(self.S / (self.k -1)) # Corrección para desviación estándar muestral (k-1)
 
 class DBConnector:
-    def __init__(self, db_path: str = None, schema_path: str = None, relationships_path: str = None): # MODIFICADO: Añadido relationships_path
+    def __init__(self, db_path: str = None, relationships_path: str = None): # schema_path eliminado
         """
         Inicializa el conector de la base de datos.
         Args:
             db_path: Ruta al archivo de la base de datos SQLite.
-            schema_path: Ruta al archivo JSON del esquema de la base de datos.
             relationships_path: Ruta al archivo JSON de relaciones entre tablas.
         """
         # Resolver db_path
@@ -67,20 +73,7 @@ class DBConnector:
             self.db_path = _DEFAULT_DB_PATH
             logger.info(f"Usando ruta de BD predeterminada: {self.db_path}")
 
-        # Resolver schema_path
-        resolved_schema_path_input = schema_path or os.getenv("SCHEMA_PATH")
-        if resolved_schema_path_input:
-            if not os.path.isabs(resolved_schema_path_input):
-                self.schema_path = os.path.abspath(os.path.join(_SCRIPT_DIR, resolved_schema_path_input))
-                logger.info(f"Ruta relativa de esquema '{resolved_schema_path_input}' resuelta a: {self.schema_path} (relativa al script)")
-            else:
-                self.schema_path = resolved_schema_path_input
-                logger.info(f"Usando ruta absoluta de esquema proporcionada: {self.schema_path}")
-        else:
-            self.schema_path = _DEFAULT_SCHEMA_PATH
-            logger.info(f"Usando ruta de esquema predeterminada: {self.schema_path}")
-        
-        # MODIFICADO: Resolver relationships_path
+        # Resolver relationships_path
         resolved_relationships_path_input = relationships_path or os.getenv("RELATIONSHIPS_PATH")
         if resolved_relationships_path_input:
             if not os.path.isabs(resolved_relationships_path_input):
@@ -106,7 +99,6 @@ class DBConnector:
             logger.info(f"Usando ruta de relaciones predeterminada: {self.relationships_path}")
 
         logger.info(f"DBConnector inicializado con db_path: {self.db_path}")
-        logger.info(f"DBConnector inicializado con schema_path: {self.schema_path}")
         logger.info(f"DBConnector inicializado con relationships_path: {self.relationships_path}")
         
         # self.conn = None # MODIFICADO: Eliminado, las conexiones se gestionan por llamada
@@ -134,81 +126,84 @@ class DBConnector:
     
     # MODIFICADO: Eliminado el método close(), las conexiones se cierran en execute_query
 
-    def execute_query(self, query: str, params: tuple = None) -> tuple[list[tuple] | None, list[str] | None]:
-        """
-        Ejecuta una consulta SQL y devuelve los resultados.
-        Establece una nueva conexión para cada llamada para asegurar la seguridad en hilos.
-        Args:
-            query: La consulta SQL a ejecutar.
-            params: Parámetros para la consulta SQL (opcional).
-        Returns:
-            Una tupla (results, column_names).
-            results: Lista de tuplas con los resultados, o None si hay error.
-            column_names: Lista de nombres de columnas, o None si hay error.
-        """
+    def execute_query(self, query: str, params: Optional[tuple] = None, timeout_seconds: int = 60) -> tuple:
+        thread_id = threading.get_ident()
         conn = None
-        cursor = None
-        try:
-            conn = self._create_connection() # MODIFICADO: Usar _create_connection
+        start_time = time.time()
+        log_query = query[:500] + "..." if len(query) > 500 else query
 
+        try:
+            conn = self._create_connection()
             cursor = conn.cursor()
-            logger.info(f"Ejecutando consulta: {query} con params: {params} (Thread ID: {threading.get_ident()})")
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            
-            results = cursor.fetchall()
+            logger.info(f"Ejecutando consulta: {log_query} con params: {params} (Thread ID: {thread_id}) en DB: {self.db_path}")
+
+            cursor.execute(query, params or ())
+
+            # Obtener nombres de columnas para construir diccionarios
             column_names = [description[0] for description in cursor.description] if cursor.description else []
-            
-            logger.info(f"Consulta ejecutada exitosamente. {len(results)} filas devueltas. (Thread ID: {threading.get_ident()})")
-            return results, column_names
-        except (sqlite3.Error, FileNotFoundError) as e:
-            logger.error(f"Error al ejecutar la consulta SQL '{query}' o al conectar: {e} (Thread ID: {threading.get_ident()})", exc_info=True)
-            return None, None
+
+            rows = cursor.fetchall()
+
+            # Convertir las filas a una lista de diccionarios
+            results = []
+            if rows and column_names:
+                for row in rows:
+                    results.append(dict(zip(column_names, row)))
+            elif rows and not column_names:
+                results = list(rows)
+
+            execution_time = time.time() - start_time
+            logger.info(f"Consulta ejecutada exitosamente en {execution_time:.4f}s. Filas devueltas: {len(results)}. (Thread ID: {thread_id})")
+            return results, column_names  # <--- AHORA RETORNA DOS VALORES
+
+        except sqlite3.OperationalError as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Error operacional de SQLite al ejecutar la consulta SQL '{log_query}' en {execution_time:.4f}s (Thread ID: {thread_id}): {e}", exc_info=False)
+            raise DBQueryExecutionError(f"Error operacional de SQLite: {e}", original_exception=e)
+        except sqlite3.Error as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Error de SQLite al ejecutar la consulta SQL '{log_query}' en {execution_time:.4f}s (Thread ID: {thread_id}): {e}", exc_info=False)
+            raise DBQueryExecutionError(f"Error de SQLite: {e}", original_exception=e)
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Error inesperado al ejecutar la consulta SQL '{log_query}' en {execution_time:.4f}s (Thread ID: {thread_id}): {e}", exc_info=True)
+            raise DBQueryExecutionError(f"Error inesperado durante la ejecución de la consulta: {e}", original_exception=e)
         finally:
-            if cursor:
-                cursor.close()
             if conn:
                 conn.close()
-                logger.info(f"Conexión a la base de datos cerrada después de execute_query para: {self.db_path} (Thread ID: {threading.get_ident()})")
+            logger.debug(f"Conexión a la base de datos cerrada después de execute_query para: {self.db_path} (Thread ID: {thread_id})")
 
-    def get_db_structure_dict(self, schema_type: str = 'simple') -> dict:
+    def get_db_structure_dict(self):
         """
-        Carga y devuelve la estructura de la base de datos desde un archivo JSON.
-        Args:
-            schema_type: 'simple' o 'full'/'enhanced' para cargar el esquema correspondiente.
-                         Actualmente, solo usa self.schema_path.
-        Returns:
-            Un diccionario representando la estructura de la base de datos.
+        Devuelve la estructura de la base de datos como un diccionario:
+        {
+            'TABLE_NAME': {
+                'columns': [ 'col1', 'col2', ... ],
+                'types': { 'col1': 'TEXT', ... }
+            },
+            ...
+        }
         """
-        if self.db_structure is None:
-            try:
-                # Determinar qué archivo de esquema cargar basado en schema_type podría ser más complejo.
-                # Por ahora, se asume que self.schema_path apunta al archivo correcto.
-                # Si necesitas cambiar entre schema_simple.json y schema_enhanced.json,
-                # esta lógica necesitaría ajustarse o el schema_path debería ser más dinámico.
-                logger.info(f"Cargando estructura de BD desde: {self.schema_path} (tipo solicitado: {schema_type})")
-                if not os.path.exists(self.schema_path):
-                    logger.error(f"El archivo de esquema no existe en la ruta: {self.schema_path}")
-                    raise FileNotFoundError(f"El archivo de esquema no existe: {self.schema_path}")
-
-                with open(self.schema_path, 'r', encoding='utf-8') as f:
-                    self.db_structure = json.load(f)
-                logger.info(f"Estructura de BD cargada desde {self.schema_path}. {len(self.db_structure.get('tables', {}))} tablas encontradas.")
-            except FileNotFoundError:
-                logger.error(f"Archivo de esquema no encontrado en {self.schema_path}.", exc_info=True)
-                self.db_structure = {} # Devolver vacío para evitar errores posteriores
-                raise # Re-lanzar para que el pipeline principal sepa que falló
-            except json.JSONDecodeError:
-                logger.error(f"Error al decodificar el JSON del archivo de esquema: {self.schema_path}.", exc_info=True)
-                self.db_structure = {}
-                raise
-            except Exception as e:
-                logger.error(f"Error inesperado al cargar la estructura de la BD: {e}", exc_info=True)
-                self.db_structure = {}
-                raise
-        return self.db_structure
+        structure = {}
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+            tables = [row[0] for row in cursor.fetchall()]
+            for table in tables:
+                cursor.execute(f"PRAGMA table_info('{table}')")
+                columns = []
+                types = {}
+                for col in cursor.fetchall():
+                    col_name = col[1]
+                    col_type = col[2]
+                    columns.append(col_name)
+                    types[col_name] = col_type
+                structure[table] = {'columns': columns, 'types': types}
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error al obtener la estructura de la base de datos: {e}")
+        return structure
 
     def get_table_relationships_str(self) -> str | None:
         """

@@ -1,5 +1,48 @@
+# cd C:\Users\cpascual\PycharmProjects\pythonProject\cursos_actividades\sina_mcp\sqlite-analyzer\src
+
+# streamlit run streamlit_interface.py
+
+
 import streamlit as st
+import os
 import sys
+import re
+import time
+import json
+from datetime import datetime
+
+# --- Configuración de sys.path ---
+# Establecer el sys.path correctamente desde el principio.
+# Asumimos que este script (streamlit_interface.py) está en .../sina_mcp/sqlite-analyzer/src/
+# Y biochat.py está en .../sina_mcp/
+
+_current_file_dir = os.path.dirname(os.path.abspath(__file__))
+_sqlite_analyzer_dir = os.path.abspath(os.path.join(_current_file_dir, '..'))
+_sina_mcp_dir = os.path.abspath(os.path.join(_sqlite_analyzer_dir, '..'))
+
+# Asegurar que el directorio raíz del proyecto (sina_mcp) esté en sys.path
+# para que 'biochat.py' (y otros módulos en sina_mcp) pueda ser importado directamente.
+if _sina_mcp_dir not in sys.path:
+    sys.path.insert(0, _sina_mcp_dir)
+
+# Asegurar que el directorio 'sqlite-analyzer' (que contiene 'src') esté en sys.path
+# para poder hacer importaciones como 'from src.module'.
+if _sqlite_analyzer_dir not in sys.path:
+    sys.path.insert(0, _sqlite_analyzer_dir)
+
+# Opcionalmente, añadir 'src' directamente si prefieres 'from module_in_src import ...'
+# if _current_file_dir not in sys.path:
+#     sys.path.insert(0, _current_file_dir)
+
+try:
+    # Con _sqlite_analyzer_dir en sys.path, podemos hacer 'from src.langchain_chatbot ...'
+    # Con _sina_mcp_dir en sys.path, langchain_chatbot.py debería poder hacer 'from biochat import ...'
+    from src.langchain_chatbot import get_langchain_agent, logger
+except ImportError as e:
+    st.error(f"Error al importar módulos necesarios: {e}. \nCWD: {os.getcwd()}\nsys.path: {sys.path}")
+    st.stop()
+# --- Fin Configuración de sys.path ---
+
 st.set_page_config(page_title="SinaSuite LangChain Chatbot", layout="wide")
 
 st.write("🛠️ App cargando correctamente")
@@ -17,71 +60,110 @@ import json # Para analizar la salida JSON de las herramientas
 from datetime import datetime # Para marcas de tiempo
 
 def limpiar_respuesta_final(texto):
-    # Ensure 'import re' is present at the top of your Python file.
     if not texto:
         return ""
 
-    # Pattern for common conversational prefixes before the actual answer
-    conversational_prefixes_pattern = re.compile(
-        r"^(I now know the final answer\.?\s*|The final answer is:?\s*|Here is the final answer:?\s*|Okay, I have the final answer:?\s*)+", 
-        re.IGNORECASE
-    )
+    # Patrón para buscar "Final Answer:" (insensible a mayúsculas/minúsculas)
+    # y capturar todo lo que sigue.
+    final_answer_pattern = re.compile(r"Final Answer:(.*)", re.IGNORECASE | re.DOTALL)
+    match = final_answer_pattern.search(texto)
 
-    # Attempt to find "Final Answer:" marker
-    final_answer_marker_search = re.search(r"Final Answer:?", texto, re.IGNORECASE)
-
-    if final_answer_marker_search:
-        # If "Final Answer:" is found, take everything after it
-        content_after_marker = texto[final_answer_marker_search.end():].strip()
-        # Then, remove conversational prefixes from this extracted content
-        cleaned_answer = conversational_prefixes_pattern.sub("", content_after_marker).strip()
-        return cleaned_answer
+    if match:
+        # Si se encuentra "Final Answer:", tomar todo lo que sigue
+        respuesta_final = match.group(1).strip()
+        
+        # Aplicar una limpieza mínima a esta respuesta final (espacios, saltos de línea múltiples)
+        respuesta_final = re.sub(r"\n{2,}", "\n\n", respuesta_final).strip()
+        
+        if not respuesta_final:
+            # Si después de "Final Answer:" no hay contenido o solo espacios.
+            return "Se encontró 'Final Answer:' pero no había contenido posterior."
+        return respuesta_final
     else:
-        # If "Final Answer:" is NOT found, first remove conversational prefixes from the whole text
-        texto_sin_prefijos = conversational_prefixes_pattern.sub("", texto).strip()
+        # Si "Final Answer:" no se encuentra, aplicar el conjunto completo de reglas de limpieza previas
+        # Eliminar encabezados de Thought
+        texto = re.sub(r"^Thought:\s*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
 
-        # Then, apply original patterns to remove thoughts, actions, logs, etc.
-        
-        # Pattern for thoughts, actions, reasoning blocks
+        # Eliminar prefijos conversacionales (ya no se busca "Final Answer:" aquí explícitamente)
+        conversational_prefixes_pattern = re.compile(
+            r"^(I now know the final answer\.?\s*|The final answer is:?\s*|Here is the final answer:?\s*|Okay, I have the final answer:?\s*)+",
+            re.IGNORECASE
+        )
+        texto = conversational_prefixes_pattern.sub("", texto).strip()
+
+        # Eliminar bloques de plan de pasos multi-step
+        texto = re.sub(
+            r"🗂️\s*Plan de pasos sugerido por el agente:[\s\S]*?(?=\n\n|\Z)",
+            "",
+            texto,
+            flags=re.IGNORECASE
+        )
+        texto = re.sub( # También eliminar la justificación si aparece separada
+            r"Justificación del plan:[\s\S]*?(?=\n\n|\Z)",
+            "",
+            texto,
+            flags=re.IGNORECASE
+        )
+
+
+        # Eliminar bloques de pensamiento, acción, logs, etc.
         patron_bloques_intermedios = re.compile(
-            r"(^|\n)[\s\u2022\-\*]*((🧠\s*)?Pensamiento:.*|Action:? ?[\w\s]*:? ?.*|Action Input:? ?.*|Razonamiento:? ?.*|\(Mostrando.*registros.*\)|Datos:.*|\[.*?\]:.*|\(y \d+ m[aá]s\)\s*|\(Sin salida o salida vacía\))($|\n)", 
-            re.IGNORECASE
+            r"(^|\n)[\s\u2022\-\*]*((🧠\s*)?Pensamiento:.*|Thought:? ?.*|Action:? ?[\w\s]*:? ?.*|Action Input:? ?.*|Razonamiento:? ?.*|\(Mostrando.*registros.*\)|Datos:.*|\[.*?\]:.*|\(y \d+ m[aá]s\)\s*|\(Sin salida o salida vacía\))($|\n)",
+            re.IGNORECASE | re.MULTILINE
         )
-        texto_limpio = patron_bloques_intermedios.sub("\n", texto_sin_prefijos)
+        texto = patron_bloques_intermedios.sub("\n", texto)
 
-        # Pattern for logs (e.g., table listings, column info)
+        # Eliminar logs y listados de tablas/columnas, incluyendo logs internos tipo pipeline.py
         patron_logs = re.compile(
-            r"(^|\n)[\s\u2022\-\*]*(Tablas disponibles:.*|Columnas de [A-Z_]+:.*|He encontrado.*resultado.*|Datos:.*|\[\{.*?\}\].*|\(Mostrando.*?\)|No se encontraron.*|Tablas que coinciden.*|Columnas que coinciden.*|El resultado del conteo es:.*|No se encontraron datos para esta consulta\.)($|\n)", 
-            re.IGNORECASE
+            r"(^|\n)[\s\u2022\-\*]*(Tablas disponibles:.*|Columnas de [A-Z_]+:.*|He encontrado.*resultado.*|Datos:.*|\[\{.*?\}\].*|\(Mostrando.*?\)|No se encontraron.*|Tablas que coinciden.*|Columnas que coinciden.*|El resultado del conteo es:.*|No se encontraron datos para esta consulta\.|DEBUG: \[pipeline.py\].*)($|\n)",
+            re.IGNORECASE | re.MULTILINE
         )
-        texto_limpio = patron_logs.sub("\n", texto_limpio)
-        
-        # Remove code blocks (like JSON outputs)
-        texto_limpio = re.sub(r"```[\w]*\n[\s\S]*?```", "\n", texto_limpio)
-        
-        # Consolidate multiple newlines and strip whitespace
-        texto_limpio = re.sub(r"\n{2,}", "\n\n", texto_limpio).strip()
-        
-        return texto_limpio
+        texto = patron_logs.sub("\n", texto)
+
+        # Eliminar bloques de SQL, advertencias técnicas y listados de columnas/tuplas
+        texto = re.sub(r"Consulta SQL utilizada:.*?;\s*", "", texto, flags=re.DOTALL | re.IGNORECASE)
+        texto = re.sub(r"Datos:\s*\(\[.*?\], \[.*?\]\)", "", texto, flags=re.DOTALL | re.IGNORECASE) # Para tuplas de datos
+        texto = re.sub(r"Datos:\s*\[.*?\]", "", texto, flags=re.DOTALL | re.IGNORECASE) # Para listas de datos
+        texto = re.sub(r"\n*Si necesitas más detalles, por favor aclara tu pregunta\.\n*", "\n", texto, flags=re.IGNORECASE)
+        texto = re.sub(r"sql\nCopiar\n", "", texto, flags=re.IGNORECASE)
+        texto = re.sub(r"O bien, si quieres usar la descripción del diccionario en lugar del código:[\s\S]*?;\s*", "", texto, flags=re.IGNORECASE)
+        texto = re.sub(r"1\. Usando el texto libre.*?;\s*", "", texto, flags=re.IGNORECASE)
+        texto = re.sub(r"2\. Usando el código de diagnóstico.*?;\s*", "", texto, flags=re.IGNORECASE)
+        texto = re.sub(r"/\*.*?\*/", "", texto, flags=re.DOTALL)  # Elimina comentarios SQL multilinea
+        texto = re.sub(r"\n*ADEMAS HA HECHO ESTA COSNULTA.*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
+        texto = re.sub(r"No, la consulta tal cual está escrita no es correcta, porque la columna.*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
+        texto = re.sub(r"En su lugar, esa tabla tiene:.*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
+        texto = re.sub(r"Esto podría indicar que no hay pacientes con ese diagnóstico en la base de datos o que los términos de búsqueda no coinciden exactamente con los registros.*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
+        texto = re.sub(r"La consulta no devolvió resultados, aunque la estructura de la consulta parece correcta.*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
+        texto = re.sub(r"Parece que hubo un problema al ejecutar la consulta SQL.*", "", texto, flags=re.IGNORECASE | re.MULTILINE)
+
+        # Eliminar bloques de código (JSON, SQL, etc.)
+        texto = re.sub(r"```[\w]*\n[\s\S]*?```", "\n", texto)
+
+        # Eliminar duplicados de saltos de línea y espacios
+        texto = re.sub(r"\n{2,}", "\n\n", texto).strip()
+
+        # Si la respuesta sigue vacía, mostrar mensaje claro
+        if not texto:
+            return "No se encontraron resultados para tu consulta."
+        return texto
 
 # Se asume que este archivo (streamlit_interface.py) está en el mismo directorio (src)
 # que langchain_chatbot.py. Si se ejecuta streamlit desde 'sqlite-analyzer/src/',
 # langchain_chatbot será directamente importable.
 try:
-    from langchain_chatbot import get_langchain_agent, logger
+    from .langchain_chatbot import get_langchain_agent, logger
 except ImportError as e:
-    # Si la importación directa falla, podría ser porque Streamlit se ejecuta desde un directorio superior.
-    # Intentamos añadir 'src' al path si no está ya.
+    # --- CORRECCIÓN DE PATH PARA IMPORTS ROBUSTOS ---
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, '..'))
     if current_dir not in sys.path:
         sys.path.insert(0, current_dir)
-    
-    # También, el directorio padre de 'src' (que sería 'sqlite-analyzer') podría necesitar estar en el path
-    # para que las importaciones internas de langchain_chatbot como 'from src.module' funcionen
-    # si langchain_chatbot.py usa 'from src. ...' y 'src' es un subdirectorio del path esperado.
-    # langchain_chatbot.py ya maneja esto añadiendo su directorio padre ('sqlite-analyzer') al path.
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    # Ahora intenta importar de nuevo
     try:
-        from langchain_chatbot import get_langchain_agent, logger
+        from src.langchain_chatbot import get_langchain_agent, logger
     except ImportError as e_inner:
         st.error(f"Error al importar módulos necesarios: {e_inner}. Asegúrate de que la estructura de directorios es correcta. CWD: {os.getcwd()}, sys.path: {sys.path}")
         st.stop()
@@ -112,22 +194,23 @@ st.sidebar.markdown("""
 
 ### <span style="color:#ffe066;">🧑‍⚕️ Consultas Clínicas Generales (BioChat)</span>
 <ul style="color:#fff;">
-  <li><i>"¿Cuáles son los avances recientes en el manejo del infarto agudo de miocardio?"</i></li>
-  <li><i>"¿Podría explicar el mecanismo de acción y aplicaciones clínicas de la tecnología CRISPR-Cas9?"</i></li>
-  <li><i>"¿Cuáles son los avances recientes en el manejo del infarto agudo de miocardio?"</i></li>
-  <li><i>"¿Qué terapias génicas emergentes existen para enfermedades cardiovasculares?"</i></li>
+  <li><i>¿Cuáles son los avances recientes en el manejo del infarto agudo de miocardio?</i></li>
+  <li><i>¿Podría explicar el mecanismo de acción y aplicaciones clínicas de la tecnología CRISPR-Cas9?</i></li>
+  <li><i>¿Cuáles son los avances recientes en el manejo del infarto agudo de miocardio?</i></li>
+  <li><i>¿Qué terapias génicas emergentes existen para enfermedades cardiovasculares?</i></li>
 </ul>
 
 ---
 
 ### <span style="color:#ffe066;">🗄️ Consultas a la Base de Datos Médica (SQL Engine)</span>
 <ul style="color:#fff;">
-  <li><i>"¿Cuál es el número total de pacientes registrados actualmente?"</i></li>
-  <li><i>Edad y sexo del paciente con ID 1010.</i></li>
-  <li><i>Listado de pacientes hospitalizados en el ultimo mes .</i></li>
-  <li><i>¿Qué informes de imagen están disponibles para el paciente Mariana (ID 3163)?</i></li>
-  <li><i>¿Cuáles son los diagnósticos principales registrados en episodios de 2022?</i></li>
-  <li><i>Resumen clínico del paciente MARIA DOLORES PRUEBAS101904 SINA101904.</i></li>
+  <li><i>¿Cuál es el número total de pacientes registrados actualmente?</i></li>
+  <li><i>¿Cuál es la prevalencia de alergias alimentarias frente a no alimentarias en hombres y mujeres, por rangos de edad?</i></li>
+  <li><i>¿Cuántos pacientes tienen prescrita metformina junto con otro antidiabético oral?</i></li>
+
+  <li><i>¿Qué patologías crónicas son más frecuentes por sexo y grupo de edad?</i></li>
+  <li><i>¿Qué pacientes mayores de 65 años tienen prescritos medicamentos con alto riesgo de efectos adversos en geriatría según su grupo terapéutico, y han sido diagnosticados de hipertensión o insuficiencia renal?</i></li>
+  <li><i>¿Existen pacientes que han sido diagnosticados con diabetes mellitus tipo 2, y además presentan prescripción simultánea de un antidiabético oral y un medicamento con riesgo de hipoglucemia no controlada?</i></li>
 </ul>
 
 ---
@@ -275,233 +358,212 @@ if user_input:
         st.session_state.history.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
+        
+        # Inicializar/resetear logs acumulados para la interacción actual
+        st.session_state.accumulated_agent_logs = []
+
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_llm_output = ""
-            intermediate_action_logs = ""
+            # intermediate_action_logs ya no se usará de la misma manera, se reemplaza por accumulated_agent_logs
             agent_has_finished = False
             final_cleaned_response_for_history = "No se pudo generar una respuesta."
+            
             try:
                 start_time = time.time()
-                message_placeholder.markdown("▌")
+                message_placeholder.markdown("▌") # Indicador inicial
+                
                 with st.spinner("Pensando... 🤔"):
                     response_stream = st.session_state.agent.stream({"input": user_input})
                     stream_did_iterate = False
+                    plan_mostrado = False # Para el plan multi-step que se muestra fuera del placeholder
+                    # plan_json = None # Ya existen
+                    # plan_steps = [] # Ya existen
+                    # plan_reasoning = None # Ya existen
+
                     for chunk_index, chunk in enumerate(response_stream):
                         stream_did_iterate = True
                         print(f"DEBUG streamlit_interface: ----- Chunk {chunk_index} -----")
                         print(f"RAW Stream chunk: {chunk}")
-                        current_time_str = datetime.now().strftime("%H:%M:%S")
-                        intermediate_log_line = None
-                        new_content_from_llm_chunk = None # Contenido de este chunk específico
+                        
+                        current_time_str = datetime.now().strftime("%H:%M:%S") # Podría usarse en logs si se desea
+                        formatted_log_entry = None # Para el log formateado de este chunk
+                        new_content_from_llm_chunk = None # Contenido de este chunk específico para full_llm_output
+                        
                         event = "N/A"
                         name = "N/A"
 
+                        # --- DETECCIÓN Y VISUALIZACIÓN DEL PLAN MULTI-STEP (se mantiene como está, fuera del placeholder) ---
+                        if not plan_mostrado:
+                            plan_candidate = None
+                            if isinstance(chunk, dict):
+                                for v in chunk.values():
+                                    if isinstance(v, str) and '"plan_required": true' in v: plan_candidate = v; break
+                                    if isinstance(v, dict) and v.get("plan_required") is True: plan_candidate = v; break
+                                if not plan_candidate and "messages" in chunk:
+                                    for msg_item in chunk["messages"]: # msg renombrado
+                                        if hasattr(msg_item, "content") and '"plan_required": true' in msg_item.content: plan_candidate = msg_item.content; break
+                            elif isinstance(chunk, str) and '"plan_required": true' in chunk:
+                                plan_candidate = chunk
+                            
+                            if plan_candidate:
+                                try:
+                                    plan_json_data = json.loads(plan_candidate) if isinstance(plan_candidate, str) else plan_candidate # renombrado
+                                    if plan_json_data.get("plan_required") and isinstance(plan_json_data.get("plan"), list):
+                                        plan_steps_data = plan_json_data["plan"] # renombrado
+                                        plan_reasoning_data = plan_json_data.get("reasoning") # renombrado
+                                        
+                                        plan_display_markdown = "🗂️ **Plan de pasos sugerido por el agente:**\n"
+                                        for step in plan_steps_data:
+                                            plan_display_markdown += f"**Paso {step.get('step_number', '?')}:** {step.get('step_description', '')}  \n"
+                                            plan_display_markdown += f"&nbsp;&nbsp;• Herramienta: `{step.get('tool_to_use', '')}`  \n"
+                                            if step.get('inputs'):
+                                                plan_display_markdown += f"&nbsp;&nbsp;• Entradas: `{json.dumps(step['inputs'], ensure_ascii=False)}`\n"
+                                        if plan_reasoning_data:
+                                            st.info(f"Justificación del plan: {plan_reasoning_data}") # Se muestra como st.info
+                                        
+                                        # Este plan se muestra una vez directamente, no en el placeholder que se refresca.
+                                        # Si se quisiera en el placeholder, se añadiría a accumulated_agent_logs.
+                                        st.markdown(plan_display_markdown, unsafe_allow_html=True)
+                                        plan_mostrado = True
+                                except Exception as ex:
+                                    st.warning(f"No se pudo analizar el plan multi-step. Error: {ex}")
+                                    st.code(str(plan_candidate))
+                                    plan_mostrado = True
+                        
+                        # --- Procesamiento de Chunks para logs y salida LLM ---
                         if isinstance(chunk, dict):
                             event = chunk.get("event")
                             data = chunk.get("data", {})
                             name = chunk.get("name", "N/A")
-                            log_prefix = f"`{current_time_str}` | `{event}` | (__{name}__ )"
 
                             if event is None and ("actions" in chunk or "messages" in chunk):
                                 if "actions" in chunk and chunk["actions"]:
-                                    for action_item in chunk["actions"]: # Renombrado para evitar conflicto
+                                    for action_item in chunk["actions"]:
                                         if hasattr(action_item, 'log'):
-                                            intermediate_log_line = f"🧠 **Pensamiento:** {action_item.log}"
+                                            formatted_log_entry = f"#### 🧠 Pensamiento del Agente\n```text\n{action_item.log}\n```"
                                 if "messages" in chunk and chunk["messages"]:
-                                    for msg in chunk["messages"]:
-                                        if hasattr(msg, 'content'):
-                                            new_content_from_llm_chunk = msg.content
-                                        elif isinstance(msg, dict) and "content" in msg:
-                                            new_content_from_llm_chunk = msg["content"]
-
-                            if event == "on_agent_action":
-                                action_data = data.get("action", {}) # Renombrado para evitar conflicto
+                                    for msg_item in chunk["messages"]: # msg renombrado
+                                        content = None
+                                        if hasattr(msg_item, 'content'): content = msg_item.content
+                                        elif isinstance(msg_item, dict) and "content" in msg_item: content = msg_item["content"]
+                                        if content: new_content_from_llm_chunk = content
+                            
+                            elif event == "on_agent_action":
+                                action_data = data.get("action", {})
                                 thought = action_data.get("log", "").strip()
-                                if thought.startswith("Thought:"):
-                                    thought = thought[len("Thought:"):].strip()
-                                
+                                if thought.startswith("Thought:"): thought = thought[len("Thought:"):].strip()
                                 tool = action_data.get("tool")
                                 tool_input_data = action_data.get("tool_input")
                                 tool_input_str = str(tool_input_data)
                                 
-                                intermediate_log_line = f"{log_prefix}\\\\n"
-                                if thought:
-                                    intermediate_log_line += f"🧠 **Pensamiento:** {thought}\\\\n"
+                                entry_parts = ["#### 🧠 Pensamiento y Acción del Agente"]
+                                if thought: entry_parts.append(f"**Pensamiento:**\n```text\n{thought}\n```")
                                 if tool:
-                                    intermediate_log_line += f"🛠️ **Acción:** Usar `{tool}`"
+                                    entry_parts.append(f"**Acción:** Usar herramienta `{tool}`")
                                     if tool_input_data:
-                                        intermediate_log_line += f" con entrada: `{tool_input_str[:100]}{'...' if len(tool_input_str) > 100 else ''}`"
-                                elif not thought: 
-                                    intermediate_log_line += "❓ Acción del agente sin herramienta o pensamiento claro."
-                                
+                                        input_display = tool_input_str
+                                        if len(input_display) > 250: input_display = input_display[:250] + "..."
+                                        entry_parts.append(f"**Entrada para `{tool}`:**\n```\n{input_display}\n```")
+                                formatted_log_entry = "\n".join(entry_parts)
+
                             elif event == "on_tool_start":
                                 tool_input_data = data.get("input", {}) 
                                 input_str = str(tool_input_data)
-                                input_preview = (input_str[:100] + '...') if len(input_str) > 100 else input_str
-                                intermediate_log_line = f"{log_prefix}\\\\n⚙️ **Iniciando herramienta:** `{name}` (Entrada: `{input_preview}`)"
+                                input_preview = (input_str[:250] + '...') if len(input_str) > 250 else input_str
+                                entry_parts = [f"#### ⚙️ Ejecutando Herramienta: `{name}`"]
+                                entry_parts.append(f"**Entrada:**\n```\n{input_preview}\n```")
                                 if name and ("biochat" in name.lower() or "biomedicalchatbotagent" in name.lower()):
-                                    intermediate_log_line += "\\\\n🔬 _Realizando consulta biomédica avanzada... Esto puede tardar varios minutos._"
+                                    entry_parts.append("\n🔬 _Realizando consulta biomédica avanzada... Esto puede tardar varios minutos._")
+                                formatted_log_entry = "\n".join(entry_parts)
 
                             elif event == "on_tool_end":
                                 tool_output_data = data.get("output")
                                 output_str = str(tool_output_data) if tool_output_data is not None else ""
-                                intermediate_log_line = f"{log_prefix}\\\\n✅ **Herramienta `{name}` finalizada.**\\\\n"
+                                entry_parts = [f"#### ✅ Resultado de Herramienta: `{name}`"]
+                                output_display = output_str
+                                if len(output_display) > 400: output_display = output_display[:400] + "..."
 
                                 if "RateLimitError" in output_str or "AuthenticationError" in output_str or "Could not parse LLM output" in output_str or "InvalidRequestError" in output_str:
-                                    intermediate_log_line += f"⚠️ **Error/Advertencia de la herramienta `{name}`:**\\\\n```text\\\\n{output_str[:500]}{'...' if len(output_str) > 500 else ''}\\\\n```"
-                                elif name and ("biochat" in name.lower() or "biomedicalchatbotagent" in name.lower()) and output_str:
-                                    try:
-                                        # ... (código de formateo JSON existente) ...
-                                        if output_str.startswith("[") and output_str.endswith("]") and name.endswith("_tool_func"): # Asumiendo que esto es para BioChat
-                                            outputs_list = json.loads(output_str)
-                                            if isinstance(outputs_list, list) and all(isinstance(item, str) for item in outputs_list):
-                                                parsed_items = [json.loads(item_str) for item_str in outputs_list]
-                                                pretty_json = json.dumps(parsed_items, indent=2, ensure_ascii=False)
-                                            else: # Si ya es una lista de dicts o similar
-                                                pretty_json = json.dumps(outputs_list, indent=2, ensure_ascii=False)
-                                        else: # Para otros JSON
-                                            parsed_json = json.loads(output_str)
-                                            pretty_json = json.dumps(parsed_json, indent=2, ensure_ascii=False)
-                                        intermediate_log_line += f"📄 **Resultado de `{name}` (JSON):**\\\\n```json\\\\n{pretty_json}\\\\n```"
-                                    except json.JSONDecodeError:
-                                        intermediate_log_line += f"📄 **Resultado de `{name}` (texto, no se pudo analizar como JSON):**\\\\n```text\\\\n{output_str[:500]}{'...' if len(output_str) > 500 else ''}\\\\n```"
-
+                                    entry_parts.append(f"⚠️ **Error/Advertencia:**\n```text\n{output_display}\n```")
                                 elif output_str:
-                                    intermediate_log_line += f"📄 **Resultado de `{name}`:**\\\\n```text\\\\n{output_str[:300]}{'...' if len(output_str) > 300 else ''}\\\\n```"
+                                    entry_parts.append(f"**Salida:**\n```text\n{output_display}\n```")
                                 else:
-                                    intermediate_log_line += f"📄 **Resultado de `{name}`:** (Sin salida o salida vacía)"
+                                    entry_parts.append("_Sin salida o salida vacía._")
+                                formatted_log_entry = "\n".join(entry_parts)
                             
                             elif event in ["on_chat_model_stream", "on_llm_stream"]:
                                 content_piece = data.get("chunk")
-                                if isinstance(content_piece, str):
-                                    new_content_from_llm_chunk = content_piece
-                                elif isinstance(content_piece, dict) and "content" in content_piece: # Manejo de dict chunk
-                                    new_content_from_llm_chunk = content_piece.get("content")
-                                elif hasattr(content_piece, 'content'): # Manejo de objeto AIMessageChunk o similar
-                                     new_content_from_llm_chunk = content_piece.content
+                                if isinstance(content_piece, str): new_content_from_llm_chunk = content_piece
+                                elif isinstance(content_piece, dict) and "content" in content_piece: new_content_from_llm_chunk = content_piece["content"]
+                                elif hasattr(content_piece, 'content'): new_content_from_llm_chunk = content_piece.content
                             
                             elif event == "on_agent_finish":
-                                agent_final_output_text = None
-                                agent_output_payload = data.get("output") # Esto puede ser un string o un dict
-
-                                # Intentar extraer la cadena de texto de la respuesta final
-                                if isinstance(agent_output_payload, str):
-                                    agent_final_output_text = agent_output_payload
-                                elif isinstance(agent_output_payload, dict):
-                                    if "output" in agent_output_payload:
-                                        agent_final_output_text = agent_output_payload["output"]
-                                    elif "final_answer" in agent_output_payload:
-                                        agent_final_output_text = agent_output_payload["final_answer"]
-                                    elif "result" in agent_output_payload:
-                                        agent_final_output_text = agent_output_payload["result"]
-                                # Para el objeto AgentFinish de Langchain (si data['output'] es el objeto en sí)
-                                elif hasattr(agent_output_payload, 'return_values') and isinstance(agent_output_payload.return_values, dict):
-                                    agent_final_output_text = agent_output_payload.return_values.get('output')
-                                # A veces, el 'log' del AgentFinish puede contener la respuesta formateada completa
-                                elif hasattr(agent_output_payload, 'log') and isinstance(agent_output_payload.log, str):
-                                     # Usar el log solo si es más sustancial que un simple mensaje de finalización
-                                     if "Final Answer:" in agent_output_payload.log or len(agent_output_payload.log) > 100:
-                                        agent_final_output_text = agent_output_payload.log
-
-                                if agent_final_output_text and isinstance(agent_final_output_text, str):
-                                    # Usar la respuesta final directa del agente.
-                                    # Esto sobrescribe cualquier acumulación previa de full_llm_output
-                                    # con la conclusión explícita del agente.
-                                    full_llm_output = agent_final_output_text
-                                    intermediate_log_line = f"{log_prefix}\\n🏁 **Agente finalizado.** Respuesta final directa del agente utilizada."
-                                    print(f"DEBUG streamlit_interface: (on_agent_finish) Usando respuesta directa del agente: '{full_llm_output[:300].replace('\\n', ' ')}...'")
-                                else:
-                                    # Si no se pudo extraer una respuesta final clara del evento on_agent_finish,
-                                    # se confiará en el full_llm_output acumulado de los eventos on_llm_stream.
-                                    intermediate_log_line = f"{log_prefix}\\n🏁 **Agente finalizado.** (Respuesta final se tomará de la acumulación de LLM streams)"
-                                    print(f"DEBUG streamlit_interface: (on_agent_finish) No se extrajo respuesta directa del payload del evento, se usará full_llm_output acumulado: '{data.get('output')}'")
-                                
                                 agent_has_finished = True
+                                agent_final_output_text = None
+                                agent_output_payload = data.get("output")
+                                if isinstance(agent_output_payload, str): agent_final_output_text = agent_output_payload
+                                elif isinstance(agent_output_payload, dict): agent_final_output_text = agent_output_payload.get("output", str(agent_output_payload))
+                                elif hasattr(agent_output_payload, 'return_values') and isinstance(agent_output_payload.return_values, dict): agent_final_output_text = agent_output_payload.return_values.get("output", str(agent_output_payload.return_values))
+                                elif hasattr(agent_output_payload, 'log') and isinstance(agent_output_payload.log, str): agent_final_output_text = agent_output_payload.log
+                                
+                                if agent_final_output_text: new_content_from_llm_chunk = agent_final_output_text # Añadir la salida final al stream de LLM
+                                formatted_log_entry = "####🏁 Agente ha finalizado."
                         
-                        elif isinstance(chunk, str): 
+                        elif isinstance(chunk, str): # Fallback para chunks de string directos
                             new_content_from_llm_chunk = chunk
-                        # --- FIN DEL PROCESAMIENTO DEL CHUNK ---
-
-                        # --- DEBUGGING INTERNO DEL BUCLE ---
-                        print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) event='{event}', name='{name}'")
-                        if intermediate_log_line is not None:
-                            print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) intermediate_log_line='{intermediate_log_line.strip()}'")
-                        if new_content_from_llm_chunk is not None:
-                            print(f"DEBUG streamlit_interface: (Chunk {chunk_index}) new_content_from_llm_chunk='{new_content_from_llm_chunk}'")
-                        # --- FIN DEBUGGING INTERNO ---
-
-                        if intermediate_log_line:
-                            log_to_add = intermediate_log_line.strip()
-                            if log_to_add:
-                                if intermediate_action_logs and not intermediate_action_logs.strip().endswith("\n\n"):
-                                    intermediate_action_logs += "\n\n"
-                                intermediate_action_logs += log_to_add + "\n\n"
+                        
+                        # --- Acumular logs y salida del LLM ---
+                        if formatted_log_entry:
+                            st.session_state.accumulated_agent_logs.append(formatted_log_entry)
                         
                         if new_content_from_llm_chunk:
                             full_llm_output += new_content_from_llm_chunk
-
-                        # --- Lógica de visualización dentro del bucle ---
-                        # Mostrar logs de acción + salida acumulada del LLM mientras el agente no haya finalizado explícitamente.
-                        # Una vez finalizado, solo se mostrará full_llm_output (que luego será limpiado).
-                        current_display_content = ""
-                        if not agent_has_finished: # Mostrar logs intermedios solo mientras el agente está trabajando activamente
-                            current_display_content += intermediate_action_logs
                         
-                        current_display_content += full_llm_output # Siempre mostrar la salida del LLM acumulada
+                        # --- Actualizar el placeholder ---
+                        display_parts = []
+                        if st.session_state.accumulated_agent_logs:
+                            display_parts.append("\n\n---\n\n".join(st.session_state.accumulated_agent_logs))
+                        
+                        # Añadir la salida actual del LLM (que puede ser la respuesta final o pensamientos)
+                        # La limpieza final se hará después del bucle.
+                        if full_llm_output:
+                            display_parts.append(f"**Respuesta del Agente (en progreso):**\n{full_llm_output}")
 
-                        if current_display_content.strip():
-                            message_placeholder.markdown(current_display_content + " ▌")
+                        current_display_content = "\n\n---\n\n".join(filter(None, display_parts))
+                        
+                        if not agent_has_finished:
+                            message_placeholder.markdown(current_display_content + " ▌", unsafe_allow_html=True)
                         else:
-                            message_placeholder.markdown("▌")
-                        
-                        if agent_has_finished: # Si el evento on_agent_finish ocurrió
-                            break # Salir del bucle de streaming
+                            # Cuando el agente ha finalizado, el bucle terminará pronto.
+                            # La actualización final del placeholder se hará en el bloque `finally`.
+                            message_placeholder.markdown(current_display_content, unsafe_allow_html=True)
 
-                    print("DEBUG streamlit_interface: Fin del bucle for chunk in response_stream.")
-                    if not stream_did_iterate:
-                        print("DEBUG streamlit_interface: ADVERTENCIA - El stream no produjo ningún chunk.")
-                        message_placeholder.error("❌ El agente no devolvió ninguna respuesta. Puede haber un problema con el modelo, la API o la configuración. Revisa los logs del terminal para más detalles.")
-                        logger.error(f"streamlit_interface.py: User: '{user_input}', Agent: El stream no produjo ningún chunk.")
-                        final_cleaned_response_for_history = "❌ El agente no devolvió ninguna respuesta."
-                        # st.session_state.history.append ya se maneja al final del bloque try/except/finally
-                        st.stop() # Detener si no hay chunks
-
-                print("DEBUG streamlit_interface: Saliendo del bloque st.spinner.")
-                end_time = time.time()
-                elapsed_time = end_time - start_time
-                
-                print(f"DEBUG streamlit_interface: Contenido de full_llm_output ANTES de limpiar: '{full_llm_output}'")
-                final_cleaned_response = limpiar_respuesta_final(full_llm_output.strip())
-                print(f"DEBUG streamlit_interface: Respuesta final (limpia DESPUÉS de limpiar full_llm_output): '{final_cleaned_response}'")
-
-                if not final_cleaned_response:
-                    message_placeholder.warning("No se generó una respuesta visible o la respuesta estaba vacía. Revisa los logs del terminal para más detalles, especialmente si esperabas una respuesta de BioChat (puede haber problemas con la API de OpenAI).")
-                    logger.warning(f"streamlit_interface.py: User: '{user_input}', Agent: Respuesta vacía tras limpieza, Time: {elapsed_time:.2f}s. Raw output: '{full_llm_output[:500]}...'")
-                    final_cleaned_response_for_history = "⚠️ No se generó una respuesta visible o la respuesta estaba vacía."
-                else:
-                    message_placeholder.markdown(final_cleaned_response) # Mostrar la respuesta final limpia
-                    final_cleaned_response_for_history = final_cleaned_response
-                    # --- NUEVO: Añadir contexto de pregunta anterior si la respuesta es de seguimiento ---
-                    respuesta = final_cleaned_response
-                    if (
-                        "¿Deseas que investigue esta relación?" in respuesta
-                        or "¿Quieres que investigue esta relación?" in respuesta
-                        or "¿Desea que investigue esta relación?" in respuesta
-                    ):
-                        # Aquí puedes añadir lógica para el tag de seguimiento si es necesario
-                        pass # st.markdown("<span style='color:cyan;font-size:0.8em;'>↪️ Respuesta de seguimiento</span>", unsafe_allow_html=True)
-                
-                st.caption(f"Tiempo de generación: {elapsed_time:.2f} segundos")
+                    # --- FIN DEL BUCLE DEL STREAM ---
+                    if not stream_did_iterate and not agent_has_finished:
+                        # Si el stream no produjo nada y el agente no ha "finalizado" explícitamente
+                        full_llm_output = "El agente no produjo ninguna salida o evento."
+                        agent_has_finished = True # Forzar finalización para limpiar
 
             except Exception as e:
-                print(f"ERROR streamlit_interface: Excepción durante el streaming: {e}", file=sys.stderr)
-                logger.error(f"streamlit_interface.py: Error al invocar el agente para input '{user_input}': {e}", exc_info=True)
-                error_message = f"Error catastrófico al procesar la pregunta: {e}"
-                message_placeholder.error(error_message)
-                final_cleaned_response_for_history = error_message
+                logger.error(f"streamlit_interface.py: Error durante el stream del agente: {e}", exc_info=True)
+                full_llm_output += f"\n\nOcurrió un error: {e}"
+                st.error(f"Error al procesar la pregunta: {e}")
+                agent_has_finished = True # Asegurar que se limpie
+            
             finally:
+                end_time = time.time()
+                logger.info(f"streamlit_interface.py: Respuesta generada en {end_time - start_time:.2f} segundos.")
+                
+                final_cleaned_response_for_history = limpiar_respuesta_final(full_llm_output)
+                if not final_cleaned_response_for_history.strip() and stream_did_iterate:
+                     final_cleaned_response_for_history = "El agente procesó la solicitud pero la respuesta final está vacía o fue eliminada por las reglas de limpieza."
+                elif not stream_did_iterate and not full_llm_output: # Si no hubo stream ni error capturado
+                    final_cleaned_response_for_history = "No se pudo obtener una respuesta del agente."
+
+                message_placeholder.markdown(final_cleaned_response_for_history, unsafe_allow_html=True)
                 st.session_state.history.append({"role": "assistant", "content": final_cleaned_response_for_history})
+                st.session_state.accumulated_agent_logs = [] # Limpiar para la próxima vez
 
 # --- Instrucciones para ejecutar ---
 # st.sidebar.info("""

@@ -308,12 +308,7 @@ def extract_info_from_question_llm(
 
     # Definir la plantilla del prompt del sistema como una cadena literal.
     # Los placeholders como {conversation_history}, {db_schema_subset_str}, etc., son literales.
-    system_prompt_template = """Eres un asistente de IA experto en SQL y bases de datos médicas.
-Tu tarea principal es analizar la pregunta del usuario y la conversación previa para extraer información estructurada en formato JSON que permita construir una consulta SQL válida y precisa, o generar directamente una consulta SQL si la pregunta es compleja o analítica.
-Debes utilizar el esquema de la base de datos proporcionada (`db_structure`) para identificar tablas y columnas relevantes.
-El dialecto SQL es SQLite.
-
-Consideraciones importantes:
+    system_prompt_template = """Eres un asistente de IA experto en SQL y bases de datos médicas.\n\n\n***IMPORTANTE: SOLO puedes usar columnas y tablas que aparecen exactamente en el esquema proporcionado (`db_structure`). Si una columna o tabla no existe en el esquema, NO la inventes ni la infieras bajo ninguna circunstancia. Si la información no está disponible en el esquema, indícalo claramente en el JSON de salida. Si tienes dudas entre varias columnas, elige la que más se parezca y explica tu razonamiento. Si no encuentras la columna exacta pero hay una similar, usa la más parecida y justifica el cambio. Si no hay ninguna columna válida, indícalo y pide aclaración al usuario. Si la consulta no devuelve resultados, sugiere alternativas, revisa los criterios y pide al usuario que aclare o modifique su pregunta si es necesario.***\n\n\nTu tarea principal es analizar la pregunta del usuario y la conversación previa para extraer información estructurada en formato JSON que permita construir una consulta SQL válida y precisa, o generar directamente una consulta SQL si la pregunta es compleja o analítica.\nDebes utilizar el esquema de la base de datos proporcionada (`db_structure`) para identificar tablas y columnas relevantes.\nEl dialecto SQL es SQLite.\n\nConsideraciones importantes:
 1.  **Identificación de Tablas y Columnas**:
     *   Usa `db_structure` para encontrar las tablas y columnas correctas. Presta atención a los nombres exactos.
     *   Si la pregunta es vaga, intenta inferir las entidades más probables.

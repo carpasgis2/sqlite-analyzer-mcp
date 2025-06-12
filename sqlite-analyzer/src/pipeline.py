@@ -2,17 +2,28 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, Optional
+import os
+import sys
+from typing import Any, Dict, Optional, Set, List # Asegúrate de tener Set y List
+
+import difflib
+
 
 import openai
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from .rag import DatabaseSchemaRAG # Asumido necesario por componentes llamados o futuros
-from .sql_generator import SQLGenerator
-from .sql_utils import extract_sql_from_markdown
-from .whitelist_validator import WhitelistValidator # MODIFICADO: validate_structured_info_whitelist eliminado
+# Asegurarse de que el directorio raíz del proyecto esté en sys.path
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
-from .db_connector import DBConnector # Para type hinting
+# Cambiar importaciones relativas a absolutas y eliminar table_identifier
+
+from src.sql_generator import SQLGenerator
+from src.sql_utils import extract_sql_from_markdown
+from src.whitelist_validator import WhitelistValidator
+from src.db_connector import DBConnector
+from src.db_relationship_graph import build_relationship_graph, find_join_path, generate_join_path
 
 # Configuración del logger
 logger = logging.getLogger(__name__)
@@ -108,10 +119,10 @@ def generate_sql_and_validate_whitelist(
             re.escape(table_pharma_name) + r"\s+(?:AS\s+)?(?P<alias_pharma_match>\w+)\s+" + # Tabla Pharma con su alias
             r"ON\s+" +
             r"(?:" + # Grupo para las condiciones ON (alternativas)
-            r"(?P=alias_pharma_match)\." + re.escape(join_column_name) + r"\s*=\s*" + re.escape(alias_meds) + r"\." + re.escape(join_column_name) + # p.PHTH_ID = m.PHTH_ID
+            r"(?P=alias_pharma_match)\." + re.escape(join_column_name) + r"\s*=\s*" + re.escape(alias_meds) + r"\." + re.escape(join_column_name) +
             r"|" + 
-            re.escape(alias_meds) + r"\." + re.escape(join_column_name) + r"\s*=\s*(?P=alias_pharma_match)\." + re.escape(join_column_name) + # m.PHTH_ID = p.PHTH_ID
-            r")" + # Fin grupo condiciones ON
+            re.escape(alias_meds) + r"\." + re.escape(join_column_name) + r"\s*=\s*(?P=alias_pharma_match)\." + re.escape(join_column_name) +
+                r")" + # Fin grupo condiciones ON
             r")", # Fin Grupo 2
             re.IGNORECASE
         )
@@ -240,11 +251,75 @@ def generate_sql_and_validate_whitelist(
     #     current_logger_sql_gen.error(f\"{error_message} para structured_info: {structured_info}\")
     #     return \"\", [], error_message, None
 
+    # --- INICIO: INFERENCIA DE JOINs MULTI-HOP GENÉRICA ---
+    if isinstance(structured_info, dict) and "tables" in structured_info and isinstance(structured_info["tables"], list):
+        tables = [t for t in structured_info["tables"] if isinstance(t, str)]
+        # Extraer también tablas de columnas y condiciones
+        cols = structured_info.get("columns", [])
+        conds = structured_info.get("conditions", [])
+        tables_from_cols = set()
+        for c in cols:
+            if isinstance(c, str) and "." in c:
+                tables_from_cols.add(c.split(".")[0])
+            elif isinstance(c, dict) and "name" in c and "." in c["name"]:
+                tables_from_cols.add(c["name"].split(".")[0])
+        tables_from_conds = set()
+        for cond in conds:
+            if isinstance(cond, dict) and "column" in cond and "." in cond["column"]:
+                tables_from_conds.add(cond["column"].split(".")[0])
+        all_tables = set(tables) | tables_from_cols | tables_from_conds
+        all_tables = [t for t in all_tables if t]
+        # Construir grafo de relaciones
+        try:
+            # Cargar relaciones desde JSON si existe
+            import os, json
+            rel_path = os.path.join(os.path.dirname(__file__), '../../table_relationships.json')
+            if os.path.exists(rel_path):
+                with open(rel_path, 'r', encoding='utf-8') as f:
+                    rel_map = json.load(f)
+            else:
+                rel_map = None
+        except Exception as e:
+            rel_map = None
+            current_logger_sql_gen.warning(f"No se pudo cargar table_relationships.json: {e}")
+        try:
+            relationship_graph = build_relationship_graph(db_connector_for_sql_gen, table_relationships=rel_map)
+        except Exception as e:
+            current_logger_sql_gen.error(f"Error al construir el grafo de relaciones: {e}")
+            relationship_graph = None
+        # Inferir JOINs multi-hop si hay más de una tabla
+        join_path_defs = []
+        join_error = None
+        if relationship_graph and len(all_tables) > 1:
+            # Buscar caminos entre todas las tablas relevantes
+            from itertools import combinations
+            joins_needed = []
+            for t1, t2 in combinations(all_tables, 2):
+                path = find_join_path(relationship_graph, t1, t2, max_depth=6)
+                if not path:
+                    join_error = f"No se puede conectar {t1} y {t2} en la base de datos. No existe un camino de JOIN válido."
+                    break
+                joins_needed.append(path)
+            if not join_error:
+                # Unir todos los caminos en una secuencia de tablas (camino mínimo de unión)
+                # Para simplicidad, usar la unión de todos los nodos de los caminos
+                tables_join_order = [all_tables[0]]
+                for path in joins_needed:
+                    for t in path[1:]:
+                        if t not in tables_join_order:
+                            tables_join_order.append(t)
+                # Generar la secuencia de JOINs
+                join_path_defs = generate_join_path(relationship_graph, tables_join_order)
+                # Añadir a structured_info['joins']
+                structured_info["joins"] = join_path_defs
+        if join_error:
+            return "", [], join_error, None
+    # --- FIN INFERENCIA JOINs MULTI-HOP ---
+
     sql_query_generated = ""
     query_params = []
     error_message_generation = ""
     context_from_sql_gen = None
-
     try:
         sql_query_generated, query_params = sql_generator_instance.generate_sql(
             question_data=structured_info,
@@ -263,15 +338,27 @@ def generate_sql_and_validate_whitelist(
         sql_query_generated = ""
         query_params = []
         current_logger_sql_gen.error(f"DEBUG: [pipeline.py] {error_message_generation}", exc_info=True)
+    
+    # Añadir logs detallados en generate_sql_and_validate_whitelist
+    logger_param.debug(f"DEBUG: [pipeline.py] structured_info recibido: {structured_info}")
+    logger_param.debug(f"DEBUG: [pipeline.py] current_allowed_columns_map recibido: {current_allowed_columns_map}")
+    logger_param.debug(f"DEBUG: [pipeline.py] terms_dict_str_for_validation recibido: {terms_dict_str_for_validation}")
+
+    # Log después de generar SQL
+    logger_param.debug(f"DEBUG: [pipeline.py] SQL generado: {sql_query_generated}")
+    logger_param.debug(f"DEBUG: [pipeline.py] Parámetros de la consulta: {query_params}")
+    logger_param.debug(f"DEBUG: [pipeline.py] Mensaje de error en generación SQL: {error_message_generation}")
+
     return sql_query_generated, query_params, error_message_generation, context_from_sql_gen
 
 def extract_info_from_question_llm(
-    question: str, 
-    db_structure_dict: dict, 
-    terms_dict: dict, 
-    llm_client, 
-    current_logger, 
-    max_retries=1 # Añadido max_retries como parámetro
+    question: str,
+    db_structure_dict: dict,
+    terms_dict: dict,
+    llm_client,
+    current_logger,
+    relationship_graph=None,  # <--- descomentado aquí
+    max_retries=1
 ) -> Optional[Dict[str, Any]]:
     """
     Utiliza un LLM para extraer información estructurada de la pregunta del usuario,
@@ -284,6 +371,7 @@ def extract_info_from_question_llm(
         terms_dict (dict): El diccionario de términos.
         llm_client: El cliente del LLM inicializado (se asume ChatOpenAI).
         current_logger: La instancia del logger.
+        relationship_graph: El grafo de relaciones (opcional).
         max_retries (int): Número máximo de reintentos para la llamada al LLM.
 
     Returns:
@@ -302,85 +390,179 @@ def extract_info_from_question_llm(
     
     # --- INICIO LLAMADA REAL AL LLM ---
     
-    rag_instance = DatabaseSchemaRAG(db_structure_dict=db_structure_dict, 
-                                     terms_dict=terms_dict,
-                                     logger_param=current_logger)
+    # Detectar entidades clave (tablas) mencionadas en la pregunta
+    forced_tables = set()
+    # Intenta extraer nombres de tablas de la pregunta (ej. PALABRA_EN_MAYUSCULAS_CON_GUIONES_BAJOS)
+    # Esto es una heurística simple, podría necesitar refinamiento.
+    # Busca palabras que parezcan nombres de tablas (mayúsculas, guiones bajos, mínimo 3 caracteres)
+    potential_tables_in_question = re.findall(r'\b([A-Z][A-Z0-9_]{2,})\b', question)
+    for pt_table_name in potential_tables_in_question:
+        if pt_table_name in db_structure_dict:
+            forced_tables.add(pt_table_name)
+            current_logger.info(f"DEBUG: [pipeline.py] Tabla '{pt_table_name}' añadida a forced_tables desde la pregunta.")
     
-    relevant_schema_str, relevant_terms_str = rag_instance.get_relevant_context(
-        question,
-        top_n_tables=5, # AUMENTADO de 3 a 5
-        top_n_columns_per_table=10, # AUMENTADO de 7 a 10
-        top_n_terms=10 # AUMENTADO de 8 a 10
+    # Añadir automáticamente tablas puente usando el grafo de relaciones
+    try:
+        rel_path = os.path.join(os.path.dirname(__file__), '../../table_relationships.json')
+        if os.path.exists(rel_path):
+            with open(rel_path, 'r', encoding='utf-8') as f:
+                rel_map = json.load(f)
+        else:
+            rel_map = None
+    except Exception as e:
+        rel_map = None
+        current_logger.warning(f"No se pudo cargar table_relationships.json para robustez: {e}")
+    try:
+        from src.db_relationship_graph import build_relationship_graph, find_join_path
+        relationship_graph = build_relationship_graph(None, table_relationships=rel_map, db_structure=db_structure_dict)
+    except Exception as e:
+        relationship_graph = None
+        current_logger.warning(f"No se pudo construir el grafo de relaciones: {e}")
+    if relationship_graph and len(forced_tables) > 1:
+        from itertools import combinations
+        for t1, t2 in combinations(forced_tables, 2):
+            path = find_join_path(relationship_graph, t1, t2, max_depth=6)
+            if path:
+                forced_tables.update(path)
+    forced_tables = list(forced_tables)
+
+    # Construir contexto relevante directamente del esquema (sin RAG)
+    # Para simplificar, pasamos todo el esquema y los términos relevantes (si existen)
+    relevant_schema_dict = db_structure_dict
+    # --- OPTIMIZACIÓN: Extraer solo el subesquema relevante para la pregunta ---
+    def extract_relevant_schema(
+        question_text: str,
+        current_db_structure_dict: dict,
+        explicitly_forced_tables: List[str], # Cambiado a List para la firma
+        graph # Grafo de relaciones
+    ) -> dict:
+        relevant_sub_schema: Dict[str, Any] = {}
+        tables_to_include: Set[str] = set(explicitly_forced_tables)
+
+        # 2a. Añadir tablas forzadas explícitamente
+        for forced_table_name in explicitly_forced_tables:
+            if forced_table_name in current_db_structure_dict:
+                if forced_table_name not in relevant_sub_schema:
+                    relevant_sub_schema[forced_table_name] = current_db_structure_dict[forced_table_name]
+                    current_logger.info(f"DEBUG: [pipeline.py] Tabla forzada '{forced_table_name}' añadida al subesquema.")
+            else:
+                current_logger.warning(f"DEBUG: [pipeline.py] Tabla forzada '{forced_table_name}' no encontrada en current_db_structure_dict.")
+
+        # 2b. Añadir tablas que contengan 'PATI_ID' (común en esquemas médicos)
+        #     y que no estén ya incluidas.
+        for table_name, table_data in current_db_structure_dict.items():
+            if "PATI_ID" in table_data.get("columns", []) and table_name not in relevant_sub_schema:
+                relevant_sub_schema[table_name] = table_data
+                tables_to_include.add(table_name)
+                current_logger.info(f"DEBUG: [pipeline.py] Tabla '{table_name}' con PATI_ID añadida al subesquema.")
+
+        # 2c. (Opcional Avanzado) Usar el grafo de relaciones para añadir tablas puente o directamente conectadas
+        #     a las tablas ya seleccionadas, si es necesario y el grafo está disponible.
+        #     Esto ayuda si una tabla de catálogo no tiene PATI_ID y no fue forzada, pero está vinculada.
+        if graph and tables_to_include and hasattr(graph, "neighbors"):
+            expanded_by_graph: Set[str] = set()
+            for core_table in list(tables_to_include): # Iterar sobre una copia
+                if core_table in graph:
+                    for neighbor in graph.neighbors(core_table):
+                        if neighbor in current_db_structure_dict and neighbor not in relevant_sub_schema:
+                            relevant_sub_schema[neighbor] = current_db_structure_dict[neighbor]
+                            expanded_by_graph.add(neighbor)
+                            current_logger.info(f"DEBUG: [pipeline.py] Tabla vecina '{neighbor}' (conectada a '{core_table}') añadida al subesquema vía grafo.")
+            if expanded_by_graph:
+                 current_logger.info(f"DEBUG: [pipeline.py] Tablas añadidas por expansión de grafo: {expanded_by_graph}")
+        elif graph and tables_to_include:
+            current_logger.warning("El objeto 'graph' no tiene el método 'neighbors'. ¿build_relationship_graph está devolviendo un grafo de networkx?")
+
+        # 2d. Fallback: Si después de todos los intentos el sub-esquema está vacío,
+        #     y no había tablas forzadas inicialmente, podría ser una pregunta muy genérica.
+        #     En este caso, devolver el esquema completo puede ser una opción, pero con advertencia.
+        #     Si había tablas forzadas pero no se encontraron, relevant_sub_schema estaría vacío,
+        #     lo que indicaría un problema (ya advertido antes).
+        if not relevant_sub_schema:
+            if not explicitly_forced_tables:
+                current_logger.warning(f"DEBUG: [pipeline.py] Subesquema relevante está vacío y no hubo tablas forzadas para la pregunta: '{question_text}'. Considera si esto es esperado. Devolviendo esquema completo como fallback.")
+                return current_db_structure_dict # Fallback MUY CAUTELOSO
+            else:
+                current_logger.warning(f"DEBUG: [pipeline.py] Subesquema relevante está vacío A PESAR de tablas forzadas: {explicitly_forced_tables} para la pregunta: '{question_text}'. Esto indica que las tablas forzadas no se encontraron o no se pudieron procesar.")
+                return {} # Devolver vacío si las tablas forzadas no resultaron en un esquema
+
+        return relevant_sub_schema
+
+    # 3. Obtener el diccionario del sub-esquema y convertirlo a string
+    relevant_schema_dict = extract_relevant_schema(question, db_structure_dict, list(forced_tables), relationship_graph)
+    relevant_schema_str = json.dumps(relevant_schema_dict, ensure_ascii=False, indent=2) # indent para mejor logging
+
+    # --- CORRECCIÓN: Definir relevant_terms_str ---
+    relevant_terms_str = json.dumps(terms_dict, ensure_ascii=False, indent=2) if terms_dict else ""
+    # --- FIN CORRECCIÓN ---
+
+    current_logger.info(f"DEBUG: [pipeline.py] Subesquema final para LLM (pregunta: '{question[:100]}...'): {list(relevant_schema_dict.keys())}")
+    # --- FIN: Lógica para determinar el sub-esquema relevante ---
+
+    # --- CONTEXTO GENÉRICO Y ROBUSTO PARA EL LLM SOBRE CONSULTAS SQL MÉDICAS ---
+    contexto_generico = (
+        "ATENCIÓN: Eres un asistente experto en SQL médico. Tu tarea es generar una consulta SQL SQLite válida y ejecutable para responder a la pregunta del usuario, usando ÚNICAMENTE la información proporcionada en el esquema de la base de datos y el diccionario de términos relevantes (si se proporciona).\n"
+        "REGLAS FUNDAMENTALES:\n"
+        "1.  **USA SOLO EL ESQUEMA PROPORCIONADO**: SOLO puedes usar columnas y tablas que aparecen exactamente en el esquema. NO inventes ni infieras columnas o tablas. Si la información no está disponible en el esquema, indícalo claramente.\n"
+        "2.  **SINTAXIS SQLITE**: Asegúrate de que la consulta SQL generada sea compatible con SQLite.\n"
+        "3.  **MANEJO DE ERRORES**: Si no puedes generar una consulta válida, explica el motivo y pide aclaración al usuario. Si la consulta podría no devolver resultados o ser ambigua, advierte al usuario.\n"
+        "4.  **FILTROS Y CONDICIONES**: Si la pregunta requiere filtrar por un paciente, diagnóstico, fecha, etc., utiliza los campos más relevantes del esquema. Para búsquedas de texto con múltiples `LIKE` y `OR`, AGRUPA los `OR` entre paréntesis: `WHERE ... AND (campo LIKE '%a%' OR campo LIKE '%b%')`.\n"
+        "5.  **TABLAS DE DICCIONARIO/CATÁLOGO**: Si existen tablas que parecen ser diccionarios de códigos o catálogos (ej., `_DICTIONARIES`, `ALLE_ALLERGY_TYPES`), considera usarlas para mapear descripciones a códigos si es necesario, pero tu objetivo principal es generar la consulta que responda a la pregunta del usuario, no explorar los catálogos a menos que sea imprescindible para la consulta final.\n"
+        "6.  **CÁLCULO DE EDAD**: Si necesitas calcular la edad a partir de dos fechas (fecha_final, fecha_inicial), usa la fórmula: `CAST((julianday(fecha_final) - julianday(fecha_inicial)) / 365.25 AS REAL)`. No pongas el alias dentro del `CAST`.\n"
+        "7.  **RESPUESTA**: Devuelve la consulta SQL. Si es necesario, puedes añadir una breve explicación de tus supuestos o limitaciones.\n\n"
+        "SOBRE EL USO DE HERRAMIENTAS DE BÚSQUEDA EXTERNA (como BioChatMedicalInquiry o similar para PubMed):\n"
+        "1. INTENTA PRIMERO RESPONDER CON TU CONOCIMIENTO GENERAL: Para preguntas sobre conceptos médicos establecidos, listas comunes (ej. medicamentos de alto riesgo en geriatría según criterios Beers o STOPP/START), definiciones, o información que es ampliamente conocida en el ámbito médico, utiliza tu conocimiento interno ANTES de recurrir a herramientas de búsqueda externa.\n"
+        "2. USA BÚSQUEDA EXTERNA PARA EVIDENCIA CIENTÍFICA RECIENTE O ESPECIALIZADA: La herramienta BioChatMedicalInquiry (o similar para PubMed) está diseñada para encontrar artículos de investigación, estudios clínicos, revisiones sistemáticas y evidencia científica específica que podría no estar en tu conocimiento base o que requiera la información más actualizada de la literatura.\n"
+        "3. NO USES BÚSQUEDA EXTERNA PARA PREGUNTAS SIMPLES DE LA BASE DE DATOS: Si la pregunta se puede responder con una consulta SQL a la base de datos local, usa SQLMedicalChatbot.\n"
+        "4. EJEMPLO DE CUÁNDO NO USAR BioChatMedicalInquiry INICIALMENTE: Si se pregunta por 'medicamentos de alto riesgo en geriatría', primero intenta generar una lista basada en criterios conocidos (Beers, STOPP/START). Solo si no puedes y la pregunta explícitamente pide 'investigación reciente sobre...' o 'estudios que comparan...' entonces considera BioChatMedicalInquiry.\n"
+        "5. SI UNA HERRAMIENTA DE BÚSQUEDA EXTERNA NO DA RESULTADOS ÚTILES TRAS UN INTENTO RAZONABLE: Considera si la pregunta puede ser respondida de otra manera (conocimiento general, reformulación) o si necesitas pedir aclaración al usuario, en lugar de insistir con la misma herramienta y ligeras variaciones de la pregunta.\n"
     )
+    prompt_text = f"""{contexto_generico}Pregunta del usuario: {question}\n\nDiccionario de términos relevantes (si aplica): {relevant_terms_str}\n\nEsquema de base de datos relevante: {relevant_schema_str}\n\nRespuesta esperada: (Consulta SQL SQLite válida o explicación clara de por qué no se puede generar)\n"""
 
-    current_logger.info(f"RAG Relevant Schema for LLM: {relevant_schema_str}") # <--- AÑADIDO: Log detallado del esquema RAG
-    current_logger.info(f"RAG Relevant Terms for LLM: {relevant_terms_str}") # <--- AÑADIDO: Log detallado de los términos RAG
-    current_logger.debug(f"RAG Schema Context: {relevant_schema_str}")
-    current_logger.debug(f"RAG Terms Context: {relevant_terms_str}")
-
-    prompt_text = f"""Dada la pregunta del usuario, el diccionario de términos relevantes y la estructura de la base de datos relevante, 
-genera una consulta SQL SQLite válida y ejecutable para responder a la pregunta.
-Consideraciones importantes para la consulta SQL:
-- Utiliza ÚNICAMENTE las tablas y columnas proporcionadas en la ESTRUCTURA DE BASE DE DATOS RELEVANTE. NO inventes tablas o columnas.
-- Presta atención a los TIPOS DE DATOS de las columnas al formular las condiciones.
-- Si la pregunta implica nombres de pacientes, la tabla PATIENTS contiene PATI_FULL_NAME. NO uses PATI_NAME o PATI_SURNAME a menos que estén explícitamente en la ESTRUCTURA DE BASE DE DATOS RELEVANTE.
-- Si necesitas unir tablas, asegúrate de que las condiciones de JOIN sean correctas y utilicen columnas existentes en la ESTRUCTURA DE BASE DE DATOS RELEVANTE.
-- El DICCIONARIO DE TÉRMINOS RELEVANTES es tu principal fuente para interpretar qué tablas o columnas son pertinentes para la pregunta.
-- Si, DESPUÉS de analizar la ESTRUCTURA DE BASE DE DATOS RELEVANTE y el DICCIONARIO DE TÉRMINOS RELEVANTES proporcionados, consideras que la información es insuficiente para generar una consulta SQL que responda DIRECTAMENTE a la pregunta, explica DETALLADAMENTE qué información específica falta y por qué el contexto proporcionado no es suficiente. NO inventes una consulta si la información no está.
-- Devuelve SÓLO la consulta SQL, sin explicaciones adicionales, ni texto introductorio o final, ni markdown, a menos que estés explicando la información faltante según el punto anterior.
-- Si la pregunta no puede ser respondida con una consulta SQL (por ejemplo, si es un saludo o una pregunta general sobre tus capacidades), responde amablemente sin generar SQL.
-
-Pregunta del usuario: {question}
-
-Diccionario de términos relevantes:
-{relevant_terms_str}
-
-Estructura de base de datos relevante:
-{relevant_schema_str}
-
-Respuesta (Consulta SQL SQLite o explicación de información faltante):
-"""
-    
-    current_logger.debug(f"DEBUG: [pipeline.py] Prompt para LLM (extracción info) para pregunta '{question}' será: {prompt_text[:1000]}...") # Loguear solo una parte
+    current_logger.info(f"DEBUG: [pipeline.py] PROMPT COMPLETO ENVIADO AL LLM PARA PREGUNTA '{question}':\n{prompt_text}")
+    # AÑADE ESTA LÍNEA PARA LOGGING COMPLETO:
+    current_logger.info(f"DEBUG: [pipeline.py] PROMPT COMPLETO ENVIADO AL LLM PARA PREGUNTA '{question}':\n{prompt_text}")
 
     structured_info = {}
     error_message = ""
 
+    # Cambiar max_retries a 0 para que solo se haga un intento
+    max_retries = 0
     for attempt in range(max_retries + 1):
         try:
             current_logger.info(f"Intento {attempt + 1} de {max_retries + 1} para llamar al LLM para extracción de estructura para la pregunta: '{question}'.")
-            
             system_message_prompt = "Eres un asistente experto en SQL que ayuda a generar consultas SQLite basadas en la estructura de la base de datos y un diccionario de términos. Tu objetivo es devolver ÚNICAMENTE la consulta SQL o un mensaje de error claro si no puedes generarla."
-            
             messages_for_llm = [
                 SystemMessage(content=system_message_prompt),
                 HumanMessage(content=prompt_text)
             ]
-
-            #(o compatible con Langchain)
-            # El modelo (ej. LLM_MODEL_NAME) se configura al instanciar llm_client.
             response_from_llm = llm_client.invoke(messages_for_llm)
-            
             structured_info_str = None
             if hasattr(response_from_llm, 'content'):
                 structured_info_str = response_from_llm.content
-            elif isinstance(response_from_llm, str): # Fallback por si la respuesta es un string directo
+            elif isinstance(response_from_llm, str):
                 structured_info_str = response_from_llm
-            
             if structured_info_str is None:
                 current_logger.error(f"Respuesta del LLM no tiene atributo 'content' o es None, y no es un string. Tipo: {type(response_from_llm)}. Contenido: {str(response_from_llm)[:200]}")
                 if attempt == max_retries:
-                     return {}, f"Formato de respuesta del LLM inesperado tras {max_retries + 1} intentos."
-                time.sleep(2) 
+                     return {}, "Formato de respuesta del LLM inesperado tras {max_retries + 1} intentos."
+                time.sleep(2)
                 continue
-
+            lower_structured = structured_info_str.lower()
+            missing_context_keywords = [
+                "missing context", "insufficient context", "insufficient information", "información insuficiente", "contexto insuficiente", "no se encuentra suficiente información", "no se encuentra suficiente contexto", "no dispongo del contexto necesario", "no dispongo de la información necesaria", "no tengo suficiente contexto", "no tengo suficiente información"
+            ]
+            if any(kw in lower_structured for kw in missing_context_keywords):
+                current_logger.error(f"LLM devolvió mensaje de contexto insuficiente (intento {attempt + 1}): {structured_info_str}")
+                final_answer_explanation = structured_info_str.strip()
+                if not final_answer_explanation.lower().startswith("final answer:"):
+                    final_answer_explanation = f"Final Answer: {final_answer_explanation}"
+                return {"non_sql_response": final_answer_explanation}, "El LLM indicó falta de contexto o información insuficiente (formateado y retornado)."
             current_logger.info(f"DEBUG: [pipeline.py] LLM (extracción) respuesta raw: {structured_info_str}")
-
             sql_query_match = extract_sql_from_markdown(structured_info_str)
             if sql_query_match:
                 current_logger.info(f"SQL extraído de la respuesta del LLM: {sql_query_match}")
                 return {"sql_query": sql_query_match}, "Consulta SQL generada por LLM."
-            
             try:
                 parsed_json = json.loads(structured_info_str)
                 if isinstance(parsed_json, dict) and "error_message" in parsed_json:
@@ -388,46 +570,36 @@ Respuesta (Consulta SQL SQLite o explicación de información faltante):
                     error_message = parsed_json.get('error_message')
                     if attempt == max_retries: return {}, error_message
                     time.sleep(2)
-                    continue 
+                    continue
             except json.JSONDecodeError:
-                # No es JSON, podría ser SQL directo o una respuesta textual no SQL
-                # Si la cadena parece una consulta SQL (heurística simple)
                 if ("SELECT".lower() in structured_info_str.lower() or
                     "INSERT".lower() in structured_info_str.lower() or
                     "UPDATE".lower() in structured_info_str.lower() or
                     "DELETE".lower() in structured_info_str.lower()):
-                    current_logger.info(f"Respuesta del LLM parece SQL directo (no Markdown, no JSON de error): {structured_info_str}")
+                    current_logger.info(f"Respuesta del LLM parece SQL directo (no Markdown, no JSON de error): {sql_query_match}")
                     return {"sql_query": structured_info_str.strip()}, "Consulta SQL (directa) generada por LLM."
-                
-                current_logger.warning(f"Respuesta del LLM no es SQL en Markdown, ni JSON de error, ni parece SQL directo. Respuesta: {structured_info_str}")
-                # Si no es SQL ni un error JSON conocido, y es el último intento, devolver como mensaje.
                 if attempt == max_retries:
-                    # Considerar si esto debería ser un error o una respuesta no SQL.
-                    # Por ahora, si el prompt pide SQL o mensaje amigable, esto podría ser el mensaje.
-                    return {"non_sql_response": structured_info_str}, "Respuesta no SQL del LLM."
-                # Si no es el último intento, podría ser un fallo transitorio, reintentar.
-                error_message = "Respuesta no SQL/JSON inesperada del LLM." # Para el log del reintento
-            
-            # Si llegamos aquí, es porque se parseó un JSON que no era de error, o algo inesperado.
-            # O la respuesta no era SQL directo y no era el último intento.
-            # Si no es un error claro para reintentar, y no es SQL, y no es el último intento,
-            # es mejor registrar y reintentar.
-            current_logger.warning(f"Intento {attempt + 1} no produjo SQL claro. Respuesta: {structured_info_str}. Reintentando si quedan intentos.")
-            if attempt == max_retries: # Si es el último intento y no se resolvió
-                return {}, f"No se pudo extraer SQL o una respuesta clara del LLM tras {max_retries + 1} intentos. Última respuesta: {structured_info_str}"
-            time.sleep(2) # Esperar antes de reintentar
-
-        except openai.APIConnectionError as e: # Suponiendo que Langchain podría lanzar errores de openai si usa ese backend
+                    idx_final_answer = structured_info_str.lower().find("final answer:")
+                    if idx_final_answer != -1:
+                        final_answer = structured_info_str[idx_final_answer:].strip()
+                        return {"non_sql_response": final_answer}, "Respuesta no SQL del LLM (Final Answer extraído)."
+                    if not structured_info_str.strip().lower().startswith("final answer:"):
+                        current_logger.warning(f"Respuesta del LLM no es SQL ni error ni contiene 'Final Answer:'. Se forzará el formato Final Answer.")
+                        final_answer = f"Final Answer: {structured_info_str.strip()}"
+                        return {"non_sql_response": final_answer}, "Respuesta no SQL del LLM (formato Final Answer forzado)."
+                    else:
+                        return {"non_sql_response": structured_info_str.strip()}, "Respuesta no SQL del LLM."
+                error_message = "Respuesta no SQL/JSON inesperada del LLM."
+        except openai.APIConnectionError as e:
             error_message = f"Error de conexión con la API del LLM: {e}"
             current_logger.error(error_message, exc_info=True)
             if attempt == max_retries: return {}, error_message
-            time.sleep(5) # Espera más larga para problemas de conexión
-        except openai.BadRequestError as e: # Errores como "context length exceeded"
+            time.sleep(5)
+        except openai.BadRequestError as e:
             error_message = f"Error en la solicitud al LLM (BadRequestError): {e}"
             current_logger.error(error_message, exc_info=True)
-            # Este tipo de error usualmente no se resuelve con reintentos simples si el prompt es el mismo.
-            return {}, error_message 
-        except openai.APIStatusError as e: # Otros errores de API
+            return {}, error_message
+        except openai.APIStatusError as e:
             error_message = f"Error de estado de la API del LLM: {e}"
             current_logger.error(error_message, exc_info=True)
             if attempt == max_retries: return {}, error_message
@@ -438,7 +610,6 @@ Respuesta (Consulta SQL SQLite o explicación de información faltante):
             if attempt == max_retries:
                 return {}, error_message
             time.sleep(2)
-            
     return {}, f"LLM no pudo extraer información después de {max_retries + 1} intentos. Último error: {error_message}"
 
 
@@ -447,62 +618,36 @@ def generate_natural_language_response_via_llm(llm, original_question, sql_query
     current_logger_nl = logger_param if logger_param else logger
     current_logger_nl.info(f"DEBUG: [pipeline.py] Entrando en generate_natural_language_response_via_llm con LLM: {type(llm)}")
 
-    # --- INICIO COMENTARIOS SOBRE LLAMADA REAL AL LLM ---
-    # Aquí es donde se construiría el prompt y se llamaría al LLM
-    # prompt_parts = [f"Pregunta original del usuario: {original_question}"]
-    # if sql_query and not ("Error:" in sql_query or (error_extract_msg and "Se proporcionó SQL directamente" not in error_extract_msg)):
-    #     prompt_parts.append(f"Consulta SQL ejecutada con éxito: {sql_query}")
-    
-    # if results is not None:
-    #     prompt_parts.append(f"Resultados ({len(results)} filas encontradas):")
-    #     if column_names:
-    #         prompt_parts.append("Columnas: " + " | ".join(column_names))
-    #     # Mostrar algunas filas de ejemplo, no todas si son muchas
-    #     for i, row in enumerate(results[:3]): # Mostrar hasta 3 filas
-    #         prompt_parts.append(f"Fila {i+1}: " + " | ".join(map(str, row)))
-    #     if len(results) > 3:
-    #         prompt_parts.append(f"... y {len(results) - 3} fila(s) más.")
-    #     if not results:
-    #          prompt_parts.append("No se encontraron resultados que coincidan con tu consulta.")
-    # elif sql_query and not ("Error:" in sql_query):
-    #     prompt_parts.append("La consulta se ejecutó pero no devolvió filas.")
-
-
-    # if error_extract_msg and "Se proporcionó SQL directamente" not in error_extract_msg:
-    #      prompt_parts.append(f"Hubo un problema al procesar la pregunta antes de generar SQL: {error_extract_msg}")
-    # elif sql_query and "Error:" in sql_query : # Si SQLGenerator devolvió un error
-    #      prompt_parts.append(f"Hubo un error al intentar generar la consulta SQL: {sql_query}")
-
-
-    # prompt_parts.append("Por favor, genera una respuesta concisa, amigable y útil en lenguaje natural para el usuario, resumiendo los hallazgos o explicando el problema.")
-    # final_prompt = "\\n".join(prompt_parts)
-    # current_logger_nl.debug(f"DEBUG: [pipeline.py] Prompt para LLM (generación NL):\\n{final_prompt[:1000]}...") # Loguear parte del prompt
-
-    # try:
-    #     # Asumiendo que llm es una instancia de Langchain (como ChatOpenAI) que tiene el método .invoke()
-    #     # response = llm.invoke(final_prompt) 
-    #     # generated_text = response.content # o la forma apropiada de obtener el texto
-    # --- FIN COMENTARIOS SOBRE LLAMADA REAL AL LLM ---
-
     # --- INICIO LLM SIMULADO para generate_natural_language_response_via_llm ---
     current_logger_nl.warning("USANDO LLM SIMULADO para generate_natural_language_response_via_llm")
     generated_text = ""
     if results is not None: # results puede ser una lista vacía
-        if results: # Hay filas
+        if results:
             generated_text = f"He encontrado {len(results)} resultado(s) para tu consulta sobre '{original_question}'. "
             if column_names:
                 generated_text += f"Las columnas son: {', '.join(column_names)}. "
-            generated_text += f"Aquí tienes algunos ejemplos: {str(results[:2])}" # Muestra los 2 primeros
-            if len(results) > 2:
-                generated_text += f" (y {len(results)-2} más)."
-        else: # No hay filas
-             generated_text = f"No se encontraron resultados para tu consulta: '{original_question}'."
+                # Mostrar los primeros 2 resultados de forma legible
+                ejemplos = "\\n".join([
+                    ", ".join(f"{col}: {val}" for col, val in zip(column_names, row))
+                    for row in results[:2]
+                ])
+                generated_text += f"Aquí tienes algunos ejemplos:\\n{ejemplos}"
+                if len(results) > 2:
+                    generated_text += f"\\n(y {len(results)-2} más)."
+            else:
+                # Si no hay nombres de columnas, mostrar los resultados tal cual
+                generated_text += f"Aquí tienes algunos ejemplos: {str(results[:2])}"
+                if len(results) > 2:
+                    generated_text += f" (y {len(results)-2} más)."
+        else:
+         # No hay filas
+            generated_text = f"No se encontraron resultados para tu consulta: '{original_question}'."
     elif sql_query and "Error:" in sql_query : # Error de SQLGenerator
-         generated_text = f"Hubo un problema al generar la consulta para tu pregunta '{original_question}'. Detalle: {sql_query}"
+        generated_text = f"Hubo un problema al generar la consulta para tu pregunta '{original_question}'. Detalle: {sql_query}"
     elif error_extract_msg and "Se proporcionó SQL directamente" not in error_extract_msg: # Error de extracción
         generated_text = f"No pude entender completamente tu pregunta sobre '{original_question}'. Error: {error_extract_msg}"
     elif error_extract_msg and "Se proporcionó SQL directamente" in error_extract_msg and sql_query and results is None: # SQL directo, pero sin resultados (results es None)
-         generated_text = f"Ejecuté la consulta SQL que proporcionaste, pero no obtuve resultados o hubo un error en la ejecución."
+        generated_text = f"Ejecuté la consulta SQL que proporcionaste, pero no obtuve resultados o hubo un error en la ejecución."
     else: # Caso genérico
         generated_text = f"He procesado tu pregunta '{original_question}'. Si esperabas datos específicos y no los ves, por favor, reformula tu pregunta o verifica los términos."
     # --- FIN LLM SIMULADO ---
@@ -512,6 +657,31 @@ def generate_natural_language_response_via_llm(llm, original_question, sql_query
     # except Exception as e: # Comentado porque la llamada real al LLM está comentada
     #     current_logger_nl.error(f"Excepción al llamar al LLM para generar respuesta NL: {e}", exc_info=True)
     #     return f"Lo siento, tuve un problema al generar la respuesta en lenguaje natural. Error: {e}"
+
+def agrupar_or_like_en_parentesis(sql: str) -> str:
+    """
+    Agrupa automáticamente los OR de varios LIKE sobre el mismo campo en paréntesis,
+    para asegurar que los AND se apliquen correctamente fuera del grupo.
+    """
+    # Busca el WHERE y separa condiciones
+    pattern = re.compile(
+        r"(WHERE\s+)(.*?)(\s+ORDER\s+BY|\s+GROUP\s+BY|\s+LIMIT|\s*$)", re.IGNORECASE | re.DOTALL
+    )
+    match = pattern.search(sql)
+    if not match:
+        return sql
+    where_start, conditions, where_end = match.groups()
+    # Busca secuencias de OR con LIKE sobre el mismo campo
+    like_or_pattern = re.compile(
+        r"((?:\w+\.\w+|\w+)\s+LIKE\s+'[^']+'\s*(?:OR\s+(?:\w+\.\w+|\w+)\s+LIKE\s+'[^']+'\s*)+)",
+        re.IGNORECASE
+    )
+    def agrupar(match_like):
+        bloque = match_like.group(1)
+        return f"({bloque.strip()})"
+    new_conditions = like_or_pattern.sub(agrupar, conditions)
+    nueva_where = f"{where_start}{new_conditions}{where_end}"
+    return sql.replace(f"{where_start}{conditions}{where_end}", nueva_where)
 
 
 class MockLLMForPipeline:
@@ -565,12 +735,24 @@ class MockLLMForPipeline:
         return "No se pudo generar una consulta SQL o no hubo resultados."
 
 
+# Inicializar instancia de DBConnector
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_DB_PATH = os.path.join(_SCRIPT_DIR, "db", "database_new.sqlite3.db")
+# _DEFAULT_SCHEMA_PATH = os.path.join(_SCRIPT_DIR, "data", "schema_simple.json") # ELIMINADO
+
+db_connector = DBConnector(
+    db_path=_DEFAULT_DB_PATH
+    # schema_path=_DEFAULT_SCHEMA_PATH # ELIMINADO
+)
+logger.info(f"Instancia de DBConnector creada con db_path: {_DEFAULT_DB_PATH}") # MODIFICADO
+
+# Definir el número máximo de reintentos para LLM
+max_retries_llm = MAX_RETRIES_LLM_EXTRACT
+
 def chatbot_pipeline_entrypoint( # MODIFICADO: Renombrar la función principal
     user_question: str, 
-    db_connector: DBConnector, 
-    llm_param: Any, # Puede ser una instancia de ChatOpenAI u otro cliente LLM compatible
-    terms_dict_path: str, 
-    schema_path: str, # Añadido schema_path
+    db_connector: DBConnector,
+    llm_param: Any,
     logger_param: Optional[logging.Logger] = None,
     max_retries_llm: int = MAX_RETRIES_LLM_EXTRACT
 ) -> Dict[str, Any]:
@@ -582,59 +764,45 @@ def chatbot_pipeline_entrypoint( # MODIFICADO: Renombrar la función principal
         user_question (str): La pregunta formulada por el usuario.
         db_connector (DBConnector): Conector a la base de datos.
         llm_param (Any): Parámetros para el modelo de lenguaje (LLM).
-        terms_dict_path (str): Ruta al diccionario de términos.
-        schema_path (str): Ruta al esquema de la base de datos.
         logger_param (Optional[logging.Logger]): Logger opcional para registrar información.
         max_retries_llm (int): Número máximo de reintentos para la extracción de información con LLM.
 
     Returns:
         Dict[str, Any]: Un diccionario con la respuesta en lenguaje natural, posibles resultados, y mensajes de error.
     """
-    logger.info(f"DEBUG: [pipeline.py] Iniciando chatbot_pipeline_entrypoint con pregunta: '{user_question}'")
+    current_pipeline_logger = logger_param if logger_param else logger
+    current_pipeline_logger.info(f"DEBUG: [pipeline.py] Iniciando chatbot_pipeline_entrypoint con pregunta: '{user_question}'")
 
-    # --- INICIO: Carga de recursos (sin cambios significativos) ---
+    # --- INICIO: Carga de recursos ---
     try:
-        terms_dict = {}
-        with open(terms_dict_path, 'r', encoding='utf-8') as terms_file:
-            terms_dict = json.load(terms_file)
-        logger.info(f"DEBUG: [pipeline.py] Diccionario de términos cargado correctamente desde {terms_dict_path}.")
-    except Exception as e_terms:
-        logger.error(f"ERROR: [pipeline.py] No se pudo cargar el diccionario de términos desde {terms_dict_path}: {e_terms}")
-        return {"error": f"No se pudo cargar el diccionario de términos: {e_terms}", "response_message": "Error crítico: no se pudo cargar el diccionario de términos.", "data_results": [], "sql_query_generated": None, "params_used": [], "data_results_empty": True, "error_message": f"No se pudo cargar el diccionario de términos: {e_terms}"}
-
-    try:
-        db_schema_dict = {}
-        with open(schema_path, 'r', encoding='utf-8') as schema_file:
-            db_schema_dict = json.load(schema_file)
-        logger.info(f"DEBUG: [pipeline.py] Esquema de base de datos cargado correctamente desde {schema_path}.")
+        # Obtener el esquema dinámicamente
+        db_schema_dict = db_connector.get_db_structure_dict()
+        if not db_schema_dict:
+            current_pipeline_logger.error("ERROR: [pipeline.py] db_connector.get_db_structure_dict() devolvió un esquema vacío o None.")
+            raise ValueError("El esquema de la base de datos obtenido dinámicamente está vacío o es None.")
+        current_pipeline_logger.info(f"DEBUG: [pipeline.py] Esquema de base de datos obtenido dinámicamente desde DBConnector.")
     except Exception as e_schema:
-        logger.error(f"ERROR: [pipeline.py] No se pudo cargar el esquema de la base de datos desde {schema_path}: {e_schema}")
-        return {"error": f"No se pudo cargar el esquema de la base de datos: {e_schema}", "response_message": "Error crítico: no se pudo cargar el esquema de la base de datos.", "data_results": [], "sql_query_generated": None, "params_used": [], "data_results_empty": True, "error_message": f"No se pudo cargar el esquema de la base de datos: {e_schema}"}
-    
-    logger.info(f"DEBUG: [pipeline.py] Esquema de base de datos cargado correctamente desde {schema_path}.")
+        current_pipeline_logger.error(f"ERROR: [pipeline.py] No se pudo obtener el esquema de la base de datos desde DBConnector: {e_schema}", exc_info=True)
+        return {"error": f"No se pudo obtener el esquema de la base de datos: {e_schema}", "response_message": "Error crítico: no se pudo cargar/obtener el esquema de la base de datos.", "data_results": [], "sql_query_generated": None, "params_used": [], "data_results_empty": True, "error_message": f"No se pudo obtener el esquema de la base de datos: {e_schema}"}
 
     # Transformar db_schema_dict al formato esperado por WhitelistValidator
     transformed_schema = {"tables": []}
-    if isinstance(db_schema_dict, dict): # Asegurarse que db_schema_dict es un diccionario
+    if isinstance(db_schema_dict, dict):
         for table_name, table_data in db_schema_dict.items():
             if isinstance(table_data, dict) and "columns" in table_data and isinstance(table_data["columns"], list):
                 columns = [{"name": col_name} for col_name in table_data.get("columns", [])]
                 transformed_schema["tables"].append({"name": table_name, "columns": columns})
             else:
-                logger.warning(f"Formato inesperado para la tabla {table_name} en schema_simple.json. Se omitirá.")
+                current_pipeline_logger.warning(f"Formato inesperado para la tabla {table_name} en schema_simple.json. Se omitirá.")
     else:
-        logger.error("ERROR: [pipeline.py] db_schema_dict no es un diccionario como se esperaba después de cargar el JSON.")
-        # Manejar el error apropiadamente, quizás devolviendo un error o usando un esquema vacío seguro.
-        # Por ahora, se procederá con un transformed_schema vacío, lo que probablemente causará fallos en la validación.
+        current_pipeline_logger.error("ERROR: [pipeline.py] db_schema_dict no es un diccionario como se esperaba después de cargar el JSON.")
         pass
 
-
-    # Instanciar WhitelistValidator
     whitelist_validator_instance = WhitelistValidator(
-        db_schema_dict=transformed_schema, # MODIFICADO: Usar el esquema transformado
-        case_sensitive=True  # Considera hacerlo configurable si es necesario
+        db_schema_dict=transformed_schema,
+        case_sensitive=True
     )
-    logger.info("DEBUG: [pipeline.py] WhitelistValidator instanciado.")
+    current_pipeline_logger.info("DEBUG: [pipeline.py] WhitelistValidator instanciado.")
     # --- FIN: Carga de recursos ---
 
     # --- INICIO: Variables para el flujo de SQL y resultados ---
@@ -647,297 +815,361 @@ def chatbot_pipeline_entrypoint( # MODIFICADO: Renombrar la función principal
     respuesta_final_chatbot: str = ""
     error_execution_msg: Optional[str] = None
     whitelist_error_msg: Optional[str] = None
-    is_whitelisted: bool = True # Asumir que es true hasta que se valide
+    is_whitelisted: bool = True
     # --- FIN: Variables para el flujo de SQL y resultados ---
 
-    preprocessed_question = preprocess_question(user_question, terms_dict)
-    logger.info(f"DEBUG: [pipeline.py] Pregunta preprocesada: '{preprocessed_question}'")
+    preprocessed_question = user_question # Aquí puedes aplicar normalización dinámica si es necesario
+    current_pipeline_logger.info(f"DEBUG: [pipeline.py] Pregunta preprocesada: '{preprocessed_question}'")
+
+    def is_sql_query(text):
+        text = text.strip()
+        # Caso 1: SQL directo
+        if text.upper().startswith(("SELECT", "WITH", "INSERT", "UPDATE", "DELETE")):
+            return True
+        # Caso 2: JSON con clave 'query' que contiene SQL
+        if text.startswith("{") and text.endswith("}"):
+            try:
+           
+                obj = json.loads(text)
+                if isinstance(obj, dict) and "query" in obj:
+                    query_val = obj["query"]
+                    if isinstance(query_val, str) and query_val.strip().upper().startswith(("SELECT", "WITH", "INSERT", "UPDATE", "DELETE")):
+                        return True
+            except Exception:
+                pass
+        return False
 
     structured_info: Dict[str, Any] = {}
-    error_extract_msg: str = "" # Mensaje de la extracción, puede ser una nota o un error.
+    error_extract_msg: str = ""
     try:
+        # --- INICIO: Inicializar relationship_graph ---
+        try:
+            rel_path = os.path.join(os.path.dirname(__file__), '../../table_relationships.json')
+            if os.path.exists(rel_path):
+                with open(rel_path, 'r', encoding='utf-8') as f:
+                    rel_map = json.load(f)
+            else:
+                rel_map = None
+        except Exception as e:
+            rel_map = None
+            current_pipeline_logger.warning(f"No se pudo cargar table_relationships.json en entrypoint: {e}")
+        try:
+            relationship_graph = build_relationship_graph(
+                db_connector, 
+                table_relationships=rel_map, 
+                db_structure=db_schema_dict
+            )
+            current_pipeline_logger.info("DEBUG: [pipeline.py] Grafo de relaciones construido en entrypoint.")
+        except Exception as e:
+            relationship_graph = None
+            current_pipeline_logger.warning(f"No se pudo construir grafo de relaciones en entrypoint: {e}")
+        # --- FIN: Inicializar relationship_graph ---
+
+        # Llamada dinámica al LLM para extracción estructurada
         structured_info, error_extract_msg = extract_info_from_question_llm(
             preprocessed_question, 
             db_schema_dict, 
-            terms_dict, 
+            None, 
             llm_client=llm_param, 
-            current_logger=logger, 
+            current_logger=current_pipeline_logger, 
+            relationship_graph=relationship_graph,  # <--- ahora definido
             max_retries=max_retries_llm
         )
-        logger.info(f"DEBUG: [pipeline.py] Información estructurada extraída: {structured_info}, Mensaje de extracción: '{error_extract_msg}'")
+        current_pipeline_logger.info(f"DEBUG: Información estructurada extraída: {structured_info}, error: '{error_extract_msg}'")
     except Exception as e_extract:
-        logger.error(f"DEBUG: [pipeline.py] Excepción durante extract_info_from_question_llm: {str(e_extract)}", exc_info=True)
-        error_extract_msg = f"Excepción crítica al intentar extraer información de la pregunta: {str(e_extract)}"
-        flow_decision = "extraction_failed_return" # Error grave, no se puede continuar
+        current_pipeline_logger.error(f"Excepción durante extract_info_from_question_llm: {e_extract}", exc_info=True)
+        error_extract_msg = f"Excepción crítica al extraer info: {e_extract}"
+        flow_decision = "extraction_failed_return"
+
+    # Expansión dinámica de sinónimos/diagnósticos (ejemplo con flexible_search_config)
+    from src.flexible_search_config import extract_diagnosis_variants_from_hint, get_llm_generated_synonyms, LLM_CALLER_FUNCTION
+    if not is_sql_query(user_question):
+        diagnosis_variants = extract_diagnosis_variants_from_hint(user_question)
+        if not diagnosis_variants and LLM_CALLER_FUNCTION:
+            synonyms_dict = get_llm_generated_synonyms([user_question], llm_caller=LLM_CALLER_FUNCTION)
+            if synonyms_dict and user_question in synonyms_dict:
+                diagnosis_variants = synonyms_dict[user_question]
+                logger.info(f"[pipeline] Sinónimos generados dinámicamente para '{user_question}': {diagnosis_variants}")
+        if diagnosis_variants:
+            logger.info(f"[pipeline] Detectadas variantes de diagnóstico: {diagnosis_variants}")
+            structured_info['diagnosis_variants'] = diagnosis_variants
+            preprocessed_question += f" (Buscar diagnósticos: {'; '.join(diagnosis_variants)})"
 
     # --- INICIO: Decidir si usar SQL extraído, generar SQL, o manejar error de extracción ---
-    flow_decision = "generate_new_sql" # Por defecto
+    flow_decision = "generate_new_sql"
+
+    # Permitir respuestas mixtas: si structured_info contiene sql_query y explanation, procesar ambos
+    explanation_from_llm = None
+    if structured_info:
+        # Soportar claves 'explanation', 'explicacion', o 'explanation_text' (flexibilidad)
+        for k in ["explanation", "explicacion", "explanation_text"]:
+            if k in structured_info and isinstance(structured_info[k], str):
+                explanation_from_llm = structured_info[k].strip()
+                break
+
+    # Refuerzo: si structured_info contiene una SQL válida, ejecutarla directamente
+    if structured_info and "sql_query" in structured_info:
+        extracted_sql_candidate = structured_info.get("sql_query")
+        if extracted_sql_candidate and isinstance(extracted_sql_candidate, str):
+            # Extraer de markdown si es necesario
+            if "```" in extracted_sql_candidate:
+                import re
+                match = re.search(r"```sql(.*?)```", extracted_sql_candidate, re.DOTALL | re.IGNORECASE)
+                if match:
+                    extracted_sql_candidate = match.group(1).strip()
+            if extracted_sql_candidate and extracted_sql_candidate.strip().upper().startswith(("SELECT", "WITH")):
+                sql_to_execute = extracted_sql_candidate.strip()
+                flow_decision = "use_extracted_sql"
+
+    # Refuerzo: si hay SQL válida, ejecutarla aunque haya error_extract_msg
+    if error_extract_msg and structured_info and "sql_query" in structured_info:
+        extracted_sql_candidate = structured_info.get("sql_query")
+        if extracted_sql_candidate and isinstance(extracted_sql_candidate, str):
+            if "```" in extracted_sql_candidate:
+                import re
+                match = re.search(r"```sql(.*?)```", extracted_sql_candidate, re.DOTALL | re.IGNORECASE)
+                if match:
+                    extracted_sql_candidate = match.group(1).strip()
+            if extracted_sql_candidate and extracted_sql_candidate.strip().upper().startswith(("SELECT", "WITH")):
+                sql_to_execute = extracted_sql_candidate.strip()
+                flow_decision = "use_extracted_sql"
 
     if error_extract_msg:
         logger.warning(f"DEBUG: [pipeline.py] Mensaje de la extracción presente: '{error_extract_msg}'")
         is_direct_sql_note = "Consulta SQL (directa) generada por LLM" in error_extract_msg or \
                              "SQL extraído directamente de la pregunta" in error_extract_msg or \
                              "La consulta SQL parece ser directa" in error_extract_msg
-        
-        if structured_info and "sql_query" in structured_info and is_direct_sql_note:
-            extracted_sql_candidate = structured_info.get("sql_query")
-            if extracted_sql_candidate and isinstance(extracted_sql_candidate, str):
-                # Intentar extraer SQL de markdown si está presente
-                if "```" in extracted_sql_candidate: # Comprobación simple de presencia de markdown
-                    logger.info(f"DEBUG: [pipeline.py] SQL directo detectado con posible markdown: '{extracted_sql_candidate[:100]}...'")
-                    extracted_sql_candidate = extract_sql_from_markdown(extracted_sql_candidate)
-                    logger.info(f"DEBUG: [pipeline.py] SQL directo después de intentar extraer de markdown: '{extracted_sql_candidate}'")
-                
-                if extracted_sql_candidate and extracted_sql_candidate.strip().upper().startswith(("SELECT", "WITH")):
-                    logger.info(f"DEBUG: [pipeline.py] SQL directo detectado y parece válido: '{extracted_sql_candidate}'.")
-                    sql_to_execute = extracted_sql_candidate
-                    flow_decision = "use_extracted_sql"
-                else:
-                    logger.error(f"DEBUG: [pipeline.py] SQL directo (post-markdown) no es SELECT/WITH o está vacío. Original structured_info: {structured_info}")
-                    error_extract_msg = f"Se detectó un intento de SQL directo, pero la consulta no era válida (post-markdown). Mensaje original: {error_extract_msg}"
-                    flow_decision = "extraction_failed_return" # Error grave
-            else: # extracted_sql_candidate no es una cadena o es None
-                logger.error(f"DEBUG: [pipeline.py] Mensaje de SQL directo, pero 'sql_query' no es una cadena o está ausente. structured_info: {structured_info}")
-                error_extract_msg = f"Se detectó un intento de SQL directo, pero la consulta ('sql_query') no es una cadena o está ausente. Mensaje original: {error_extract_msg}"
-                flow_decision = "extraction_failed_return" # Error grave
-        elif not (structured_info and "sql_query" in structured_info): # Si hay error_extract_msg Y NO hay sql_query en structured_info
-            logger.error(f"DEBUG: [pipeline.py] Error definitivo en la extracción (sin SQL en structured_info): {error_extract_msg}.")
-            flow_decision = "extraction_failed_return"
-        # Si hay error_extract_msg pero también hay sql_query (y no es la nota de SQL directo),
-        # se intentará usar ese sql_query si es válido (siguiente bloque).
-        # Si no es válido, se pasará a generar.
-
-    if flow_decision == "generate_new_sql" and structured_info and "sql_query" in structured_info:
-        extracted_sql_candidate = structured_info.get("sql_query")
-        if extracted_sql_candidate and isinstance(extracted_sql_candidate, str):
-            # Intentar extraer SQL de markdown si está presente
-            if "```" in extracted_sql_candidate: # Comprobación simple de presencia de markdown
-                logger.info(f"DEBUG: [pipeline.py] SQL de structured_info con posible markdown: '{extracted_sql_candidate[:100]}...'")
-                extracted_sql_candidate = extract_sql_from_markdown(extracted_sql_candidate)
-                logger.info(f"DEBUG: [pipeline.py] SQL de structured_info después de intentar extraer de markdown: '{extracted_sql_candidate}'")
-
-            if extracted_sql_candidate and extracted_sql_candidate.strip().upper().startswith(("SELECT", "WITH")):
-                logger.info(f"DEBUG: [pipeline.py] SQL extraído de structured_info (post-markdown) parece válido: '{extracted_sql_candidate}'.")
-                sql_to_execute = extracted_sql_candidate
-                flow_decision = "use_extracted_sql"
-            else:
-                logger.warning(f"DEBUG: [pipeline.py] structured_info tiene 'sql_query' (post-markdown) pero no es SELECT/WITH válida o está vacía: '{extracted_sql_candidate}'. Se procederá a generar SQL si es necesario.")
-                # flow_decision permanece "generate_new_sql"
-
-    if flow_decision == "extraction_failed_return":
-        logger.error(f"DEBUG: [pipeline.py] Retornando debido a error en la extracción: {error_extract_msg}")
-        respuesta_final_chatbot = f"Error al procesar la pregunta: {error_extract_msg}"
-        # El diccionario de retorno se ensambla al final
-    elif flow_decision == "use_extracted_sql":
-        if sql_to_execute:
-            logger.info(f"DEBUG: [pipeline.py] Validando SQL extraído/directo contra whitelist: {sql_to_execute}")
-            # Usar la instancia de WhitelistValidator y su nuevo método
-            is_whitelisted, whitelist_error_msg, _ = whitelist_validator_instance.validate_sql_string(sql_to_execute)
-            if not is_whitelisted:
-                logger.warning(f"DEBUG: [pipeline.py] SQL extraído/directo NO permitido por whitelist: {whitelist_error_msg}")
-                respuesta_final_chatbot = f"Consulta SQL no permitida: {whitelist_error_msg}"
-                sql_to_execute = None # No ejecutar
-            else:
-                logger.info(f"DEBUG: [pipeline.py] SQL extraído/directo es VÁLIDO y PERMITIDO.")
-                params_to_execute = [] 
-        else:
-            logger.error("ERROR LÓGICO: flow_decision es use_extracted_sql pero sql_to_execute no está definido.")
-            respuesta_final_chatbot = "Error lógico interno del pipeline (sql_to_execute ausente)."
-            # Esto se tratará como un error que impide la ejecución.
-            sql_to_execute = None # Asegurar que no se ejecute nada.
-
-    elif flow_decision == "generate_new_sql":
-        logger.info(f"DEBUG: [pipeline.py] Procediendo a generar SQL nuevo.")
-    
-        try:
-            sql_generator_instance = SQLGenerator(db_connector=db_connector, llm=llm_param, logger_instance=logger)
-            
-            # current_allowed_columns_map ahora viene de la instancia del validador
-            # terms_dict_str_for_validation se mantiene, asumiendo que json.dumps(terms_dict) es correcto
-            terms_dict_str_for_gen = json.dumps(terms_dict)
-
-            generated_sql_candidate, gen_params, gen_error, gen_context = \
-                generate_sql_and_validate_whitelist(
-                    structured_info=structured_info, 
-                    sql_generator_instance=sql_generator_instance,
-                    db_connector_for_sql_gen=db_connector,
-                    current_allowed_columns_map=whitelist_validator_instance.allowed_columns_map, # ACTUALIZADO
-                    terms_dict_str_for_validation=terms_dict_str_for_gen, # Mantenido
-                    question_for_logging=preprocessed_question,
-                    logger_param=logger
-                )
-            
-            error_sql_gen = gen_error
-            context_sql_gen = gen_context if gen_context else ""
-
-            if generated_sql_candidate and not error_sql_gen:
-                logger.info(f"DEBUG: [pipeline.py] SQL generado y validado (o error_sql_gen lo indica): {generated_sql_candidate}")
-                sql_to_execute = generated_sql_candidate
-                params_to_execute = gen_params if gen_params else []
-                is_whitelisted = True # Si llegamos aquí sin error_sql_gen, se asume que pasó la whitelist.
-                # whitelist_error_msg debería estar vacío o ser None si no hay error_sql_gen.
-            else:
-                logger.error(f"DEBUG: [pipeline.py] Fallo en la generación o validación de SQL. Error: {error_sql_gen}")
-                # sql_to_execute permanece None. error_sql_gen ya está poblado.
-                is_whitelisted = False # No pasó la whitelist o hubo otro error de generación
-                whitelist_error_msg = error_sql_gen # Usar el mensaje de error de la generación
-        except Exception as e_gen_pipeline:
-            logger.error(f"DEBUG: [pipeline.py] Excepción durante el bloque de generación/validación de SQL: {str(e_gen_pipeline)}", exc_info=True)
-            error_sql_gen = f"Excepción en pipeline durante generación/validación de SQL: {str(e_gen_pipeline)}"
-            sql_to_execute = None
-            params_to_execute = []
-            is_whitelisted = False
-            whitelist_error_msg = error_sql_gen
-            context_sql_gen = "" # Resetear contexto en caso de excepción
-    # --- FIN: Decisión y procesamiento de SQL ---
+        if structured_info and "non_sql_response" in structured_info:
+            respuesta_final_chatbot = structured_info["non_sql_response"].strip()
+            # Si además hay explicación, la concatenamos
+            if explanation_from_llm:
+                respuesta_final_chatbot = f"{respuesta_final_chatbot}\n\nExplicación: {explanation_from_llm}"
+            logger.error(f"DEBUG: [pipeline.py] Respuesta no SQL del LLM detectada, retornando Final Answer: {respuesta_final_chatbot}")
+            return {
+                "response_message": respuesta_final_chatbot,
+                "data_results": [],
+                "sql_query_generated": None,
+                "params_used": [],
+                "data_results_empty": True,
+                "error_message": error_extract_msg
+            }
+        elif structured_info and "sql_query" in structured_info and is_direct_sql_note:
+            # Ejecutar SQL si aplica
+            if sql_to_execute:
+                sql_to_execute = agrupar_or_like_en_parentesis(sql_to_execute)
+                # Ejecutar SQL y devolver explicación si existe
+                try:
+                    results, columns = db_connector.execute_query(sql_to_execute)
+                    data_results_empty = not results
+                except Exception as e:
+                    error_execution_msg = str(e)
+                    results = []
+                    columns = []
+                    data_results_empty = True
+                response_message = ""
+                if explanation_from_llm:
+                    response_message += f"Explicación: {explanation_from_llm}\n"
+                response_message += f"Consulta SQL ejecutada."
+                return {
+                    "response_message": response_message,
+                    "data_results": results,
+                    "sql_query_generated": sql_to_execute,
+                    "params_used": [],
+                    "data_results_empty": data_results_empty,
+                    "error_message": error_execution_msg
+                }
+        elif not (structured_info and "sql_query" in structured_info):
+            # Retornar explicación si existe
+            if explanation_from_llm:
+                return {
+                    "response_message": f"Explicación: {explanation_from_llm}",
+                    "data_results": [],
+                    "sql_query_generated": None,
+                    "params_used": [],
+                    "data_results_empty": True,
+                    "error_message": error_extract_msg
+                }
+            # Fallback genérico
+            return {
+                "response_message": f"No se pudo procesar la pregunta. Detalle: {error_extract_msg}",
+                "data_results": [],
+                "sql_query_generated": None,
+                "params_used": [],
+                "data_results_empty": True,
+                "error_message": error_extract_msg
+            }
+    # --- FIN: Decidir si usar SQL extraído, generar SQL, o manejar error de extracción ---
 
     # --- INICIO: Ejecución de SQL y obtención de resultados ---
-    if sql_to_execute and is_whitelisted: # Solo ejecutar si hay SQL y está permitido
+    if flow_decision == "use_extracted_sql":
+        logger.info(f"DEBUG: [pipeline.py] Usando SQL extraído directamente: {sql_to_execute}")
         try:
-            logger.info(f"DEBUG: [pipeline.py] Ejecutando SQL: {sql_to_execute} con params: {params_to_execute}")
-            rows, cols = db_connector.execute_query(sql_to_execute, params_to_execute)
-            
-            logger.debug(f"DEBUG PIPELINE: Filas crudas (rows) desde db_connector: {str(rows)[:200]}") # Loguear solo una parte
-            logger.debug(f"DEBUG PIPELINE: Columnas crudas (cols) desde db_connector: {cols}")
-
-            if rows is not None and cols is not None and rows:
-                results = [dict(zip(cols, row)) for row in rows]
-            else:
-                results = []
-            
-            logger.debug(f"DEBUG PIPELINE: Results procesados (lista de diccionarios): {str(results)[:200]}") # Loguear solo una parte
-
-            if not results:
-                data_results_empty = True
-                if rows is None or cols is None:
-                    respuesta_final_chatbot = "La consulta se ejecutó pero no pude formatear la respuesta correctamente (problema con filas/columnas)."
-                else: # rows is not None and cols is not None but rows is empty
-                    respuesta_final_chatbot = "La consulta SQL se ejecutó correctamente pero no devolvió ningún dato."
-            else:
-                data_results_empty = False
-                logger.info(f"DEBUG: [pipeline.py] Resultados SQL obtenidos ({len(results)} filas). Generando respuesta en lenguaje natural.")
-                
-                # Usar error_extract_msg original para la respuesta NL, ya que puede ser una nota útil
-                # (ej. "SQL directo proporcionado").
-                # context_sql_gen también se pasa.
-                _error_extract_msg_for_nl = error_extract_msg if error_extract_msg else ""
-                _cols_for_nl = cols if cols is not None else []
-
-                respuesta_final_chatbot = generate_natural_language_response_via_llm(
-                    llm=llm_param,
-                    original_question=user_question,
-                    sql_query=sql_to_execute,
-                    results=results,
-                    column_names=_cols_for_nl,
-                    context=context_sql_gen, # Contexto de la generación de SQL
-                    error_extract_msg=_error_extract_msg_for_nl, # Mensaje de la extracción inicial
-                    logger_param=logger
+            rows, columns = db_connector.execute_query(sql_to_execute)
+            results = rows
+            data_results_empty = len(rows) == 0
+            logger.info(f"DEBUG: [pipeline.py] Resultados obtenidos: (filas: {len(rows)}, columnas: {columns})")
+        except Exception as e_execute:
+            error_execution_msg = f"Error al ejecutar la consulta SQL extraída: {e_execute}"
+            logger.error(f"DEBUG: [pipeline.py] {error_execution_msg}", exc_info=True)
+            # --- INICIO FALLBACK AUTOMÁTICO ---
+            # Reenviar el error y la consulta al LLM para que la corrija
+            correction_prompt = (
+                f"La consulta SQL generada produjo el siguiente error: {e_execute}. "
+                f"Consulta original: '''{sql_to_execute}'''. "
+                "Corrige la consulta SQL para que sea válida en SQLite, usando solo tablas y columnas existentes. "
+                "Si es necesario, consulta el esquema antes de reintentar."
+            )
+            try:
+                # Llama al LLM para corregir la consulta (puedes usar extract_info_from_question_llm o tu función LLM preferida)
+                structured_info_fallback, error_fallback = extract_info_from_question_llm(
+                    correction_prompt,
+                    db_schema_dict,
+                    None,
+                    llm_client=llm_param,
+                    current_logger=current_pipeline_logger,
+                    relationship_graph=relationship_graph,
+                    max_retries=max_retries_llm
                 )
-                logger.info(f"DEBUG: [pipeline.py] Respuesta en lenguaje natural generada: {respuesta_final_chatbot}")
-        except Exception as e_sql:
-            logger.error(f"ERROR: [pipeline.py] Excepción durante la ejecución de SQL o procesamiento de resultados: {e_sql}", exc_info=True)
-            error_execution_msg = str(e_sql)
-            respuesta_final_chatbot = f"Se produjo un error al ejecutar la consulta SQL o procesar sus resultados: {error_execution_msg}"
-            results = [] 
-            data_results_empty = True
-    else: # No hay sql_to_execute o no está permitido por whitelist
-        logger.warning(f"DEBUG: [pipeline.py] No hay SQL para ejecutar o no está permitido. SQL: '{sql_to_execute}', Whitelisted: {is_whitelisted}")
-        results = []
-        data_results_empty = True
-        if not is_whitelisted and whitelist_error_msg: # Error de whitelist es prioritario si ocurrió
-             respuesta_final_chatbot = f"Consulta SQL no permitida: {whitelist_error_msg}"
-        elif error_sql_gen: # Error durante la generación de SQL
-            respuesta_final_chatbot = f"No se pudo generar una consulta SQL válida. Detalle: {error_sql_gen}"
-        elif flow_decision == "extraction_failed_return" and error_extract_msg: # Error grave de extracción
-            respuesta_final_chatbot = f"No se pudo procesar la pregunta. Detalle: {error_extract_msg}"
-        elif not sql_to_execute and error_extract_msg: # Si no hay SQL y hubo un mensaje de extracción (que no fue nota de SQL directo manejada)
-             # Este caso es para cuando error_extract_msg no fue fatal pero no se encontró/generó SQL
-             is_direct_sql_note_handled = "Consulta SQL (directa) generada por LLM" in error_extract_msg or \
-                                          "SQL extraído directamente de la pregunta" in error_extract_msg
-             if not is_direct_sql_note_handled:
-                respuesta_final_chatbot = f"Problema al procesar la pregunta: {error_extract_msg}"
-             else: # Si fue una nota de SQL directo pero falló la validación de ese SQL
-                respuesta_final_chatbot = "La consulta SQL directa proporcionada no pudo ser procesada."
-
-        if not respuesta_final_chatbot: # Fallback genérico
-            respuesta_final_chatbot = "No se pudo determinar o ejecutar una consulta SQL para su pregunta."
+                # Intenta extraer la nueva SQL del resultado del LLM
+                sql_fallback = None
+                if structured_info_fallback and "sql_query" in structured_info_fallback:
+                    sql_fallback = structured_info_fallback["sql_query"]
+                if sql_fallback:
+                    logger.info(f"DEBUG: [pipeline.py] Intentando ejecutar SQL corregida por fallback: {sql_fallback}")
+                    try:
+                        rows, columns = db_connector.execute_query(sql_fallback)
+                        results = rows
+                        data_results_empty = len(rows) == 0
+                        sql_to_execute = sql_fallback  # Actualiza la consulta usada
+                        error_execution_msg = None
+                        logger.info(f"DEBUG: [pipeline.py] Resultados obtenidos tras fallback: (filas: {len(rows)}, columnas: {columns})")
+                    except Exception as e_fallback_execute:
+                        error_execution_msg = f"Error también en el fallback/corrección: {e_fallback_execute}"
+                        logger.error(f"DEBUG: [pipeline.py] {error_execution_msg}", exc_info=True)
+                        flow_decision = "extraction_failed_return"
+                else:
+                    error_execution_msg = f"No se pudo obtener una consulta SQL corregida del LLM. Error: {error_fallback}"
+                    logger.error(f"DEBUG: [pipeline.py] {error_execution_msg}")
+                    flow_decision = "extraction_failed_return"
+            except Exception as e_fallback_llm:
+                error_execution_msg = f"Error al intentar corregir la consulta SQL con el LLM: {e_fallback_llm}"
+                logger.error(f"DEBUG: [pipeline.py] {error_execution_msg}", exc_info=True)
+                flow_decision = "extraction_failed_return"
+            # --- FIN FALLBACK AUTOMÁTICO ---
+    elif flow_decision == "generate_new_sql":
+        logger.info(f"DEBUG: [pipeline.py] Generando nueva SQL a partir de información estructurada: {json.dumps(structured_info, indent=2, ensure_ascii=False)}")
+        sql_to_execute, params_to_execute, error_sql_gen, context_sql_gen = generate_sql_and_validate_whitelist(
+            structured_info=structured_info,
+            sql_generator_instance=sql_generator_instance,
+            db_connector_for_sql_gen=db_connector,
+            current_allowed_columns_map=whitelist_validator_instance.allowed_columns_map,
+            terms_dict_str_for_validation="{}", # Diccionario vacío, lógica dinámica
+            question_for_logging=user_question,
+            logger_param=logger
+        )
+        if error_sql_gen:
+            error_execution_msg = f"Error al generar la consulta SQL: {error_sql_gen}"
+            logger.error(f"DEBUG: [pipeline.py] {error_execution_msg}")
+            flow_decision = "extraction_failed_return"
+        else:
+            logger.info(f"DEBUG: [pipeline.py] SQL generado exitosamente: {sql_to_execute}, Params: {params_to_execute}")
+            try:
+                is_whitelisted = whitelist_validator_instance.validate_sql(
+                    sql_query=sql_to_execute,
+                    params=params_to_execute
+                )
+                if not is_whitelisted:
+                    # Intentar detectar columna inventada y sugerir la más parecida
+                    columnas_validas = []
+                    for t in db_schema_dict.values():
+                        columnas_validas.extend(t.get('columns', []))
+                    # Buscar columnas inventadas en el SQL generado
+                    columnas_en_sql = re.findall(r'\b([A-Z_]+)\b', sql_to_execute)
+                    columna_sugerida = None
+                    for col in columnas_en_sql:
+                        if col not in columnas_validas:
+                            sugerida = sugerir_columna_parecida(col, columnas_validas)
+                            if sugerida:
+                                columna_sugerida = sugerida
+                                columna_inventada = col
+                                break
+                    if columna_sugerida:
+                        logger.warning(f"Columna inventada '{columna_inventada}' detectada. Sugerida: '{columna_sugerida}'. Reintentando consulta con la columna sugerida.")
+                        # Reemplazar la columna inventada por la sugerida en la SQL y reintentar
+                        sql_to_execute_corregida = sql_to_execute.replace(columna_inventada, columna_sugerida)
+                        try:
+                            is_whitelisted_2 = whitelist_validator_instance.validate_sql(sql_query=sql_to_execute_corregida, params=params_to_execute)
+                            if is_whitelisted_2:
+                                sql_to_execute = sql_to_execute_corregida
+                                whitelist_error_msg = None
+                                logger.info(f"Consulta corregida con columna sugerida: {sql_to_execute}")
+                                # Continuar flujo normal
+                            else:
+                                whitelist_error_msg = f"El SQL corregido con la columna sugerida tampoco está permitido por la whitelist. Columna inventada: {columna_inventada}, sugerida: {columna_sugerida}."
+                                flow_decision = "extraction_failed_return"
+                        except Exception as e:
+                            whitelist_error_msg = f"Error al validar SQL corregido: {e}"
+                            flow_decision = "extraction_failed_return"
+                    else:
+                        whitelist_error_msg = "El SQL generado no está permitido por la whitelist y no se encontró columna parecida para sugerir."
+                        logger.warning(f"DEBUG: [pipeline.py] {whitelist_error_msg} SQL: {sql_to_execute}, Params: {params_to_execute}")
+                        flow_decision = "extraction_failed_return"
+                else:
+                    logger.info(f"DEBUG: [pipeline.py] SQL generado está permitido por la whitelist.")
+            except Exception as e_whitelist:
+                logger.error(f"DEBUG: [pipeline.py] Excepción al validar whitelist: {e_whitelist}", exc_info=True)
+                whitelist_error_msg = f"Error al validar whitelist: {e_whitelist}"
+                flow_decision = "extraction_failed_return"
     # --- FIN: Ejecución de SQL y obtención de resultados ---
 
-    # --- INICIO: Preparación de la respuesta final del pipeline ----
-    if not respuesta_final_chatbot: # Si la generación NL principal no dio resultado o fue omitida
-        if not data_results_empty: # Tenemos datos (results no está vacío), pero respuesta_final_chatbot sí lo está.
-            logger.info("DEBUG: [pipeline.py] respuesta_final_chatbot está vacía pero hay resultados. Intentando fallback.")
-            # Fallback específico si es un resultado de COUNT y la NL principal falló.
-            if sql_to_execute and "COUNT(" in sql_to_execute.upper() and results and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict):
-                try:
-                    # Intenta extraer el nombre de la columna de conteo y el valor
-                    count_col_name = list(results[0].keys())[0]
-                    count_value = results[0][count_col_name]
-                    respuesta_final_chatbot = f"La consulta de conteo para '{count_col_name}' devolvió: {count_value}."
-                    logger.info(f"DEBUG: [pipeline.py] Fallback NL generado para COUNT: {respuesta_final_chatbot}")
-                except Exception as e_fallback_nl:
-                    logger.warning(f"DEBUG: [pipeline.py] Error generando fallback NL para COUNT ({e_fallback_nl}). Usando mensaje más genérico.")
-                    respuesta_final_chatbot = "Se obtuvieron resultados numéricos, pero hubo un problema al formatear la respuesta detallada."
-            else:
-                # Fallback genérico si hay resultados pero la NL principal está vacía (y no es un COUNT claro)
-                respuesta_final_chatbot = "Se han obtenido datos, pero no se pudo generar una descripción en lenguaje natural para ellos."
-            # Importante: data_results_empty ya es False en este camino y debe permanecer así.
-        elif data_results_empty and sql_to_execute and is_whitelisted and not error_execution_msg:
-            # Caso: consulta ejecutada OK, permitida, sin errores de ejecución, pero devolvió 0 filas.
-            respuesta_final_chatbot = "La consulta se ejecutó correctamente, pero no se encontraron resultados que coincidan con tu petición."
-        else:
-            # Otros casos: error de extracción, error de generación SQL, error de whitelist, error de ejecución SQL.
-            # La respuesta_final_chatbot ya debería haber sido establecida por esos flujos de error.
-            # Si por alguna razón no lo fue, este es un último recurso.
-            
-            # Construir el mensaje de error a partir de las partes disponibles
-            # Esta variable se define más abajo, pero la necesitamos aquí para el log y la respuesta.
-            current_error_message_parts_temp = []
-            if error_extract_msg and flow_decision == "extraction_failed_return":
-                current_error_message_parts_temp.append(f"Extracción: {error_extract_msg}")
-            elif error_extract_msg and not ("Consulta SQL (directa)" in error_extract_msg or "SQL extraído directamente" in error_extract_msg) and not sql_to_execute :
-                current_error_message_parts_temp.append(f"Extracción: {error_extract_msg}")
-            if error_sql_gen:
-                current_error_message_parts_temp.append(f"Generación SQL: {error_sql_gen}")
-            if error_execution_msg:
-                current_error_message_parts_temp.append(f"Ejecución SQL: {error_execution_msg}")
-            if not is_whitelisted and whitelist_error_msg:
-                 current_error_message_parts_temp.append(f"Whitelist: {whitelist_error_msg}")
+    # --- INICIO: Manejo de resultados y generación de respuesta final ---
+    if flow_decision == "extraction_failed_return":
+        logger.warning(f"DEBUG: [pipeline.py] Flujo de extracción falló, retornando mensaje de error: {error_extract_msg}")
+        respuesta_final_chatbot = f"No pude procesar tu solicitud. Detalle: {error_extract_msg}"
+    else:
+        # Aquí se asume que si no hubo error, se generó una respuesta válida
+        respuesta_final_chatbot = f"He procesado tu pregunta. "
+        if results is not None:
+            respuesta_final_chatbot += f"Se encontraron {len(results)} resultado(s). "
+        if sql_to_execute:
+            respuesta_final_chatbot += f"Consulta SQL utilizada: {sql_to_execute}. "
+        if params_to_execute:
+            respuesta_final_chatbot += f"Parámetros: {params_to_execute}. "
+        if context_sql_gen:
+            respuesta_final_chatbot += f"Contexto adicional: {context_sql_gen}. "
+        respuesta_final_chatbot += "Si necesitas más detalles, por favor aclara tu pregunta."
+    # --- FIN: Manejo de resultados y generación de respuesta final ---
 
-            if current_error_message_parts_temp:
-                respuesta_final_chatbot = f"No se pudo completar la solicitud. Errores detectados: {'; '.join(current_error_message_parts_temp)}"
-            elif not sql_to_execute:
-                 respuesta_final_chatbot = "No se pudo determinar o generar una consulta SQL para su pregunta."
-            else:
-                respuesta_final_chatbot = "No se pudo completar la solicitud debido a un error interno o falta de información."
-            logger.warning(f"DEBUG: [pipeline.py] Fallback final para respuesta_final_chatbot: {respuesta_final_chatbot}")
-
-    logger.info(f"DEBUG: [pipeline.py] Respuesta final del chatbot para el usuario: {respuesta_final_chatbot}")
-
-    final_error_message_parts = []
-    # Solo añadir error_extract_msg si fue un error real que impidió el flujo o es relevante
-    if error_extract_msg and flow_decision == "extraction_failed_return":
-        final_error_message_parts.append(f"Extracción: {error_extract_msg}")
-    elif error_extract_msg and not ("Consulta SQL (directa)" in error_extract_msg or "SQL extraído directamente" in error_extract_msg) and not sql_to_execute : # Si hubo un error de extracción que no fue una nota y no se pudo generar SQL
-        final_error_message_parts.append(f"Extracción: {error_extract_msg}")
-
-    if error_sql_gen:
-        final_error_message_parts.append(f"Generación SQL: {error_sql_gen}")
-    if error_execution_msg:
-        final_error_message_parts.append(f"Ejecución SQL: {error_execution_msg}")
-    if not is_whitelisted and whitelist_error_msg:
-         final_error_message_parts.append(f"Whitelist: {whitelist_error_msg}")
-    
-    final_error_message_str = "; ".join(final_error_message_parts) if final_error_message_parts else None
-
-    return_dict = {
+    current_pipeline_logger.info(f"DEBUG: [pipeline.py] Respuesta final del chatbot: {respuesta_final_chatbot}")
+    return {
         "response_message": respuesta_final_chatbot,
         "data_results": results,
-        "sql_query_generated": sql_to_execute, 
+        "sql_query_generated": sql_to_execute,
         "params_used": params_to_execute,
         "data_results_empty": data_results_empty,
-        "error_message": final_error_message_str
+        "error_message": error_execution_msg or whitelist_error_msg or error_extract_msg
     }
-    logger.debug(f"DEBUG: [pipeline.py] Diccionario de retorno final: {return_dict}")
-    return return_dict
-# --- FIN: chatbot_pipeline_entrypoint ---
+
+# --- INICIO: Instanciar SQLGenerator para la sesión ---
+sql_generator_instance = SQLGenerator(allowed_tables=[], allowed_columns={})
+# --- FIN: Instanciar SQLGenerator ---
+
+import difflib
+
+def sugerir_columna_parecida(columna_inventada: str, columnas_validas: list, umbral: float = 0.7) -> str:
+    """
+    Dada una columna inventada y una lista de columnas válidas, sugiere la más parecida usando fuzzy matching.
+    Si no hay ninguna suficientemente similar, devuelve None.
+    Args:
+        columna_inventada (str): Nombre de la columna inventada.
+        columnas_validas (list): Lista de nombres de columnas válidas.
+        umbral (float): Umbral de similitud (0-1) para aceptar la sugerencia.
+    Returns:
+        str or None: Nombre de la columna sugerida o None si no hay ninguna suficientemente parecida.
+    """
+    if not columna_inventada or not columnas_validas:
+        return None
+    matches = difflib.get_close_matches(columna_inventada, columnas_validas, n=1, cutoff=umbral)
+    if matches:
+        return matches[0]
+    return None

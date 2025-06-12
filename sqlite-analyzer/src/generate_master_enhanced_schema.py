@@ -44,48 +44,43 @@ def _save_schema(schema_data, path):
 def get_llm_generated_description(element_name: str, element_type: str, existing_description: str = None, context_schema: dict = None) -> str:
     """
     Genera una descripción para un elemento del esquema (tabla o columna) usando el LLM.
+    Se enfoca en concisión y relevancia para la generación de SQL y comprensión del LLM.
     """
     prompt_parts = [
-        f"Eres un asistente experto en documentación de bases de datos médicas. Tu tarea es generar una descripción clara y concisa para un elemento de un esquema de base de datos."
+        f"Eres un asistente experto en documentación de bases de datos médicas. Tu tarea es generar una descripción MUY CONCISA (1-2 frases MÁXIMO) para un elemento de un esquema de base de datos, enfocándote en su propósito y semántica para la generación de consultas SQL y la comprensión por un LLM."
     ]
 
     if element_type == "tabla":
         prompt_parts.append(f"El elemento es una TABLA llamada '{element_name}'.")
-        prompt_parts.append("Describe su propósito principal, el tipo de entidad o información que almacena, y cualquier característica clave obvia por su nombre.")
+        prompt_parts.append("Describe su propósito principal de forma breve. Ejemplo: 'Almacena información de pacientes.' o 'Registros de diagnósticos médicos.'")
     elif element_type == "columna":
         prompt_parts.append(f"El elemento es una COLUMNA llamada '{element_name}'.")
         if context_schema and context_schema.get("table_name"):
-            prompt_parts.append(f"Esta columna pertenece a la tabla '{context_schema.get('table_name')}' (descripción de la tabla: '{context_schema.get('description', 'No disponible')}').")
+            prompt_parts.append(f"Pertenece a la tabla '{context_schema.get('table_name')}' (descripción tabla: '{context_schema.get('description', 'No disponible')}').")
         
-        prompt_parts.append("Describe su propósito específico. Presta atención a sufijos comunes y explica su significado:")
-        prompt_parts.append("  - '_ID': Generalmente un identificador único (clave primaria o foránea).")
-        prompt_parts.append("  - '_CODE', '_CD': Un código o clave alfanumérica.")
-        prompt_parts.append("  - '_NAME', '_DESCRIPTION', '_TEXT', '_LABEL': Un nombre o descripción textual. Indica si parece ser la descripción principal/humana de una entidad.")
-        prompt_parts.append("  - '_DATE', '_DT', '_TIMESTAMP': Un campo de fecha o fecha/hora.")
-        prompt_parts.append("  - '_FLAG', '_IND', 'IS_': Un indicador booleano (flag).")
-        prompt_parts.append("  - '_ES', '_EN', '_FR': Indica el idioma del contenido (Español, Inglés, Francés, etc.).")
-        prompt_parts.append("  - '_TYPE', '_CATEGORY': Indica un tipo o categoría.")
-        prompt_parts.append("Si parece una clave foránea por su nombre (ej. 'PATIENT_ID' en una tabla de episodios), menciónalo.")
-        prompt_parts.append("Si el nombre sugiere que es la descripción oficial de un diagnóstico o un término médico codificado, indícalo.")
+        prompt_parts.append("Describe su propósito específico de forma breve. Si es una clave, indica a qué entidad identifica. Si es una descripción, indica de qué. Si es una fecha, indica qué evento representa. Presta atención a sufijos comunes y explica su significado de forma concisa:")
+        prompt_parts.append("  - '_ID': Identificador único (PK o FK). Si es FK, menciona la entidad referenciada si es obvio por el nombre.")
+        prompt_parts.append("  - '_CODE', '_CD': Código o clave alfanumérica.")
+        prompt_parts.append("  - '_NAME', '_DESCRIPTION', '_TEXT', '_LABEL': Nombre o descripción textual. Indica si es la descripción principal de una entidad.")
+        prompt_parts.append("  - '_DATE', '_DT', '_TIMESTAMP': Fecha o fecha/hora de un evento específico.")
+        prompt_parts.append("  - '_FLAG', '_IND', 'IS_': Indicador booleano.")
+        prompt_parts.append("  - '_ES', '_EN': Idioma del contenido (Español, Inglés).")
+        prompt_parts.append("  - '_TYPE', '_CATEGORY': Tipo o categoría.")
+        prompt_parts.append("Ejemplo para columna 'PATIENT_ID' en tabla 'EPISODES': 'Identificador del paciente asociado a este episodio (FK a la tabla de pacientes).' Ejemplo para 'DIAG_DATE': 'Fecha en que se registró el diagnóstico.'")
 
-    if existing_description: # This will likely be None when reading fresh from DB
-        prompt_parts.append(f"La descripción actual es: '{existing_description}'. Por favor, revisa y mejora esta descripción si es necesario, o genera una nueva si la actual no es adecuada o está vacía.")
-    else:
-        prompt_parts.append("Por favor, genera una descripción concisa y útil para este elemento.")
+    # No se usará existing_description para este nuevo enfoque más directo.
+    # else:
+    #     prompt_parts.append("Por favor, genera una descripción MUY CONCISA y útil para este elemento.")
 
-    prompt_parts.append("La descripción debe ser informativa para un analista de datos o un desarrollador que necesite entender el propósito de este elemento.")
-    
-    # Caso especial para PHTH_DESCRIPTION_ES para asegurar que el LLM entiende la guía crítica
+    # Caso especial para PHTH_DESCRIPTION_ES
     if element_name == "PHTH_DESCRIPTION_ES" and context_schema and context_schema.get("table_name") == "MEDI_PHARMA_THERAPEUTIC_GROUPS":
-        prompt_parts.append("IMPORTANTE: Para la columna 'PHTH_DESCRIPTION_ES' en la tabla 'MEDI_PHARMA_THERAPEUTIC_GROUPS', la descripción DEBE enfatizar que se refiere a una CLASIFICACIÓN FARMACOLÓGICA y NO a una condición médica o enfermedad. Debe guiar al usuario a buscar primero la clasificación farmacológica relevante para una condición y luego usar esa clasificación aquí.")
-        prompt_parts.append("Ejemplo de énfasis: 'Descripción en español de la CLASIFICACIÓN FARMACOLÓGICA del grupo terapéutico (ej: \\\\'Inhibidores de la enzima convertidora de angiotensina\\\\'). IMPORTANTE: Esta columna se refiere a una clasificación farmacológica, NO a una condición médica o enfermedad que el grupo trata.'")
-
+        prompt_parts.append("CRÍTICO: Para 'PHTH_DESCRIPTION_ES' en 'MEDI_PHARMA_THERAPEUTIC_GROUPS', la descripción DEBE indicar que es una CLASIFICACIÓN FARMACOLÓGICA, NO una enfermedad. Ejemplo: 'Clasificación farmacológica del grupo terapéutico (ej: Inhibidores ECA). NO es una enfermedad.'")
     elif element_name == "MEDI_PHARMA_THERAPEUTIC_GROUPS" and element_type == "tabla":
-        prompt_parts.append("IMPORTANTE: Para la tabla 'MEDI_PHARMA_THERAPEUTIC_GROUPS', la descripción DEBE aclarar que la columna PHTH_DESCRIPTION_ES describe la CLASIFICACIÓN FARMACOLÓGICA y NO debe usarse para buscar directamente nombres de enfermedades.")
+        prompt_parts.append("CRÍTICO: Para la tabla 'MEDI_PHARMA_THERAPEUTIC_GROUPS', aclarar que PHTH_DESCRIPTION_ES es la CLASIFICACIÓN FARMACOLÓGICA, no nombres de enfermedades.")
 
-    prompt_parts.append("Responde ÚNICAMENTE con la descripción generada, sin frases introductorias como 'Aquí tienes la descripción:'.")
+    prompt_parts.append("Responde ÚNICAMENTE con la descripción generada (1-2 frases).")
 
-    system_message = "Eres un asistente de documentación de bases de datos experto."
+    system_message = "Eres un asistente de documentación de bases de datos experto en concisión y relevancia para LLMs."
     user_message = "\\n".join(prompt_parts)
 
     messages = [
@@ -110,6 +105,92 @@ def get_llm_generated_description(element_name: str, element_type: str, existing
         print(f"Error al generar descripción para '{element_name}': {response}")
         # Return None or a default error message if generation fails, existing_description might be None
         return "Descripción no disponible (error en generación)."
+
+
+def enrich_schema_with_coded_conditions(enhanced_schema, llm_config):
+    """
+    Añade una sección 'coded_conditions' al esquema enriquecido usando el LLM para identificar diagnósticos médicos codificados y sus mapeos.
+    """
+    # Construir un resumen del esquema para el LLM (solo nombres de tablas y columnas)
+    schema_info = {table['table_name']: [col['name'] for col in table['columns']] for table in enhanced_schema}
+    
+    system_prompt_content = (
+        "Eres un experto en ingeniería de datos biomédicos. Analiza el siguiente esquema de base de datos "
+        "(tablas y columnas) y devuelve una lista de diagnósticos o condiciones médicas codificadas "
+        "presentes en la base de datos. Para cada diagnóstico, proporciona un objeto JSON con las claves: "
+        "'term' (nombre común del diagnóstico o condición), "
+        "'table' (tabla principal donde se instancia o registra esta condición para una entidad, ej. EPIS_DIAGNOSTICS), "
+        "'code_field' (columna en 'table' que contiene el código de la condición), "
+        "'code_values' (lista de ejemplos de códigos si son evidentes o muy limitados; dejar lista vacía [] si no se pueden inferir directamente o son muchos), "
+        "'catalog_table' (tabla de catálogo donde se define el código y su descripción oficial, si aplica, ej. CODR_DIAGNOSTIC_GROUPS), "
+        "'description_field' (columna en 'catalog_table' que contiene la descripción textual del código, si 'catalog_table' aplica), "
+        "'description' (breve descripción del término médico), "
+        "'synonyms' (lista de sinónimos o términos relacionados en lenguaje natural, ej. ['HTA', 'Presión alta'])."
+        "Asegúrate de que 'table' y 'code_field' se refieran a donde se usa el código, y 'catalog_table' y 'description_field' a donde se define."
+        "Ejemplo de estructura de un elemento de la lista:"
+        "{"
+        "  'term': 'Hipertensión Arterial',"
+        "  'table': 'EPIS_DIAGNOSTICS',"
+        "  'code_field': 'CDTE_ID',"
+        "  'code_values': ['I10', 'I10.9'],"
+        "  'catalog_table': 'CODR_DIAGNOSTIC_GROUPS',"
+        "  'description_field': 'DGGR_DESCRIPTION_ES',"
+        "  'description': 'Condición médica caracterizada por una presión arterial elevada de forma persistente.',"
+        "  'synonyms': ['HTA', 'Presión alta']"
+        "}"
+        "Responde solo con una lista JSON de objetos, sin explicaciones adicionales ni texto introductorio."
+    )
+    
+    user_prompt_content = f"Esquema de la base de datos (tablas y columnas): {json.dumps(schema_info, ensure_ascii=False)}"
+
+    prompt_messages = [
+        {"role": "system", "content": system_prompt_content},
+        {"role": "user", "content": user_prompt_content}
+    ]
+    
+    llm_response = call_llm_with_fallbacks(llm_config, prompt_messages)
+    coded_conditions = {}
+    import re
+    try:
+        # Intenta encontrar el array JSON en la respuesta del LLM
+        match = re.search(r'\[\s*\{.*?\}\s*\]', llm_response, re.DOTALL | re.MULTILINE)
+        if not match: # Intento más permisivo si el anterior falla
+             match = re.search(r'\[.*\]', llm_response, re.DOTALL)
+
+        if match:
+            json_str = match.group(0)
+            # Un intento adicional de limpieza por si el LLM añade comentarios o texto residual
+            json_str = re.sub(r'//.*?\n|/\*.*?\*/', '', json_str, flags=re.DOTALL | re.MULTILINE) # Eliminar comentarios JS/C++
+            json_str = json_str.strip()
+            
+            # A veces el LLM puede envolver la lista en un bloque de código markdown
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+            json_str = json_str.strip()
+
+            coded_list = json.loads(json_str)
+            for entry in coded_list:
+                term = entry.get("term")
+                if term:
+                    # Validar que los campos esperados estén presentes, aunque sea con valor None o lista vacía
+                    validated_entry = {
+                        "term": term,
+                        "table": entry.get("table"),
+                        "code_field": entry.get("code_field"),
+                        "code_values": entry.get("code_values", []),
+                        "catalog_table": entry.get("catalog_table"),
+                        "description_field": entry.get("description_field"),
+                        "description": entry.get("description"),
+                        "synonyms": entry.get("synonyms", [])
+                    }
+                    coded_conditions[term] = validated_entry
+        else:
+            print(f"No se pudo extraer lista JSON de diagnósticos. Respuesta del LLM: {llm_response}")
+    except Exception as e:
+        print(f"Error procesando la lista de diagnósticos: {e}\nRespuesta del LLM: {llm_response}")
+    return coded_conditions
 
 
 def generate_enhanced_schema():
@@ -259,6 +340,14 @@ def generate_enhanced_schema():
 
     # Guardado final (aunque ya se guarda progresivamente)
     if db_tables: # Solo imprimir si se procesaron tablas
+        # Enriquecer con diagnósticos codificados
+        coded_conditions = enrich_schema_with_coded_conditions(enhanced_schema, LM_CONFIG_DEFAULTS)
+        # Guardar el esquema con la nueva sección
+        output_schema = {
+            "tables": enhanced_schema,
+            "coded_conditions": coded_conditions
+        }
+        _save_schema(output_schema, ENHANCED_SCHEMA_PATH)
         print(f"Proceso completado. Esquema final guardado en {ENHANCED_SCHEMA_PATH}")
     else:
         print("No se procesaron tablas. Verifique la conexión a la BD y la existencia de tablas.")

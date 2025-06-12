@@ -62,14 +62,33 @@ def extract_synonyms_and_text(table_info: dict) -> List[str]:
         text_blobs.append(table_info['use_case'])
     return [t.lower() for t in text_blobs if isinstance(t, str)]
 
-def identify_relevant_tables(user_query: str, top_k: int = 3, explain: bool = False) -> List[Dict]:
+def identify_relevant_tables(user_query: str, top_k: int = 3, explain: bool = False, db_structure_dict: dict = None) -> List[Dict]:
     """
     Dada una consulta de usuario, devuelve una lista de tablas candidatas ordenadas por score de relevancia.
     El score es el número de coincidencias únicas de palabras/frases clave en descripciones, sinónimos y casos de uso.
     Coincidencias exactas de frases valen más que palabras sueltas.
     """
-    schema = load_enhanced_schema()
-    tables = schema.get('schema_knowledge', {}).get('tables', {})
+    # Robustez: aceptar esquema externo o cargarlo si no se pasa
+    if db_structure_dict is not None:
+        if isinstance(db_structure_dict, dict):
+            schema = db_structure_dict
+        elif isinstance(db_structure_dict, list):
+            # Intentar convertir lista a dict si es posible
+            try:
+                schema = {t['table_name']: t for t in db_structure_dict if 'table_name' in t}
+            except Exception:
+                schema = {}
+        else:
+            schema = {}
+    else:
+        schema = load_enhanced_schema()
+    # Robustez: buscar la clave correcta
+    if isinstance(schema, dict):
+        tables = schema.get('schema_knowledge', {}).get('tables', {})
+        if not tables and 'tables' in schema and isinstance(schema['tables'], dict):
+            tables = schema['tables']
+    else:
+        tables = {}
     query = user_query.lower()
     query_keywords = set(extract_keywords(query))
     results = []

@@ -121,6 +121,93 @@ def save_dictionary_incrementally(data: Dict[str, Any], output_path: str):
     except IOError as e:
         print(f"Error al guardar el diccionario incrementalmente en {output_path}: {e}")
 
+def enrich_with_coded_conditions(dictionary, db_path, llm_config=None):
+    """
+    Añade o actualiza la sección 'coded_conditions' en el diccionario, usando el LLM para identificar y mapear automáticamente diagnósticos médicos presentes en el esquema de la BD.
+    """
+    import re
+    coded_conditions = dictionary.get("coded_conditions", {})
+    # 1. Obtener el esquema de tablas y columnas relevantes
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row["name"] for row in cursor.fetchall()]
+    schema_info = {}
+    for table in tables:
+        cursor.execute(f"PRAGMA table_info('{table}');")
+        columns = [col["name"] for col in cursor.fetchall()]
+        schema_info[table] = columns
+    conn.close()
+    # 2. Prompt al LLM para que identifique y mapee diagnósticos automáticamente (formato enriquecido)
+    system_prompt_content = (
+        "Eres un experto en ingeniería de datos biomédicos. Analiza el siguiente esquema de base de datos "
+        "(tablas y columnas) y devuelve una lista de diagnósticos o condiciones médicas codificadas "
+        "presentes en la base de datos. Para cada diagnóstico, proporciona un objeto JSON con las claves: "
+        "'term' (nombre común del diagnóstico o condición), "
+        "'table' (tabla principal donde se instancia o registra esta condición para una entidad, ej. EPIS_DIAGNOSTICS), "
+        "'code_field' (columna en 'table' que contiene el código de la condición), "
+        "'code_values' (lista de ejemplos de códigos si son evidentes o muy limitados; dejar lista vacía [] si no se pueden inferir directamente o son muchos), "
+        "'catalog_table' (tabla de catálogo donde se define el código y su descripción oficial, si aplica, ej. CODR_DIAGNOSTIC_GROUPS), "
+        "'description_field' (columna en 'catalog_table' que contiene la descripción textual del código, si 'catalog_table' aplica), "
+        "'description' (breve descripción del término médico), "
+        "'synonyms' (lista de sinónimos o términos relacionados en lenguaje natural, ej. ['HTA', 'Presión alta'])."
+        "Asegúrate de que 'table' y 'code_field' se refieran a donde se usa el código, y 'catalog_table' y 'description_field' a donde se define."
+        "Ejemplo de estructura de un elemento de la lista:"
+        "{"
+        "  'term': 'Hipertensión Arterial',"
+        "  'table': 'EPIS_DIAGNOSTICS',"
+        "  'code_field': 'CDTE_ID',"
+        "  'code_values': ['I10', 'I10.9'],"
+        "  'catalog_table': 'CODR_DIAGNOSTIC_GROUPS',"
+        "  'description_field': 'DGGR_DESCRIPTION_ES',"
+        "  'description': 'Condición médica caracterizada por una presión arterial elevada de forma persistente.',"
+        "  'synonyms': ['HTA', 'Presión alta']"
+        "}"
+        "Responde solo con una lista JSON de objetos, sin explicaciones adicionales ni texto introductorio."
+    )
+    user_prompt_content = f"Esquema de la base de datos (tablas y columnas): {json.dumps(schema_info, ensure_ascii=False)}"
+    prompt = [
+        {"role": "system", "content": system_prompt_content},
+        {"role": "user", "content": user_prompt_content}
+    ]
+    llm_response = call_llm_with_fallbacks(llm_config, prompt)
+    try:
+        # Buscar la lista JSON en la respuesta
+        match = re.search(r'\[\s*\{.*?\}\s*\]', llm_response, re.DOTALL | re.MULTILINE)
+        if not match:
+            match = re.search(r'\[.*\]', llm_response, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            json_str = re.sub(r'//.*?\n|/\*.*?\*/', '', json_str, flags=re.DOTALL | re.MULTILINE)
+            json_str = json_str.strip()
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+            json_str = json_str.strip()
+            coded_list = json.loads(json_str)
+            for entry in coded_list:
+                term = entry.get("term")
+                if term:
+                    validated_entry = {
+                        "term": term,
+                        "table": entry.get("table"),
+                        "code_field": entry.get("code_field"),
+                        "code_values": entry.get("code_values", []),
+                        "catalog_table": entry.get("catalog_table"),
+                        "description_field": entry.get("description_field"),
+                        "description": entry.get("description"),
+                        "synonyms": entry.get("synonyms", [])
+                    }
+                    coded_conditions[term] = validated_entry
+        else:
+            print(f"No se pudo extraer lista JSON de diagnósticos. Respuesta: {llm_response}")
+    except Exception as e:
+        print(f"Error procesando la lista de diagnósticos: {e}\nRespuesta: {llm_response}")
+    dictionary["coded_conditions"] = coded_conditions
+    return dictionary
+
 def generate_enhanced_dictionary(db_path: str, output_path: str, llm_config: dict = None) -> None:
     """
     Genera un diccionario plano enriquecido para mapeo de términos y sinónimos, usando LLM para descripciones y términos comunes.
@@ -175,7 +262,7 @@ def generate_enhanced_dictionary(db_path: str, output_path: str, llm_config: dic
             {"role": "user", "content": f"Para la tabla '{table_name}' (columnas de ejemplo: {columns_names_for_prompt if columns_names_for_prompt else 'ninguna'}), por favor genera:\\n1. Descripción concisa (máximo 2 frases, en español) de su propósito principal.\\n2. Lista de 3 a 7 términos o sinónimos comunes en español y estrictamente en minúsculas que un usuario podría usar para referirse a esta tabla. Incluye palabras clave individuales (ej: si la tabla es 'CITAS_MEDICAS', incluye 'cita', 'citas'), frases cortas (ej: 'historial de citas') y variaciones comunes (plurales/singulares). Formato para términos: ['termino1', 'frase corta 2', 'palabra clave 3']"}
         ]
         
-        table_response_text = call_llm_with_fallbacks(table_prompt_messages, llm_config, step_name=f"Tabla {table_name}")
+        table_response_text = call_llm_with_fallbacks(llm_config, table_prompt_messages)
         
         table_desc, table_terms = parse_llm_response_for_dict(table_response_text, table_name)
         
@@ -196,7 +283,7 @@ def generate_enhanced_dictionary(db_path: str, output_path: str, llm_config: dic
                     {"role": "user", "content": f"Para la columna '{col_name}' (tipo: {col_type}) de la tabla '{table_name}', por favor genera:\\n1. Descripción breve (máximo 1 frase, en español) de la información que almacena.\\n2. Lista de 3 a 7 términos o sinónimos comunes en español y estrictamente en minúsculas que un usuario podría usar para referirse a esta columna. Incluye palabras clave individuales, frases cortas y variaciones comunes si aplican. Formato para términos: ['termino_columna', 'otro nombre columna', 'dato x']"}
                 ]
                 
-                col_response_text = call_llm_with_fallbacks(col_prompt_messages, llm_config, step_name=f"Columna {table_name}.{col_name}")
+                col_response_text = call_llm_with_fallbacks(llm_config, col_prompt_messages)
                 
                 col_desc, col_terms = parse_llm_response_for_dict(col_response_text, col_name)
                 
@@ -227,7 +314,7 @@ def generate_enhanced_dictionary(db_path: str, output_path: str, llm_config: dic
             if tuple(sorted(rel_dict.items())) not in current_relationships:
                 dictionary["table_relationships"].append(rel_dict)
                 current_relationships.add(tuple(sorted(rel_dict.items())))
-    
+
     print("Añadiendo typos comunes...")
     dictionary["common_typos"] = {
         "paicente": "paciente",
@@ -247,8 +334,9 @@ def generate_enhanced_dictionary(db_path: str, output_path: str, llm_config: dic
     conn.close()
     
     # Guardado final con toda la información
+    # Enriquecer con diagnósticos codificados
+    dictionary = enrich_with_coded_conditions(dictionary, db_path, llm_config)
     save_dictionary_incrementally(dictionary, output_path)
-    
     print(f"Diccionario enriquecido generado y guardado en: {output_path}")
 
 if __name__ == "__main__":
