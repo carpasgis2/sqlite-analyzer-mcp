@@ -21,13 +21,11 @@ except ImportError as e:
     print(f"Error importando módulos: {e}. Asegúrate de que el script está en src/data/ y que llm_utils.py y update_dictionary.py son accesibles.")
     sys.exit(1)
 
-# Configuración del LLM (similar a generate_master_enhanced_schema.py, usando DeepSeek)
-LM_CONFIG_DEFAULTS = {
-    "llm_api_key": os.getenv("DEEPSEEK_API_KEY", "sk-aedf531ee17447aa95c9102e595f29ae"), # Usar variable de entorno o default
-    "llm_api_url": os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1"), # Usar variable de entorno o default, asegurando que no termine en /chat/completions
-    "llm_model": os.getenv("DEEPSEEK_MODEL_NAME", "deepseek-chat"), # Usar variable de entorno, default a deepseek-chat
-    "temperature": 0.4,  # Un poco más de creatividad para generar conceptos
-    "max_tokens": 2000   # Los conceptos pueden ser largos y la respuesta JSON completa
+# Configuración del LLM para OpenAI
+llm_config = {
+    "llm_api_key": os.getenv("OPENAI_API_KEY"),
+    "llm_api_url": "https://api.openai.com/v1",
+    "llm_model": "gpt-3.5-turbo"
 }
 
 SCHEMA_PATH = os.path.join(current_dir, "schema_enhanced.json") # Corregido para apuntar al archivo y ubicación correctos
@@ -168,7 +166,7 @@ def generate_concepts():
         print(f"  Llamando al LLM para generar conceptos para la tabla '{table_name}'...")
         llm_response_str = None
         try:
-            llm_response_str = call_llm_with_fallbacks(LM_CONFIG_DEFAULTS, messages)
+            llm_response_str = call_llm_with_fallbacks(llm_config, messages)
         except Exception as e_llm_call:
             print(f"  Error durante la llamada al LLM para la tabla '{table_name}': {e_llm_call}. Saltando esta tabla.")
             continue # Pasar a la siguiente tabla

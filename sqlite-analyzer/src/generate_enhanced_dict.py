@@ -348,18 +348,8 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Cargar la configuración del LLM, incluyendo la API key
-    deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY")
-    default_api_key = "sk-aedf531ee17447aa95c9102e595f29ae" # Clave por defecto como en langchain_chatbot.py
-
-    if not deepseek_api_key:
-        print("Advertencia: La variable de entorno DEEPSEEK_API_KEY no está configurada. Se usará una clave por defecto.")
-        print(f"Para configurar la clave API, ejecute: export DEEPSEEK_API_KEY='su_clave_api_aqui'")
-        deepseek_api_key = default_api_key
-        
     llm_config_example = {
-        "llm_api_key": deepseek_api_key
-        # Aquí se podrían añadir otras configuraciones del LLM si fueran necesarias,
+        # Aquí se podrían añadir configuraciones del LLM si fueran necesarias,
         # como "llm_api_url" o "llm_model", si se quieren sobrescribir los valores
         # que llm_utils.py toma de las variables de entorno o sus propios defaults.
     }

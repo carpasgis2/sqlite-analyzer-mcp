@@ -36,9 +36,10 @@ MAX_RESPONSE_DATA_ROWS_CONFIG = 100  # Un valor por defecto, ajústalo según se
 
 MAX_CONTEXT_TOKENS_FOR_SCHEMA_RELATIONS_APPROX = 60000  # O el valor que consideres apropiado
 
-LLM_PROVIDER_FOR_TOKEN_COUNT = "deepseek" # Proveedor de LLM para el conteo de tokens
-
-MAX_SQL_EXECUTION_TIME_PIPELINE = 90 # Tiempo máximo de ejecución de SQL en el pipeline en segundos
-LLM_MODEL_NAME_FOR_QUERY_GENERATION = "deepseek-coder" # Modelo LLM para generación de consultas
+# Configuración para OpenAI
+LLM_PROVIDER_FOR_TOKEN_COUNT = "openai"
+LLM_MODEL_NAME_FOR_QUERY_GENERATION = "gpt-3.5-turbo"
 MAX_TOKENS_FOR_QUERY_GENERATION = 4096 # Máximos tokens para la generación de consultas
 TEMPERATURE_FOR_QUERY_GENERATION = 0.0 # Temperatura para la generación de consultas
+
+MAX_SQL_EXECUTION_TIME_PIPELINE = 90 # Tiempo máximo de ejecución de SQL en el pipeline en segundos

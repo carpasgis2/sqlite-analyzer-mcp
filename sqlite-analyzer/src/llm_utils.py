@@ -15,27 +15,29 @@ import tiktoken # Añadir tiktoken
 
 # Intenta obtener la clave API de una variable de entorno
 # OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-LLM_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-aedf531ee17447aa95c9102e595f29ae")
-LLM_API_URL = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com/v1") # Corregido: URL base sin /chat/completions
-LLM_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")  # Corregido el nombre del modelo
-LLM_PROVIDER = "deepseek"  # Identificador del proveedor de LLM este es el llm
+# --- INICIO CAMBIO PARA USAR OPENAI ---
+# Forzar a usar la clave correcta de OpenAI
+LLM_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not LLM_API_KEY:
+    raise ValueError("La variable de entorno OPENAI_API_KEY no está configurada.")
+LLM_API_URL = "https://api.openai.com/v1"
+LLM_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
+LLM_PROVIDER = "openai"
+
+# Configuración del cliente LLM global (ahora para OpenAI)
+if not LLM_API_KEY:
+    logger.error("La variable de entorno OPENAI_API_KEY no está configurada.")
+    llm_client = None
+else:
+    llm_client = OpenAI(
+        api_key=LLM_API_KEY,
+        base_url=LLM_API_URL
+    )
+LLM_MODEL_NAME = LLM_MODEL
+# --- FIN CAMBIO PARA USAR OPENAI ---
 
 # Configuración del logger
 logger = logging.getLogger(__name__)
-
-# Configuración del cliente LLM global (ahora para DeepSeek)
-if not LLM_API_KEY: # Usar la variable LLM_API_KEY
-    logger.error("La variable de entorno DEEPSEEK_API_KEY no está configurada.")
-    # Podrías levantar un error aquí o tener un comportamiento de fallback
-    # Por ahora, se procederá, pero el cliente fallará si se usa sin clave.
-    llm_client = None 
-else:
-    llm_client = OpenAI(
-        api_key=LLM_API_KEY, # Usar la variable LLM_API_KEY
-        base_url=LLM_API_URL # Usar la variable LLM_API_URL
-    )
-
-LLM_MODEL_NAME = LLM_MODEL # Usar la variable LLM_MODEL
 
 # Comentando la configuración anterior de OpenAI para evitar confusión
 # OPENAI_API_KEY = "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" # Extraída de llm_test.py

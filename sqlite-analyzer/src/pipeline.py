@@ -19,11 +19,11 @@ if _PROJECT_ROOT not in sys.path:
 
 # Cambiar importaciones relativas a absolutas y eliminar table_identifier
 
-from src.sql_generator import SQLGenerator
-from src.sql_utils import extract_sql_from_markdown
-from src.whitelist_validator import WhitelistValidator
-from src.db_connector import DBConnector
-from src.db_relationship_graph import build_relationship_graph, find_join_path, generate_join_path
+from sql_generator import SQLGenerator
+from sql_utils import extract_sql_from_markdown
+from whitelist_validator import WhitelistValidator
+from db_connector import DBConnector
+from db_relationship_graph import build_relationship_graph, find_join_path, generate_join_path
 
 # Configuración del logger
 logger = logging.getLogger(__name__)
@@ -413,7 +413,7 @@ def extract_info_from_question_llm(
         rel_map = None
         current_logger.warning(f"No se pudo cargar table_relationships.json para robustez: {e}")
     try:
-        from src.db_relationship_graph import build_relationship_graph, find_join_path
+        from db_relationship_graph import build_relationship_graph, find_join_path
         relationship_graph = build_relationship_graph(None, table_relationships=rel_map, db_structure=db_structure_dict)
     except Exception as e:
         relationship_graph = None
@@ -749,6 +749,17 @@ logger.info(f"Instancia de DBConnector creada con db_path: {_DEFAULT_DB_PATH}") 
 # Definir el número máximo de reintentos para LLM
 max_retries_llm = MAX_RETRIES_LLM_EXTRACT
 
+# --- INICIO: Definir sql_to_execute y variables críticas por defecto para evitar NameError ---
+sql_to_execute = None
+sql_fallback = None
+params_to_execute = []
+results = None
+columns = None
+error_execution_msg = None
+whitelist_error_msg = None
+context_sql_gen = None
+# --- FIN: Definir sql_to_execute y variables críticas por defecto para evitar NameError ---
+
 def chatbot_pipeline_entrypoint( # MODIFICADO: Renombrar la función principal
     user_question: str, 
     db_connector: DBConnector,
@@ -872,7 +883,7 @@ def chatbot_pipeline_entrypoint( # MODIFICADO: Renombrar la función principal
             None, 
             llm_client=llm_param, 
             current_logger=current_pipeline_logger, 
-            relationship_graph=relationship_graph,  # <--- ahora definido
+            relationship_graph=relationship_graph,  
             max_retries=max_retries_llm
         )
         current_pipeline_logger.info(f"DEBUG: Información estructurada extraída: {structured_info}, error: '{error_extract_msg}'")
@@ -882,7 +893,7 @@ def chatbot_pipeline_entrypoint( # MODIFICADO: Renombrar la función principal
         flow_decision = "extraction_failed_return"
 
     # Expansión dinámica de sinónimos/diagnósticos (ejemplo con flexible_search_config)
-    from src.flexible_search_config import extract_diagnosis_variants_from_hint, get_llm_generated_synonyms, LLM_CALLER_FUNCTION
+    from flexible_search_config import extract_diagnosis_variants_from_hint, get_llm_generated_synonyms, LLM_CALLER_FUNCTION
     if not is_sql_query(user_question):
         diagnosis_variants = extract_diagnosis_variants_from_hint(user_question)
         if not diagnosis_variants and LLM_CALLER_FUNCTION:
@@ -1173,3 +1184,19 @@ def sugerir_columna_parecida(columna_inventada: str, columnas_validas: list, umb
     if matches:
         return matches[0]
     return None
+
+import re
+
+# --- INICIO: Robustez para llaves en SQL generada por LLM ---
+def limpiar_sql_llaves(sql: str):
+    # Reemplaza {{var}} o {var} por ? para SQLite
+    sql = re.sub(r"\{\{\s*([\w_]+)\s*\}\}", "?", sql)
+    sql = re.sub(r"\{\s*([\w_]+)\s*\}", "?", sql)
+    return sql
+
+# Antes de ejecutar cualquier SQL generada por LLM:
+if sql_to_execute:
+    sql_to_execute = limpiar_sql_llaves(sql_to_execute)
+if 'sql_fallback' in locals() and sql_fallback:
+    sql_fallback = limpiar_sql_llaves(sql_fallback)
+# --- FIN: Robustez para llaves en SQL generada por LLM ---

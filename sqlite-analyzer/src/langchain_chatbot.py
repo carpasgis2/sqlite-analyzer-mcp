@@ -9,7 +9,7 @@ import re
 import json # Asegurarse de que json está importado
 import concurrent.futures
 from typing import Type, Any # Añadido Any
-from pydantic import PrivateAttr  # Añadir esta importación para atributos privados
+# from pydantic import PrivateAttr  # Añadir esta importación para atributos privados
 
 from langchain.tools import Tool # Descomentado
 from langchain_core.tools import BaseTool # Usar BaseTool
@@ -22,10 +22,12 @@ from langchain_core.language_models.base import BaseLanguageModel # Para tipado 
 
 from langchain_core.exceptions import OutputParserException
 import sqlite3 # Nueva importación
+import openai
+from openai import RateLimitError
 
 # Gestionar la importación de LLM_MODEL_NAME
 try:
-    from src.llm_utils import LLM_MODEL_NAME # MODIFICADO: Añadido prefijo src.
+    from llm_utils import LLM_MODEL_NAME
 except ImportError:
     # El logger puede no estar completamente configurado aquí si esto está en la parte superior.
     # Se podría registrar una advertencia más tarde o usar print.
@@ -33,18 +35,12 @@ except ImportError:
     LLM_MODEL_NAME = "deepseek-coder" # Valor por defecto
 
 # Importación para la nueva herramienta BioChat
-# Asumiendo que biochat.py está en el directorio raíz del proyecto 'sina_mcp'
-# y este archivo (langchain_chatbot.py) está en 'sina_mcp/sqlite-analyzer/src/'
-import sys
-import os
-# Añadir el directorio raíz del proyecto (sina_mcp) al sys.path
-# Esto permite importaciones absolutas desde la raíz del proyecto
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+# Asegura que la raíz del proyecto está en sys.path para importar biochat.py
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-
 try:
-    from biochat import full_pipeline # Importación absoluta
+    from biochat import full_pipeline
 except ImportError as e:
     print(f"Error crítico: No se pudo importar full_pipeline desde biochat.py. Detalles: {e}. La herramienta BioChat no estará disponible.")
     full_pipeline = None
@@ -61,10 +57,16 @@ except ImportError:
 
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-# MODIFICADO: Usar importación relativa para pipeline
-from .pipeline import chatbot_pipeline_entrypoint as chatbot_pipeline
-from .sql_utils import list_tables, list_columns, search_schema # Importaciones relativas
-from .db_connector import DBConnector # <--- AÑADIDA ESTA LÍNEA
+# Cambiar imports relativos a absolutos para ejecución directa
+try:
+    from pipeline import chatbot_pipeline_entrypoint as chatbot_pipeline
+    from sql_utils import list_tables, list_columns, search_schema
+    from db_connector import DBConnector
+except ImportError:
+    # Fallback: intentar imports relativos si falla el absoluto (por compatibilidad)
+    from .pipeline import chatbot_pipeline_entrypoint as chatbot_pipeline
+    from .sql_utils import list_tables, list_columns, search_schema
+    from .db_connector import DBConnector
 
 # Configuración del logger
 # --- INICIO CONFIGURACIÓN DE LOGGING ---
@@ -96,34 +98,29 @@ else:
     logger.info(f"El logger ya tiene handlers. Los logs continuarán en: {log_file_path} (modo overwrite)")
 # --- FIN CONFIGURACIÓN DE LOGGING ---\
 
-# Configuración de la API de DeepSeek (preferiblemente desde variables de entorno)
-_DEEPSEEK_API_URL_FROM_ENV = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com/v1")
-
-# Asegurarse de que la URL base no contenga /chat/completions
-if _DEEPSEEK_API_URL_FROM_ENV.endswith("/chat/completions"):
-    LLM_API_BASE_URL = _DEEPSEEK_API_URL_FROM_ENV[:-len("/chat/completions")]
-elif _DEEPSEEK_API_URL_FROM_ENV.endswith("/chat/completions/"):
-    LLM_API_BASE_URL = _DEEPSEEK_API_URL_FROM_ENV[:-len("/chat/completions/")]
+# Configuración de la API de OpenAI
+# Elimina cualquier clave hardcodeada para evitar confusión y usa solo la variable de entorno
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    print("\033[91m[ADVERTENCIA] No se ha definido la variable de entorno OPENAI_API_KEY.\033[0m")
 else:
-    LLM_API_BASE_URL = _DEEPSEEK_API_URL_FROM_ENV
+    print("[DEBUG] Clave API usada (primeros 8):", OPENAI_API_KEY[:8], "... (oculta por seguridad)")
 
-# Eliminar barras inclinadas al final de la URL base si las hubiera, para evitar dobles barras
-LLM_API_BASE_URL = LLM_API_BASE_URL.rstrip('/')
-
-LLM_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-aedf531ee17447aa95c9102e595f29ae") # Clave API de DeepSeek
-LLM_MODEL = LLM_MODEL_NAME # Usar la variable importada o el valor por defecto
-LLM_PROVIDER = "deepseek" # Proveedor
+LLM_MODEL_NAME = "gpt-3.5-turbo"
+LLM_API_BASE_URL = "https://api.openai.com/v1"
+LLM_API_KEY = OPENAI_API_KEY
+LLM_PROVIDER = "openai"
 
 # Crear la instancia de LLM que se usará en las herramientas
 # Esta instancia se crea aquí porque sql_medical_chatbot_tool y query_planner_tool se instancian en este mismo archivo.
 try:
     llm_instance = ChatOpenAI(
-        model_name=LLM_MODEL,
+        model_name=LLM_MODEL_NAME,
         openai_api_base=LLM_API_BASE_URL,
         openai_api_key=LLM_API_KEY,
         temperature=0.0,
     )
-    logger.info(f"Instancia de ChatOpenAI ({LLM_MODEL}) creada exitosamente para herramientas.")
+    logger.info(f"Instancia de ChatOpenAI ({LLM_MODEL_NAME}) creada exitosamente para herramientas.")
 except Exception as e:
     logger.error(f"Error al crear la instancia de ChatOpenAI para herramientas: {e}", exc_info=True)
     llm_instance = None
@@ -270,7 +267,7 @@ class SQLMedicalChatbot(BaseTool):
         # --- INICIO: Expansión dinámica de diagnósticos ---
         # Si la consulta contiene palabras clave de diagnóstico, intentamos expandir variantes y sinónimos
         import re
-        from src.flexible_search_config import extract_diagnosis_variants_from_hint, get_llm_generated_synonyms
+        from flexible_search_config import extract_diagnosis_variants_from_hint, get_llm_generated_synonyms
         diagnosis_patterns = [
             r"diagn[oó]stico[s]? de ([\w\sáéíóúüñ\-]+)",
             r"con ([\w\sáéíóúüñ\-]+) ?\(?HTA\)?",  # ejemplo: con hipertensión o con HTA
@@ -615,84 +612,24 @@ class QueryPlannerTool(BaseTool):
         self.logger.info(f"[QueryPlannerTool] Recibida pregunta para planificación: {user_question}")
 
         planning_prompt_template = """
-Dada la siguiente pregunta de un usuario:
-</user_question>
+You are a robust medical query planner. Route each user question to the correct tool:
 
-Tu tarea es analizar esta pregunta y determinar si es compleja y requiere un plan de múltiples pasos.
-Una pregunta es compleja si requiere combinar información, múltiples operaciones lógicas, o inferencias.
+- If the question mentions guidelines, PubMed, reviews, literature, articles, studies, or biomedical research, ALWAYS use the BioChatMedicalInquiry tool.
+- If the question is about patient data, hospitalizations, diagnoses, procedures, medications, or anything that can be answered with SQL from the patient database, use the SQLMedicalChatbot tool.
+- NEVER invent tables, columns, or relationships. If the question cannot be answered with the available schema, respond: 'This cannot be answered with SQL. Please use BioChatMedicalInquiry for biomedical or literature questions.'
+- When showing tables or schema, ONLY mention the relevant table(s) by name (maximum 3), NEVER print the full schema or all tables.
+- If the question is a greeting or about the assistant, use ChatMedGeneralInfo.
+- IMPORTANT: Before stating that information is not available, always check for any related columns or tables that could provide a partial or indirect answer. Never say data is missing if any related field exists in the schema.
 
-**PRINCIPIOS CLAVE PARA LA PLANIFICACIÓN:**
-
-1.  **ESQUEMA Y ENTIDADES:**
-    *   Usa SIEMPRE los nombres exactos de tablas y columnas del esquema de la base de datos. NO INVENTES nombres.
-    *   Si un paso implica SQL, `SQLMedicalChatbot` necesitará los nombres correctos.
-
-2.  **MAPEO DE CONCEPTOS A CÓDIGOS (ESPECIALMENTE ALERGIAS):**
-    *   Si la pregunta involucra conceptos médicos que se mapean a códigos o categorías:
-        a.  **Paso 1 (Identificar Código/Categoría):** Tu plan DEBE PRIMERO proponer un paso para obtener el código numérico (ej. `ALCA_ID`, `NMAL_ID`, `CDTE_ID`) usando `SQLMedicalChatbot` para consultar la tabla de diccionario/categoría apropiada.
-        b.  **Paso 2 (Usar Código en Datos del Paciente):** Los pasos siguientes deben usar el código obtenido en el Paso 1 para filtrar en las tablas de datos del paciente (ej. `PATI_PATIENT_ALLERGIES`, `EPIS_DIAGNOSTICS`).
-
-    *   **GUÍA ESPECÍFICA PARA ALERGIAS:**
-        *   **Tabla de Categorías Principal:** `ALLE_ALLERGY_CATEGORIES` (columnas `ALCA_ID`, `ALCA_DESCRIPTION_ES`).
-            *   `ALCA_DESCRIPTION_ES = 'Medicamentosa'` (corresponde a `ALCA_ID = 1`)
-            *   `ALCA_DESCRIPTION_ES = 'No medicamentosa'` (corresponde a `ALCA_ID = 2`)
-        *   **Tabla de Alérgenos No Medicamentosos Específicos:** `ALLE_NOT_MEDICINAL_ALLERGENS` (columnas `NMAL_ID`, `NMAL_DESCRIPTION_ES`). Esta tabla detalla los alérgenos que caen bajo `ALCA_ID = 2` ('No medicamentosa').
-
-        *   **Si la pregunta es sobre "alergias alimentarias" o "alergias no alimentarias" (en general, como categoría):**
-            1.  **Paso 1 (Obtener ALCA_ID):** La sub-pregunta para `SQLMedicalChatbot` debe ser:
-                `"Obtén el ALCA_ID de ALLE_ALLERGY_CATEGORIES donde ALCA_DESCRIPTION_ES = 'No medicamentosa'."`
-                (Esto te dará `ALCA_ID = 2`. Las alergias alimentarias son un tipo de alergia 'No medicamentosa').
-            2.  **Paso 2 (Filtrar pacientes):** Usa el `ALCA_ID` obtenido para filtrar en `PATI_PATIENT_ALLERGIES`. Ejemplo: `WHERE ALCA_ID = {{output_paso_1}}`.
-
-        *   **Si la pregunta es sobre "alergias medicamentosas":**
-            1.  **Paso 1 (Obtener ALCA_ID):** Sub-pregunta:
-                `"Obtén el ALCA_ID de ALLE_ALLERGY_CATEGORIES donde ALCA_DESCRIPTION_ES = 'Medicamentosa'."` (Esto dará `ALCA_ID = 1`).
-            2.  **Paso 2 (Filtrar pacientes):** Usa el `ALCA_ID` obtenido en `PATI_PATIENT_ALLERGIES`.
-
-        *   **Si la pregunta es sobre un ALÉRGENO ESPECÍFICO NO MEDICAMENTOSO (ej. "alergia al polen", "alergia al cacahuete"):**
-            1.  **Paso 1 (Obtener ALCA_ID para 'No medicamentosa'):** Sub-pregunta:
-                `"Obtén el ALCA_ID de ALLE_ALLERGY_CATEGORIES donde ALCA_DESCRIPTION_ES = 'No medicamentosa'."` (Obtendrás `ALCA_ID = 2`).
-            2.  **Paso 2 (Obtener NMAL_ID del alérgeno específico):** Sub-pregunta:
-                `"Obtén el NMAL_ID de ALLE_NOT_MEDICINAL_ALLERGENS donde NMAL_DESCRIPTION_ES LIKE '%termino_del_alergeno_especifico%'."` (Ej: `'%polen%'`, `'%cacahuete%'`).
-            3.  **Paso 3 (Filtrar pacientes con datos estructurados):** Usa AMBOS, el `ALCA_ID` del Paso 1 Y los `NMAL_ID` del Paso 2, para filtrar en `PATI_PATIENT_ALLERGIES`. Ejemplo: `WHERE ALCA_ID = {{output_paso_1}} AND NMAL_ID IN ({{output_paso_2}})`.
-            4.  **Paso 4 (Fallback a Texto Libre SI el Paso 2 o 3 no devuelven resultados concluyentes):** Si el Paso 2 no encontró un `NMAL_ID` o el Paso 3 no encontró pacientes, planifica un paso adicional para buscar el `termino_del_alergeno_especifico` en los campos de texto libre de `PATI_PATIENT_ALLERGIES` (ej. `PALL_OBSERVATIONS`, `PALL_ALLERGY_OBSERVATION`). Describe este paso claramente.
-            *   Ejemplo de sub-pregunta para este fallback: `"Busca pacientes con 'polen' en las observaciones de alergias: SELECT PATI_ID, PALL_OBSERVATIONS FROM PATI_PATIENT_ALLERGIES WHERE LOWER(PALL_OBSERVATIONS) LIKE '%polen%' OR LOWER(PALL_ALLERGY_OBSERVATION) LIKE '%polen%'."`
-
-    *   **Para OTROS CONCEPTOS (ej. diagnósticos como 'diabetes tipo 2' mapeado a `CDTE_ID`):**
-        1.  **Paso 1 (Identificar Código):** La sub-pregunta a `SQLMedicalChatbot` debe consultar la tabla de diccionario relevante (ej. `DIAG_DIAGNOSES` para `CDTE_ID`) usando `LIKE` en la columna descriptiva para encontrar el código. Ejemplo: `"Obtén el CDTE_ID de DIAG_DIAGNOSES donde DIAG_DESCRIPTION LIKE '%diabetes tipo 2%'."`
-        2.  **Paso 2 (Filtrar pacientes con código):** Usa el código obtenido en la tabla de datos del paciente (ej. `EPIS_DIAGNOSTICS`).
-        3.  **Paso 3 (Fallback a Texto Libre SI el Paso 1 o 2 no devuelven resultados concluyentes):** Si el Paso 1 no encontró un código o el Paso 2 no encontró pacientes, planifica un paso adicional para buscar el término original en los campos de texto libre relevantes (ej. `DIAG_OTHER_DIAGNOSTIC` en `EPIS_DIAGNOSTICS`). Describe este paso claramente.
-
-3.  **BÚSQUEDA EN TEXTO LIBRE COMO COMPLEMENTO:**
-    *   Si buscas un término médico específico (por ejemplo, un alérgeno, diagnóstico, medicamento, etc.) y el plan inicial para buscarlo en la tabla estructurada correspondiente podría no encontrarlo (o si la búsqueda estructurada inicial falla o devuelve 0 resultados):
-        a.  **Planifica un paso adicional o alternativo** para buscar ese término en los campos de texto libre relevantes de las tablas de pacientes (ej. `PALL_OBSERVATIONS`, `DIAG_OTHER_DIAGNOSTIC`, `MEDI_DOSAGE_OBSERVATIONS`, etc.), utilizando una consulta con `LIKE '%término%'`.
-        b.  El objetivo es complementar la búsqueda estructurada para no omitir registros relevantes por falta de codificación.
-    *   **Ejemplo de sub-pregunta para SQLMedicalChatbot para texto libre (si la búsqueda estructurada de 'polen' falló):**
-        `"Busca pacientes con 'polen' en las observaciones de alergias: SELECT PATI_ID FROM PATI_PATIENT_ALLERGIES WHERE LOWER(PALL_OBSERVATIONS) LIKE '%polen%' OR LOWER(PALL_ALLERGY_OBSERVATION) LIKE '%polen%'."`
-
-4.  **DERIVACIÓN DE INFO Y MULTI-CRITERIO:**
-    *   Si se necesita información no directa (ej. 'edad' de `PATI_BIRTH_DATE`) o hay múltiples filtros, el plan debe incluir pasos o consideraciones para ello, instruyendo a `SQLMedicalChatbot` para que use funciones SQL (ej. `strftime`, `julianday`, `CASE WHEN`).
-    *   Asegúrate de que el plan aborde TODOS los criterios de la pregunta original.
-
-5.  **USO DE HERRAMIENTAS Y AMBIGÜEDAD:**
-    *   Usa `BioChatMedicalInquiry` SOLO para investigación médica general o conocimiento que NO está en la base de datos.
-    *   Si la pregunta es ambigua, el plan debe indicar que se necesita aclaración (ver formato de salida).
-
-**FORMATO DE SALIDA (JSON):**
-
-Si la pregunta es simple (puede ser respondida directamente por `SQLMedicalChatbot`, `BioChatMedicalInquiry`, o `SinaSuiteAndGeneralInformation`):
-{{"plan_required": false, "reasoning": "La pregunta es simple y puede ser manejada directamente.", "suggested_tool": "SQLMedicalChatbot_o_BioChatMedicalInquiry_o_SinaSuiteAndGeneralInformation", "original_question": "{user_question}"}}
-
-Si la pregunta es compleja, genera un plan JSON con una lista "plan". Cada paso debe tener: "step_number", "step_description", "tool_to_use", "inputs" (diccionario, usualmente {{"query": "sub-pregunta"}}, puede referenciar salidas previas con {{{{step_N_output}}}}).
-
-Si es ambigua e irresoluble:
-{{"plan_required": false, "reasoning": "Pregunta ambigua. Aclaración necesaria: [qué falta].", "suggested_tool": "SinaSuiteAndGeneralInformation", "original_question": "{user_question}"}}
-
-Si hay un error interno al planificar:
-{{"error": "No se pudo generar plan.", "reasoning": "Error interno o pregunta incomprensible."}}
+Return a JSON object with:
+- plan_required: true/false
+- reasoning: brief justification
+- suggested_tool: tool name (if simple)
+- plan: (if complex) list of steps, each with step_number, step_description, tool_to_use, and inputs
+- original_question: the user question
+- If ambiguous or not answerable, set plan_required: false and reasoning explaining why.
 """
-        
-        formatted_prompt = planning_prompt_template.format(user_question=user_question)
+        formatted_prompt = planning_prompt_template + f"\nUser question: {user_question}\n"
         
         try:
             self.logger.info(f"[QueryPlannerTool] Enviando prompt simplificado al LLM para planificación.")
@@ -826,162 +763,63 @@ biochat_medical_tool = Tool(
     )
 )
 
-# --- Herramienta para información general y SinaSuite ---
-def fetch_sinasuite_info(question: str) -> str:
+# --- Herramienta para información general y ChatMed ---
+def fetch_general_info(question: str) -> str:
     """
-    Busca información sobre SinaSuite, la función del chatbot o responde a saludos y preguntas generales.
-    Utiliza esta herramienta para preguntas que no parezcan estar relacionadas con la extracción de datos
-    específicos de la base de datos médica.
+    Responde a saludos, preguntas generales sobre el chatbot o su función, o dudas generales sobre el sistema.
+    Este asistente es un buscador médico avanzado (ChatMed), capaz de responder consultas clínicas, buscar artículos científicos (PubMed) y ayudarte con información médica relevante.
     """
     question_lower = question.lower()
     
     saludos_keywords = ["hola", "buenos días", "buenas tardes", "buenas noches", "qué tal", "hey"]
-    sinasuite_keywords = [
-        "sinasuite", "qué es sinasuite", "que es sinasuite",
-        "cuál es tu función", "cual es tu funcion", "qué haces", "que haces",
-        "quién eres", "quien eres", "para qué sirves", "para que sirves",
-        "ayuda", "info", "informacion"
+    general_keywords = [
+        "quién eres", "quien eres", "qué eres", "que eres",
+        "qué haces", "que haces", "cuál es tu función", "cual es tu funcion",
+        "ayuda", "info", "informacion", "buscador", "chatbot", "chatmed"
     ]
 
     if any(saludo in question_lower for saludo in saludos_keywords):
-        return "¡Hola! Soy un asistente virtual. Puedo ayudarte con consultas sobre la base de datos médica o proporcionarte información general sobre SinaSuite. ¿En qué puedo ayudarte hoy?"
+        return "¡Hola! Soy ChatMed, tu asistente médico virtual. Puedo ayudarte a buscar información clínica, responder dudas médicas y encontrar artículos científicos. ¿En qué puedo ayudarte hoy?"
 
-    if any(keyword in question_lower for keyword in sinasuite_keywords):
-        return "Soy un asistente virtual con dos funciones principales: 1) Ayudarte a consultar información específica de la base de datos médica. 2) Proporcionarte información general sobre SinaSuite, que es una plataforma integral para la gestión de datos médicos. Para más detalles sobre SinaSuite, puedes visitar https://www.sinasuite.com/."
+    if any(keyword in question_lower for keyword in general_keywords):
+        return ("Soy ChatMed, un chatbot médico avanzado. Puedo responder preguntas clínicas, ayudarte a consultar bases de datos médicas, y buscar artículos científicos en PubMed. "
+                "No soy un sustituto de un profesional sanitario, pero puedo orientarte y proporcionarte información relevante y actualizada.")
 
-    # Si el agente eligió esta herramienta pero no es un saludo ni sobre SinaSuite,
+    # Si el agente eligió esta herramienta pero no es un saludo ni una pregunta general,
     # podría ser un error del agente o una pregunta muy general.
-    return "Puedo ayudarte a consultar la base de datos médica o darte información sobre SinaSuite. ¿Tienes alguna pregunta específica sobre estos temas?"
+    return "Soy ChatMed, tu asistente médico. ¿Tienes alguna consulta clínica o necesitas buscar información científica?"
 
-sinasuite_tool = Tool(
-    name="SinaSuiteAndGeneralInformation",  # Nombre sin espacios
-    func=fetch_sinasuite_info,
-    description="""Útil para responder a saludos, preguntas generales sobre la función de este chatbot, o consultas sobre 'SinaSuite'.
-No uses esta herramienta para consultas que requieran acceder a datos médicos (ni de la base de datos ni información médica general).
-Ejemplos de cuándo usarla: 'Hola', '¿Qué es SinaSuite?', '¿Quién eres?', 'Ayuda'."""
+chatmed_tool = Tool(
+    name="ChatMedGeneralInfo",
+    func=fetch_general_info,
+    description="""Responde a saludos, preguntas generales sobre el chatbot médico, su función, o dudas generales sobre el sistema. Ejemplos: 'Hola', '¿Quién eres?', '¿Qué puedes hacer?', 'Ayuda', '¿Qué es ChatMed?'."""
 )
 
 # --- TOOLS DE ESQUEMA (OBSOLETO - REEMPLAZADO POR DatabaseSchemaTool) ---
 # from sql_utils import list_tables, list_columns, search_schema # Ya no se usan directamente aquí
 # SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "data", "schema_simple.json") # Ya no se usa aquí
 
-# Las funciones tool_list_tables, tool_list_columns, tool_search_schema, tool_list_all_columns
-# y la lista TOOLS_SCHEMA han sido eliminadas ya que su funcionalidad
-# ahora está cubierta por DatabaseSchemaTool.
+# Mover la creación de all_tools y AGENT_PREFIX al ámbito global
+# Asegúrate de que todas las herramientas individuales (query_planner_tool, sql_medical_chatbot_tool, etc.)
+# ya han sido instanciadas globalmente ANTES de este punto.
 
-def custom_handle_parsing_errors(error: OutputParserException) -> str:
+all_tools = [query_planner_tool, sql_medical_chatbot_tool, biochat_medical_tool, chatmed_tool]
+
+tool_descriptions_str = "\n".join([f"- {tool.name}: {getattr(tool, 'description', '')}" for tool in all_tools])
+tool_names_str = ", ".join([tool.name for tool in all_tools])
+
+# --- UTILIDAD PARA TRUNCAR OBSERVACIONES LARGAS DE ESQUEMA ---
+def truncate_schema_observation(observation: str, max_lines: int = 10) -> str:
     """
-    Genera un mensaje de error personalizado y prescriptivo cuando el LLM no sigue el formato ReAct.
-    Intenta extraer la salida problemática del LLM para incluirla en el mensaje de corrección.
+    Trunca la observación de esquema/tablas si es demasiado larga para evitar flood en la terminal.
     """
-    response_str = str(error) # Mensaje completo de la excepción
+    lines = observation.splitlines()
+    if len(lines) > max_lines:
+        return '\n'.join(lines[:max_lines]) + f"\n... (truncado, {len(lines)-max_lines} líneas más) ..."
+    return observation
 
-    # Intentar extraer la salida real del LLM que causó el problema
-    problematic_output = getattr(error, 'llm_output', None)
-    if problematic_output is None:
-        # Intentar parsear desde el string de la excepción
-        prefixes_to_check = [
-            "Parsing LLM output produced both a final answer and a parse-able action:: ",
-            "Could not parse LLM output: ",
-            "Invalid Format: ",
-            "Invalid tool `",
-        ]
-        parsed_from_str = False
-        for prefix in prefixes_to_check:
-            if response_str.startswith(prefix):
-                if prefix == "Invalid tool `":
-                    end_of_tool_name = response_str.find("`", len(prefix))
-                    if end_of_tool_name != -1:
-                        problematic_output = response_str[len(prefix):end_of_tool_name]
-                        parsed_from_str = True
-                        break
-                else:
-                    problematic_output = response_str[len(prefix):]
-                    parsed_from_str = True
-                    break
-        if not parsed_from_str:
-            problematic_output = response_str
-    else:
-        problematic_output = str(problematic_output)
-
-    # Loguear la salida problemática específica que se enviará al LLM para corrección
-    logging.error(f"Salida problemática del LLM (para corrección):\\n---\\n{problematic_output}\\n---")
-
-    # Mensaje prescriptivo para el LLM
-    # (El resto de la función que construye el mensaje de error para el LLM permanece igual)
-    # ...
-    # Asegurarse de que el logger de root también capture la salida problemática real que se envía al LLM
-    # (el logger actual en el manejador de errores del agente ya lo hace si error.llm_output está poblado)
-
-    # El mensaje que se devuelve al LLM para que lo corrija:
-    # (Este es el formato que ya tenías y es bueno, solo nos aseguramos que `problematic_output` sea más preciso)
-    # (El código original para construir el mensaje prescriptivo sigue aquí)
-    # ... (resto del código de la función) ...
-    # Por ejemplo:
-    error_message_template = (
-        "CRITICAL ERROR: Your response was not in the correct ReAct format. "
-        "You MUST respond with either a valid 'Action:' line followed by an 'Action Input:' line, "
-        "OR a 'Final Answer:' line. "
-        "DO NOT provide explanations or conversational text outside of the 'Thought:' field. "
-        "The available tools are: {tool_names}. "
-        "Ensure your Action is one of these tools if you are using an action. "
-        "Your problematic output was:\\n'''{problematic_llm_output}'''\\n"
-        "Correct your response to strictly follow the ReAct format (Thought, Action, Action Input, or Final Answer)."
-    )
-    # Obtener nombres de herramientas (asumiendo que están disponibles en algún contexto o globalmente)
-    # Esto es solo un ejemplo, necesitarías acceso a `self.tools` o similar si esto está en una clase.
-    # Si es una función global, los nombres de las herramientas tendrían que pasarse o ser accesibles.
-    # Por ahora, lo omito para mantener el cambio enfocado en la extracción de `problematic_output`.
-    
-    # tool_names_str = ", ".join([tool.name for tool in self.tools]) if hasattr(self, 'tools') else "Not available here"
-    
-    # Para este ejemplo, usaré un placeholder para tool_names
-    tool_names_str = "[SQLMedicalChatbot, SinaSuiteAndGeneralInformation]" # Placeholder
-
-    # Re-loguear la salida problemática que se usará en el prompt de corrección
-    # logging.error(f"Salida problemática del LLM (para corrección del LLM):\\n---\\n{problematic_output}\\n---")
-    # Este logging ya se hizo arriba.
-
-    return error_message_template.format(
-        tool_names=tool_names_str,
-        problematic_llm_output=problematic_output
-    )
-
-def get_langchain_agent():
-    """
-    Inicializa y devuelve un agente LangChain con las herramientas configuradas.
-    """
-    try:
-        llm = ChatOpenAI(
-            model=LLM_MODEL,
-            api_key=LLM_API_KEY,
-            base_url=LLM_API_BASE_URL,
-            temperature=0.0,
-        )
-    except Exception as e:
-        logger.error("No se pudo inicializar el LLM: %s", e)
-        return None
-
-    # Instanciar herramientas con el LLM recién creado
-    sql_medical_chatbot_tool = SQLMedicalChatbot(
-        db_connector=db_connector_instance,
-        logger=logger,
-        llm=llm
-    )
-    query_planner_tool = QueryPlannerTool(
-        llm=llm,
-        logger=logger
-    )
-    # Las siguientes herramientas deben estar definidas en el módulo, si no, defínelas antes de esta función
-    # biochat_medical_tool y sinasuite_tool ya deberían estar disponibles
-
-    all_tools = [query_planner_tool, sql_medical_chatbot_tool, biochat_medical_tool, sinasuite_tool]
-
-    # Construir el prompt de agente (AGENT_PREFIX) y tool_descriptions_str
-    tool_descriptions_str = "\n".join([f"- {tool.name}: {getattr(tool, 'description', '')}" for tool in all_tools])
-    tool_names_str = ", ".join([tool.name for tool in all_tools])
-
-    AGENT_PREFIX = f"""Answer the following questions as best you can. Strictly follow the ReAct format.
+# --- REFORZAR EL PROMPT DEL AGENTE PARA DISCIPLINA DE SQL ---
+AGENT_PREFIX = f"""Answer the following questions as best you can. Strictly follow the ReAct format.
 
 **ReAct Format (MANDATORY for EVERY response):**
 Thought: [Your reasoning. Include plan status if active (e.g., "Plan active, next step X"). Brief and direct.]
@@ -994,10 +832,12 @@ Final Answer: [Direct final answer.]
 
 **SQL Query Rules (for SQLMedicalChatbot):**
 1.  **Strict Schema Adherence**: ALWAYS use exact table/column names from the provided schema. Verify with `DatabaseSchemaTool` if unsure (e.g., `DatabaseSchemaTool: list tables` or `DatabaseSchemaTool: describe table TABLE_NAME`). NEVER invent names.
-2.  **Critical Alerts**:
+2.  **Do NOT invent entities, tables, columns, or relationships.** If the user's question does not correspond to any table/column in the schema, respond that it is not possible to answer with SQL and suggest using another tool if appropriate.
+3.  **Stay on topic**: Only generate SQL relevant to the user's question. Do NOT introduce unrelated concepts or entities (e.g., do not mention 'polen' if the user asks about hospitalizations).
+4.  **Critical Alerts**:
     *   `PRES_PRESCRIPTIONS` table DOES NOT EXIST. For prescriptions, carefully examine the schema for alternatives (e.g., `PATI_USUAL_MEDICATION`).
     *   Patient gender is NOT in `PATI_GENDER`. Use `PATI_PATIENTS.PATY_ID` and JOIN with the gender types table (likely `PARA_GENDERS`).
-3.  **Common Tables (Examples)**:
+5.  **Common Tables (Examples)**:
     *   Diagnoses: `EPIS_DIAGNOSTICS`, `HIST_HISTORY_DIAG_PROC` (Codes: `CDTE_ID`; Text: `HIDI_OTHER_DIAGNOSTIC`, `DIAG_OTHER_DIAGNOSTIC`).
     *   Medications: `MEDI_MEDICATIONS` (Use `MEDI_ID`, `MEDI_DESCRIPTION_ES`).
     *   Usual Medication: `PATI_USUAL_MEDICATION`.
@@ -1072,14 +912,106 @@ Action Input: "Original failed query: `[failed query]`. Original error: `[SQL er
 -   **CRITICAL FINALIZATION**: If an action's `Observation` (e.g., from SQLMedicalChatbot) already contains the answer to the user's question (including requested data), YOU MUST end your turn with `Final Answer: [response]`. DO NOT iterate further or re-run queries if you have the data.
 """
 
-    # Crear el agente con LangChain
-    agent = initialize_agent(
-        tools=all_tools,
-        llm=llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        verbose=True,
-        memory=ConversationBufferMemory(memory_key="chat_history"),
-        handle_parsing_errors=custom_handle_parsing_errors,
-        agent_kwargs={"prefix": AGENT_PREFIX}
-    )
+# Crear el agente con LangChain (Este es el agente global)
+# Definir custom_handle_parsing_errors ANTES de usarla en initialize_agent
+def custom_handle_parsing_errors(error: OutputParserException) -> str:
+    """Maneja errores de parseo de la salida del agente."""
+    logger.error(f"Error de parseo en la salida del agente: {error}", exc_info=True)
+    # Devolver el texto problemático o un mensaje de error genérico
+    # Podrías intentar extraer 'error.llm_output' o 'error.observation' si están disponibles
+    # y son relevantes para que el agente reintente.
+    # Por ahora, un mensaje genérico que incluye el error.
+    return f"Error al procesar la respuesta del LLM. Por favor, reformula tu pregunta o intenta de nuevo. Detalle del error: {str(error)}"
+
+agent = initialize_agent(
+    tools=all_tools,
+    llm=llm_instance, # Asegúrate que llm_instance es el LLM global
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True,
+    memory=ConversationBufferMemory(memory_key="chat_history"),
+    handle_parsing_errors=custom_handle_parsing_errors, # Asegúrate que custom_handle_parsing_errors está definido globalmente o es accesible
+    agent_kwargs={"prefix": AGENT_PREFIX}
+)
+
+# La función get_langchain_agent() podría ser eliminada o refactorizada si ya no es necesaria,
+# ya que ahora tenemos un agente global. Por ahora, la dejamos.
+def get_langchain_agent():
+    """
+    Devuelve la instancia global del agente LangChain.
+    """
+    global agent # Asegurarse de que estamos usando el agente global
+    if agent is None:
+        logger.error("Se intentó obtener el agente antes de su inicialización.")
+        # Podrías inicializarlo aquí como fallback si es necesario,
+        # pero idealmente ya debería estar inicializado.
+        # Por ahora, simplemente devolvemos None o lanzamos un error.
+        raise RuntimeError("El agente LangChain no ha sido inicializado.")
     return agent
+
+if __name__ == "__main__":
+    logger.info("Iniciando chatbot en modo interactivo...")
+    # Verificar si biochat.py está disponible y mostrar advertencia si no
+    if full_pipeline is None:
+        print("\\033[93m⚠️ Advertencia: biochat.py no encontrado o full_pipeline no pudo ser importado.\\033[0m")
+        print("\\033[93m   Las funcionalidades de BioChat (investigación médica general) no estarán disponibles.\\033[0m")
+        print("\\033[93m   Para habilitarlas, asegúrate de que biochat.py está en la raíz del proyecto (\\033[1m%s\\033[0m\\033[93m).\\033[0m" % _PROJECT_ROOT)
+        print("-" * 50)
+
+    print("\\033[92m🤖 Asistente Médico Virtual (SinaMCP - LangChain) listo.\\033[0m")
+    print("Escribe tu consulta o usa ':salir' para terminar, ':limpiar' para reiniciar la conversación.")
+    
+    current_agent = get_langchain_agent() # Obtener el agente global
+
+    while True:
+        try:
+            user_input = input("\033[94m👤 Tú: \033[0m")
+            if user_input.lower() == ':salir':
+                print("\033[92m🤖 ¡Hasta luego!\033[0m")
+                break
+            if user_input.lower() == ':limpiar':
+                current_agent.memory.clear()
+                print("\033[92m✨ Conversación reiniciada.\033[0m")
+                continue
+
+            if not user_input.strip():
+                continue
+
+            print("\033[92m🤖 Agente: \033[0m", end="", flush=True)
+            max_retries = 5
+            wait_time = 3
+            for attempt in range(max_retries):
+                try:
+                    response = current_agent.invoke({"input": user_input})
+                    if isinstance(response, dict) and "output" in response:
+                        output = response["output"]
+                        # Si la respuesta contiene un bloque de esquema/tablas muy largo, trúncalo
+                        if "DatabaseSchemaTool Observation" in output or "list tables" in output or "describe table" in output:
+                            output = truncate_schema_observation(output, max_lines=10)
+                        print(output)
+                    elif isinstance(response, str):
+                        print(response)
+                    else:
+                        logger.error(f"Respuesta inesperada del agente: {response}")
+                        print("Hubo un problema al obtener la respuesta del agente.")
+                    break  # Salir del bucle de reintentos si fue exitoso
+                except RateLimitError as rle:
+                    logger.warning(f"Rate limit alcanzado (429): {rle}. Reintentando en {wait_time} segundos...")
+                    print(f"\033[93m[AVISO] Límite de uso alcanzado. Esperando {wait_time} segundos para reintentar...\033[0m")
+                    time.sleep(wait_time)
+                    wait_time *= 2  # Exponencial
+                except Exception as e:
+                    logger.error(f"Error inesperado en el bucle interactivo: {e}", exc_info=True)
+                    print(f"\033[91mOcurrió un error inesperado: {e}\033[0m")
+                    break
+            else:
+                print("\033[91mNo se pudo completar la consulta tras varios intentos por límite de uso. Intenta de nuevo en unos minutos.\033[0m")
+
+        except KeyboardInterrupt:
+            print("\n\033[92m🤖 ¡Hasta luego! (Interrupción de teclado)\033[0m")
+            break
+        except Exception as e:
+            logger.error(f"Error inesperado fuera del bucle principal: {e}", exc_info=True)
+            print(f"\033[91mOcurrió un error inesperado: {e}\033[0m")
+
+
+

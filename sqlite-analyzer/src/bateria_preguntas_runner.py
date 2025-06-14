@@ -5,7 +5,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import json
-from src.langchain_chatbot import get_langchain_agent
+from langchain_chatbot import get_langchain_agent
 
 # Lista de preguntas estructurada por apartados para exportar los títulos en el resultado
 PREGUNTAS_POR_APARTADO = [

@@ -39,8 +39,6 @@ if "NCBI_API_KEY" not in os.environ:
 
 # Configuración de API Key para OpenAI (usada por Langchain)
 # Tomada de la configuración de BiomedicalAssistant en el archivo original
-OPENAI_API_KEY = "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"
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 fetch = PubMedFetcher()
 translator = GoogleTranslator(source='es', target='en')
@@ -88,7 +86,7 @@ logger = ClinicalLogger(log_file="logs/biochat_agent.log")
 class BiomedicalAssistant:
     def __init__(self, log_file="biomedical_chatbot_assistant.log"):
         self.logger = ClinicalLogger(log_file) # Logger separado para el assistant
-        self.api_key = OPENAI_API_KEY
+        self.api_key = os.environ.get("OPENAI_API_KEY")
         self.base_url = "https://api.openai.com/v1/chat/completions"
         self.model_name = "gpt-3.5-turbo" # Modelo para tareas auxiliares
 
@@ -278,7 +276,7 @@ llm_call_logger = LLMCallLogger() # Instanciar el logger
 llm = ChatOpenAI(
     model_name="gpt-4",
     temperature=0.0,
-    openai_api_key=OPENAI_API_KEY,
+    openai_api_key=os.environ.get("OPENAI_API_KEY"),
     callbacks=[llm_call_logger],
     streaming=True  # ACTIVAR STREAMING DE RESPUESTA
 )
@@ -510,6 +508,25 @@ full_pipeline = SequentialChain(
     verbose=True
 )
 
+# --- Stub mínimo para integración con ChatMed ---
+def full_pipeline(inputs: dict) -> dict:
+    """
+    Simula la respuesta de un pipeline biomédico. Devuelve un informe de ejemplo.
+    """
+    question = inputs.get("objective") or inputs.get("question") or ""
+    return {
+        "final_report": f"[Simulado] Respuesta biomédica para: '{question}'. (Aquí iría el informe real de PubMed o guidelines si estuviera implementado)"
+    }
+
+def biochat_reduced_pipeline(inputs: dict) -> dict:
+    """
+    Simula la respuesta de un pipeline reducido (solo metadatos PubMed).
+    """
+    question = inputs.get("objective") or inputs.get("question") or ""
+    return {
+        "raw_pubmed_results": f"[Simulado] Resultados PubMed para: '{question}'. (Aquí irían los artículos reales si estuviera implementado)"
+    }
+
 if __name__ == "__main__":
     logger.info("Iniciando BioChat Agent Pipeline en modo interactivo...")
     print("BioChat Agent Pipeline Interactivo. Escribe 'salir' para terminar.")
@@ -627,7 +644,7 @@ if __name__ == "__main__":
                     elif isinstance(parsed_json_output, list) or isinstance(parsed_json_output, dict):
                          print(f"{header}\n{json.dumps(parsed_json_output, indent=2, ensure_ascii=False)}\n")
                     else:
-                        print(f"{header}\n{parsed_json_output}\n")
+                        print(f"{header}\n{parsed_jsonOutput}\n")
                 except Exception as ex_parse:
                      print(f"{header} {Colors.RED}(Excepción al procesar/imprimir JSON: {ex_parse}){Colors.RESET}\n{pipeline_outputs['validated_data_json_list']}\n")
             else:
@@ -646,7 +663,7 @@ if __name__ == "__main__":
                     elif isinstance(parsed_json_output, list) or isinstance(parsed_json_output, dict):
                         print(f"{header}\n{json.dumps(parsed_json_output, indent=2, ensure_ascii=False)}\n")
                     else:
-                        print(f"{header}\n{parsed_json_output}\n")
+                        print(f"{header}\n{parsed_jsonOutput}\n")
                 except Exception as ex_parse:
                     print(f"{header} {Colors.RED}(Excepción al procesar/imprimir JSON: {ex_parse}){Colors.RESET}\n{pipeline_outputs['expert_annotations_json_list']}\n")
             else:

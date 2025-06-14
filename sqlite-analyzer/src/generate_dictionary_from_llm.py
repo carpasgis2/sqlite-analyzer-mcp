@@ -2,10 +2,12 @@ import os
 import json
 import requests
 
-# Configuración de la API de Deepseek (preferiblemente desde variables de entorno)
-LLM_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-aedf531ee17447aa95c9102e595f29ae")
-LLM_API_URL = os.environ.get("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
-LLM_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+# Configuración de la API de OpenAI
+LLM_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not LLM_API_KEY:
+    raise ValueError("La variable de entorno OPENAI_API_KEY no está configurada.")
+LLM_API_URL = "https://api.openai.com/v1/chat/completions"
+LLM_MODEL = "gpt-3.5-turbo"
 
 # Rutas de archivos (ajusta según sea necesario)
 SCHEMA_FILE_PATH = "c:\\Users\\cpascual\\PycharmProjects\\pythonProject\\cursos_actividades\\sina_mcp\\sqlite-analyzer\\src\\schema_rag_enriched.json"
@@ -277,7 +279,7 @@ def main():
 if __name__ == "__main__":
     # Pequeña validación de configuración antes de empezar
     if not LLM_API_KEY or not LLM_API_KEY.startswith("sk-"):
-        print("Advertencia: DEEPSEEK_API_KEY no parece estar configurada correctamente o no está disponible.")
-        print("Por favor, asegúrate de que la variable de entorno DEEPSEEK_API_KEY esté configurada.")
+        print("Advertencia: OPENAI_API_KEY no parece estar configurada correctamente o no está disponible.")
+        print("Por favor, asegúrate de que la variable de entorno OPENAI_API_KEY esté configurada.")
     
     main()

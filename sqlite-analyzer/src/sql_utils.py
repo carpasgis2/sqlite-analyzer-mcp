@@ -12,9 +12,9 @@ import difflib
 from difflib import get_close_matches
 # Dinámico para evitar módulo faltante
 try:
-    from src.llm_utils import call_llm
-except ImportError:
     from llm_utils import call_llm
+except ImportError:
+    call_llm = None
 from json.decoder import JSONDecodeError, JSONDecoder
 from pathlib import Path
 import sqlparse

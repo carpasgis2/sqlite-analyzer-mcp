@@ -26,7 +26,7 @@ if _sina_mcp_dir not in sys.path:
     sys.path.insert(0, _sina_mcp_dir)
 
 # Asegurar que el directorio 'sqlite-analyzer' (que contiene 'src') esté en sys.path
-# para poder hacer importaciones como 'from src.module'.
+# para poder hacer importaciones como 'from langchain_chatbot' directamente.
 if _sqlite_analyzer_dir not in sys.path:
     sys.path.insert(0, _sqlite_analyzer_dir)
 
@@ -35,9 +35,9 @@ if _sqlite_analyzer_dir not in sys.path:
 #     sys.path.insert(0, _current_file_dir)
 
 try:
-    # Con _sqlite_analyzer_dir en sys.path, podemos hacer 'from src.langchain_chatbot ...'
+    # Con _sqlite_analyzer_dir en sys.path, podemos hacer 'from langchain_chatbot ...'
     # Con _sina_mcp_dir en sys.path, langchain_chatbot.py debería poder hacer 'from biochat import ...'
-    from src.langchain_chatbot import get_langchain_agent, logger
+    from langchain_chatbot import get_langchain_agent, logger
 except ImportError as e:
     st.error(f"Error al importar módulos necesarios: {e}. \nCWD: {os.getcwd()}\nsys.path: {sys.path}")
     st.stop()
@@ -152,7 +152,7 @@ def limpiar_respuesta_final(texto):
 # que langchain_chatbot.py. Si se ejecuta streamlit desde 'sqlite-analyzer/src/',
 # langchain_chatbot será directamente importable.
 try:
-    from .langchain_chatbot import get_langchain_agent, logger
+    from langchain_chatbot import get_langchain_agent, logger
 except ImportError as e:
     # --- CORRECCIÓN DE PATH PARA IMPORTS ROBUSTOS ---
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -163,7 +163,7 @@ except ImportError as e:
         sys.path.insert(0, project_root)
     # Ahora intenta importar de nuevo
     try:
-        from src.langchain_chatbot import get_langchain_agent, logger
+        from langchain_chatbot import get_langchain_agent, logger
     except ImportError as e_inner:
         st.error(f"Error al importar módulos necesarios: {e_inner}. Asegúrate de que la estructura de directorios es correcta. CWD: {os.getcwd()}, sys.path: {sys.path}")
         st.stop()
